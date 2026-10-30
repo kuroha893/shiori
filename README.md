@@ -1,57 +1,65 @@
 # Shiori 栞
 
-A personal paper reader for macOS. A PDF goes in; Claude transcribes and translates it in the background; it comes
-back as a typeset bilingual article (中文 / 原文 / 对照) with figures, formulas, cross-reference previews,
-highlights, notes and a Claude side panel. Visual style follows kuroha.xyz.
+Shiori is a paper reader for macOS. Drop in a PDF or an arXiv link, and Claude transcribes and translates the whole
+paper in the background. It comes back as a typeset Chinese–English article you can read, annotate and ask
+questions about.
 
-All AI goes through the user's own, unmodified Claude Code CLI signed in with their Claude subscription
-(`claude -p`, never the Agent SDK or an API key), for personal use only.
+![Shiori reading a paper](docs/reader.png)
 
-## Run
+## Features
+
+- **Readable papers** – PDFs are re-typeset as articles with figures, tables and KaTeX formulas, in Chinese,
+  the original English, or side by side.
+- **Cross-references** – hover a figure, table, equation or citation to preview it; click to jump, swipe back to
+  return.
+- **Original page** – every paragraph links to its page in the PDF.
+- **Highlights and notes** – four highlight colours and notes, exportable as Markdown.
+- **Ask Claude** – select any passage to have it explained or translated, or chat about the paper. Each paper
+  keeps its own conversation.
+- **Reading guide** – a short summary of the problem, method, results and what to read first.
+- **Library** – arXiv import, reading progress, and venue tags with their CCF rank.
+- **Glossary** – your preferred translations of terms, used for every paper.
+- **Themes and fonts** – light, dark and sepia; any installed font for the interface.
+
+## Requirements
+
+- macOS on Apple silicon
+- Node.js 20.19+ or 22.12+
+- [Claude Code](https://claude.com/claude-code), signed in with a Claude account
+
+## Getting started
 
 ```bash
+git clone https://github.com/kuroha893/shiori.git
+cd shiori
 npm install
-npm run dev        # development
-npm run pack       # dist/mac-arm64/Shiori.app (unsigned, for this Mac)
+npm run dev
 ```
 
-## Fonts
+To build the app:
 
-The interface ships only open-licensed fonts (SIL OFL, via Fontsource): Geist (default), Inter, Space Grotesk,
-IBM Plex Sans, Manrope, and Geist Mono (default), JetBrains Mono, IBM Plex Mono. Settings → 阅读 → 界面字体 /
-等宽字体 can switch to any of them or to any font installed on the Mac (install a font in Font Book and it
-appears in the list). Chinese text uses the system's PingFang SC and Songti SC.
+```bash
+npm run pack
+```
 
-Needs Claude Code installed (`curl -fsSL https://claude.ai/install.sh | bash`) and signed in (`claude auth login`).
-Settings → Claude shows the status and opens the login in Terminal.
+The app is written to `dist/mac-arm64/Shiori.app`.
 
-## How it fits together
+On first launch, open **Settings → Claude** to check that Claude Code is found and signed in. Papers are stored in
+`~/Documents/Shiori`, one folder per paper.
 
-- `src/main/library.ts`: the library folder (default `~/Documents/Shiori`). One folder per paper:
-  `paper.pdf`, `meta.json` (app state), `thumb.png`, `pages/pNN.png` (pages with a 0–1000 coordinate grid),
-  `doc/NN.md` (the transcription), `figures/<id>.png`, `info.json`, `summary.md` (reading guide),
-  `annotations.json`, `chat.json`. `profile.md` and `glossary.md` at the library root go into every prompt.
-- `src/main/jobs.ts`: the processing queue. Render pages → Claude (Opus by default) reads the PDF and writes
-  `doc/*.md`, `info.json`, `summary.md` → crop figures/tables from the bbox values → Claude checks the crops in
-  the same session and fixes boxes → ready.
-- `src/main/claude.ts`: finds the CLI, checks `claude auth status`, runs headless turns with `--restricted`
-  (no code execution, file tools confined to the paper folder), `--strict-mcp-config`, a clean environment
-  (no `ANTHROPIC_*` / `CLAUDE*` variables, so an API key can never take over billing).
-- `src/main/chat.ts`: one Claude session per paper (`--session-id`, then `--resume`), streamed to the panel.
-- `src/main/prompts.ts`: the processing, crop-check and chat prompts, including the document format.
-- `src/main/worker.ts` + `src/renderer/src/worker.ts`: a hidden window running pdf.js for page renders and crops.
-- `src/shared/venue.ts` + `src/shared/ccf.ts`: venue tags. `ccf.ts` is the CCF list, 7th edition (2026-03-31),
-  parsed from the official PDF; `venue.ts` maps free-text venues to a label, family colour (ML / ACL / AI / CV),
-  CCF rank, or Findings / Workshop (which CCF doesn't rank). Update `ccf.ts` when CCF publishes a new edition.
-- `src/shared/doc.ts`: parser for the document format (`@@ <type> key=value` blocks, `@@zh` / `@@table` sections).
-- `src/renderer/`: React UI. `lib/markdown.ts` renders Markdown + KaTeX, sanitizes with DOMPurify (paper text
-  and answers are untrusted) and applies typographic fixes; highlights use the CSS Custom Highlight API with
-  text offsets per block (`lib/anchors.ts`), so they never modify the DOM.
+## Project structure
 
-## Testing without Claude
+```
+src/
+  main/       Electron main process: library, processing queue, Claude Code runs, chat
+  preload/    API exposed to the window
+  renderer/   React UI: library, reader, side panel, settings
+  shared/     Types, the transcription format, venue and CCF data
+```
 
-- `SHIORI_USER_DATA=<dir>`: separate settings/profile (put `{"libraryPath": "..."}` in `<dir>/settings.json`).
-- `SHIORI_FAKE_CLAUDE=<dir>`: processing copies `<dir>/<paper id>/` (doc/, info.json, summary.md) instead of
-  calling Claude; pages, crops and everything after run for real.
-- Settings → `claudePath` can point at a stand-in script that prints the same stream-json events.
-- Launch with `--remote-debugging-port=9222` to drive the window over the DevTools protocol.
+See [docs/development.md](docs/development.md) for how processing works and how to test without Claude.
+
+## Built with
+
+Electron, React, pdf.js, KaTeX and markdown-it. Fonts: Geist, Inter, Space Grotesk, IBM Plex, Manrope and
+JetBrains Mono (SIL Open Font License).
