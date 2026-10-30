@@ -3,6 +3,7 @@ import type { ChatEvent, ChatMessage } from '../shared/types'
 import { loadChat, paperDir, readMeta, readRootText, saveChat } from './library'
 import { runClaude } from './claude'
 import { chatSystemPrompt } from './prompts'
+import { glossaryPrompt } from './glossary'
 import { getSettings } from './settings'
 
 const active = new Map<string, AbortController>()
@@ -55,7 +56,7 @@ export async function ask(
       partial: true,
       systemPrompt: chatSystemPrompt({
         profile: readRootText('profile.md'),
-        glossary: readRootText('glossary.md'),
+        glossary: glossaryPrompt(),
         title: meta.titleZh || meta.title
       }),
       signal: abort.signal,

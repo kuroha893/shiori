@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Annotation, ChatEvent, PaperMeta, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
 import * as lib from './library'
 import { getSettings, saveSettings } from './settings'
 import { claudeStatus, openLogin } from './claude'
 import { cancel, enqueue, initJobs, prepare } from './jobs'
+import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
 
@@ -72,7 +73,10 @@ function registerIpc(): void {
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     const s = saveSettings(patch)
-    if (patch.libraryPath) lib.ensureLibrary()
+    if (patch.libraryPath) {
+      lib.ensureLibrary()
+      loadGlossary()
+    }
     return s
   })
   ipcMain.handle('settings:chooseLibrary', async () => {
@@ -80,10 +84,15 @@ function registerIpc(): void {
     if (r.canceled || !r.filePaths[0]) return getSettings()
     const s = saveSettings({ libraryPath: r.filePaths[0] })
     lib.ensureLibrary()
+    loadGlossary()
     return s
   })
-  ipcMain.handle('text:get', (_e, name: 'profile.md' | 'glossary.md') => lib.readRootText(name))
-  ipcMain.handle('text:set', (_e, name: 'profile.md' | 'glossary.md', text: string) => lib.writeRootText(name, text))
+  ipcMain.handle('text:get', (_e, name: 'profile.md') => lib.readRootText(name))
+  ipcMain.handle('text:set', (_e, name: 'profile.md', text: string) => lib.writeRootText(name, text))
+
+  ipcMain.handle('glossary:list', () => loadGlossary())
+  ipcMain.handle('glossary:save', (_e, entry: Omit<GlossaryEntry, 'id'> & { id?: string }) => saveEntry(entry))
+  ipcMain.handle('glossary:delete', (_e, id: string) => deleteEntry(id))
 
   ipcMain.handle('claude:status', () => claudeStatus())
   ipcMain.handle('claude:login', () => openLogin())
@@ -147,6 +156,7 @@ app.whenReady().then(() => {
     }
   })
   lib.ensureLibrary()
+  loadGlossary()
   registerIpc()
   createWindow()
   initJobs(paperChanged)

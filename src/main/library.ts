@@ -38,8 +38,6 @@ export function ensureLibrary(): void {
   mkdirSync(papersDir(), { recursive: true })
   const profile = join(root(), 'profile.md')
   if (!existsSync(profile)) writeFileSync(profile, DEFAULT_PROFILE)
-  const glossary = join(root(), 'glossary.md')
-  if (!existsSync(glossary)) writeFileSync(glossary, DEFAULT_GLOSSARY)
 }
 
 /** Resolve a path inside a paper folder, refusing anything that escapes it. */
@@ -206,12 +204,12 @@ export const loadChat = (id: string) => readJson<ChatState>(id, 'chat.json', { m
 export const saveChat = (id: string, chat: ChatState) =>
   writeFile(join(paperDir(id), 'chat.json'), JSON.stringify(chat, null, 2))
 
-export function readRootText(name: 'profile.md' | 'glossary.md'): string {
+export function readRootText(name: 'profile.md'): string {
   ensureLibrary()
   return readFileSync(join(root(), name), 'utf8')
 }
 
-export function writeRootText(name: 'profile.md' | 'glossary.md', text: string): void {
+export function writeRootText(name: 'profile.md', text: string): void {
   ensureLibrary()
   writeFileSync(join(root(), name), text)
 }

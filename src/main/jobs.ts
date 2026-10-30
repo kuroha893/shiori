@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { PaperMeta } from '../shared/types'
 import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, readRootText, updateMeta } from './library'
+import { glossaryPrompt } from './glossary'
 import { runClaude } from './claude'
 import { processPrompt, verifyPrompt } from './prompts'
 import { getSettings } from './settings'
@@ -134,7 +135,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     }
   }
 
-  const glossary = readRootText('glossary.md')
+  const glossary = glossaryPrompt()
   const profile = readRootText('profile.md')
   // Development only: SHIORI_FAKE_CLAUDE=<dir> copies <dir>/<paper id>/ in place of Claude's output.
   const fake = globalThis.process.env.SHIORI_FAKE_CLAUDE

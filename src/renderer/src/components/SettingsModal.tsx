@@ -3,6 +3,7 @@ import type { ClaudeStatus, Settings } from '../../../shared/types'
 import { api } from '../api'
 import { Icon } from './Icon'
 import { Modal, themeOptions } from './Chrome'
+import { GlossaryList } from './GlossaryList'
 
 const INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash'
 
@@ -26,7 +27,7 @@ function Copyable({ text }: { text: string }) {
   )
 }
 
-function TextFile({ name, rows }: { name: 'profile.md' | 'glossary.md'; rows: number }) {
+function TextFile({ name, rows }: { name: 'profile.md'; rows: number }) {
   const [text, setText] = useState<string>()
   const [saved, setSaved] = useState(true)
   useEffect(() => {
@@ -208,9 +209,9 @@ export function SettingsModal(props: {
       <section className="set-section">
         <h3>
           术语表
-          <small>所有论文共用的译法。改了之后，新处理的论文会照新的来。</small>
+          <small>所有论文共用的译法。改了之后，新处理的论文和问答都会照新的来。</small>
         </h3>
-        <TextFile name="glossary.md" rows={10} />
+        <GlossaryList />
       </section>
     </Modal>
   )

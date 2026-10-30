@@ -94,6 +94,15 @@ export interface ClaudeStatus {
   error?: string
 }
 
+export interface GlossaryEntry {
+  id: string
+  en: string
+  /** Chinese rendering; ignored when keep is set */
+  zh?: string
+  /** Keep the English term untranslated */
+  keep?: boolean
+}
+
 export type ChatEvent =
   | { paper: string; kind: 'delta'; text: string }
   | { paper: string; kind: 'status'; text: string }

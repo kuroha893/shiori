@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, PaperMeta, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
 
 const on = <T>(channel: string, fn: (v: T) => void) => {
   const h = (_e: unknown, v: T) => fn(v)
@@ -13,8 +13,11 @@ const api = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch: Partial<Settings>) => ipcRenderer.invoke('settings:set', patch),
   chooseLibrary: () => ipcRenderer.invoke('settings:chooseLibrary'),
-  getText: (name: 'profile.md' | 'glossary.md') => ipcRenderer.invoke('text:get', name),
-  setText: (name: 'profile.md' | 'glossary.md', text: string) => ipcRenderer.invoke('text:set', name, text),
+  getText: (name: 'profile.md') => ipcRenderer.invoke('text:get', name),
+  setText: (name: 'profile.md', text: string) => ipcRenderer.invoke('text:set', name, text),
+  listTerms: (): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:list'),
+  saveTerm: (entry: Omit<GlossaryEntry, 'id'> & { id?: string }): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:save', entry),
+  deleteTerm: (id: string): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:delete', id),
   claudeStatus: () => ipcRenderer.invoke('claude:status'),
   claudeLogin: () => ipcRenderer.invoke('claude:login'),
 
