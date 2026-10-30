@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, Folder, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
 
 const on = <T>(channel: string, fn: (v: T) => void) => {
   const h = (_e: unknown, v: T) => fn(v)
@@ -18,6 +18,11 @@ const api = {
   listTerms: (): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:list'),
   saveTerm: (entry: Omit<GlossaryEntry, 'id'> & { id?: string }): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:save', entry),
   deleteTerm: (id: string): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:delete', id),
+  listFolders: (): Promise<Folder[]> => ipcRenderer.invoke('folders:list'),
+  createFolder: (name: string): Promise<Folder> => ipcRenderer.invoke('folders:create', name),
+  renameFolder: (id: string, name: string) => ipcRenderer.invoke('folders:rename', id, name),
+  deleteFolder: (id: string) => ipcRenderer.invoke('folders:delete', id),
+  acceptSuggestion: (id: string) => ipcRenderer.invoke('papers:acceptSuggestion', id),
   claudeStatus: () => ipcRenderer.invoke('claude:status'),
   claudeLogin: () => ipcRenderer.invoke('claude:login'),
 
@@ -43,6 +48,7 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),
+  onFoldersChanged: (fn: (f: Folder[]) => void) => on('folders:changed', fn),
   onPaperRemoved: (fn: (id: string) => void) => on('paper:removed', fn),
   onChatEvent: (fn: (e: ChatEvent) => void) => on('chat:event', fn)
 }

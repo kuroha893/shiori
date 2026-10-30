@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { PaperMeta } from '../shared/types'
 import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, readRootText, updateMeta } from './library'
+import { findFolder, loadFolders } from './folders'
 import { glossaryPrompt } from './glossary'
 import { runClaude } from './claude'
 import { guidePrompt, processPrompt, verifyPrompt } from './prompts'
@@ -217,10 +218,12 @@ export function startGuide(id: string): void {
 async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   const dir = paperDir(id)
   const next = join(dir, 'summary.next.md')
+  const suggestion = join(dir, 'suggestion.json')
   rmSync(next, { force: true })
+  rmSync(suggestion, { force: true })
   const result = await runClaude({
     cwd: dir,
-    prompt: guidePrompt({ glossary: glossaryPrompt(), profile: readRootText('profile.md') }),
+    prompt: guidePrompt({ glossary: glossaryPrompt(), profile: readRootText('profile.md'), folders: loadFolders().map((f) => f.name) }),
     model: getSettings().processModel,
     tools: ['Read', 'Glob', 'Write', 'WebSearch'],
     allowedTools: ['WebSearch'],
@@ -231,6 +234,18 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   if (result.isError) throw new Error(result.text || 'Claude 处理失败')
   if (!existsSync(next)) throw new Error('Claude 没有写出导读')
   renameSync(next, join(dir, 'summary.md'))
+  applySuggestion(id, suggestion)
+}
+
+/** A paper already filed by the owner gets no suggestion. */
+function applySuggestion(id: string, file: string): void {
+  try {
+    const name = String(JSON.parse(readFileSync(file, 'utf8')).name ?? '').trim()
+    if (name && !readMeta(id)?.folders?.length) set(id, { suggestion: { name, folderId: findFolder(name)?.id } })
+  } catch {
+    /* the guide is what matters; no suggestion this time */
+  }
+  rmSync(file, { force: true })
 }
 
 export const isRunning = (id: string) => running?.id === id

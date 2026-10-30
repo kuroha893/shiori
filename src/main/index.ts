@@ -5,6 +5,7 @@ import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '
 import * as lib from './library'
 import { getSettings, saveSettings } from './settings'
 import { claudeStatus, openLogin } from './claude'
+import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
 import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
@@ -61,6 +62,7 @@ function createWindow(): void {
 
 const send = (channel: string, payload: unknown) => main?.webContents.send(channel, payload)
 const paperChanged = (meta: PaperMeta) => send('paper:changed', meta)
+const foldersChanged = () => send('folders:changed', loadFolders())
 
 async function addPdf(path: string): Promise<PaperMeta> {
   const meta = lib.importPdf(path)
@@ -93,6 +95,26 @@ function registerIpc(): void {
   ipcMain.handle('glossary:list', () => loadGlossary())
   ipcMain.handle('glossary:save', (_e, entry: Omit<GlossaryEntry, 'id'> & { id?: string }) => saveEntry(entry))
   ipcMain.handle('glossary:delete', (_e, id: string) => deleteEntry(id))
+
+  ipcMain.handle('folders:list', () => loadFolders())
+  ipcMain.handle('folders:create', (_e, name: string) => {
+    const folder = createFolder(name)
+    foldersChanged()
+    return folder
+  })
+  ipcMain.handle('folders:rename', (_e, id: string, name: string) => {
+    renameFolder(id, name)
+    foldersChanged()
+  })
+  ipcMain.handle('folders:delete', (_e, id: string) => {
+    deleteFolder(id).forEach(paperChanged)
+    foldersChanged()
+  })
+  ipcMain.handle('papers:acceptSuggestion', (_e, id: string) => {
+    const meta = acceptSuggestion(id)
+    if (meta) paperChanged(meta)
+    foldersChanged()
+  })
 
   ipcMain.handle('claude:status', () => claudeStatus())
   ipcMain.handle('claude:login', () => openLogin())

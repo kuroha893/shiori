@@ -346,6 +346,7 @@ export function Reader(props: {
                 setTab('guide')
               }}
               footer={finished}
+              toast={toast}
             />
           )}
         </div>

@@ -27,10 +27,19 @@ export interface PaperMeta {
   /** A guide is being written in the background */
   guideWriting?: boolean
   guideError?: string
+  /** Ids of the research directions the owner filed this paper under */
+  folders?: string[]
+  /** Claude's suggestion for an unfiled paper; nothing is filed until the owner accepts it */
+  suggestion?: { name: string; folderId?: string }
   /** Reading state */
   readPos?: { block: string; ratio: number }
   readAt?: string
   finished?: boolean
+}
+
+export interface Folder {
+  id: string
+  name: string
 }
 
 export interface Block {

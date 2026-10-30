@@ -50,7 +50,7 @@ export function Menu({ x, y, items, onClose }: { x: number; y: number; items: Me
   const ref = useRef<HTMLDivElement>(null)
   useDismiss(ref, onClose)
   const left = Math.min(x, window.innerWidth - 200)
-  const top = Math.min(y, window.innerHeight - items.length * 34 - 16)
+  const top = Math.max(8, Math.min(y, window.innerHeight - items.length * 34 - 16))
   return (
     <div ref={ref} className="popover menu" style={{ left, top }}>
       {items.map((it) => (

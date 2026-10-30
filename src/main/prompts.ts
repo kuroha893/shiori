@@ -126,7 +126,7 @@ const GUIDE_SAMPLE = `## 要解决的问题
 
 这个想法成立了：Transformer 的翻译质量超过了当时最好的模型，训练成本却低得多。论文之外还有一点值得知道：后来的 BERT 和 GPT 都建立在这个架构上，这也是它今天仍然值得读的主要原因。`
 
-export function guidePrompt(o: { glossary: string; profile: string }): string {
+export function guidePrompt(o: { glossary: string; profile: string; folders: string[] }): string {
   return `You are writing the reading guide (导读) of an academic paper for a Chinese reader who has not read it yet.
 The guide is the underdrawing a painter lays down before any detail: it gives a rough but intuitive sense of the
 whole paper and of the line of research it belongs to, so the reader knows what they are looking at when they
@@ -203,7 +203,15 @@ ${o.glossary}
 ## About the reader (adapt the explanations to them)
 ${o.profile}
 
-Write the guide to summary.next.md and nothing else, then reply with the single word DONE.`
+Write the guide to summary.next.md.
+
+Then suggest a research direction under which the reader could file this paper. Their directions so far:
+${o.folders.length ? o.folders.map((f) => `- ${f}`).join('\n') : '(none yet)'}
+If one of these fits, use its name exactly. Otherwise propose a short new Chinese name, broad enough to hold several
+related papers yet narrower than the reader's whole field: 幻觉与事实性 or 推理加速, not 大语言模型 and not the name of this
+paper's method. Write it to suggestion.json as {"name": "..."}.
+
+Write nothing else, then reply with the single word DONE.`
 }
 
 export const verifyPrompt = (ids: string[]) =>
