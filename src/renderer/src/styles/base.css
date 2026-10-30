@@ -1,0 +1,454 @@
+/* Design tokens and fonts follow kuroha.xyz (Axi-Theme): Century Gothic + Satoshi, a quiet steel-blue
+   primary, charcoal layers in dark mode, rounded-lg bordered cards. */
+
+@font-face {
+  font-family: 'Century Gothic';
+  src: url('../assets/fonts/centurygothic.ttf') format('truetype');
+  font-weight: normal;
+}
+@font-face {
+  font-family: 'Century Gothic';
+  src: url('../assets/fonts/centurygothic_bold.ttf') format('truetype');
+  font-weight: bold;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('../assets/fonts/Satoshi-Variable.ttf');
+  font-weight: 300 900;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('../assets/fonts/Satoshi-VariableItalic.ttf');
+  font-weight: 300 900;
+  font-style: italic;
+}
+/* In Chinese text, dashes and ellipses take the CJK glyphs (——, ……) instead of the Latin font's. */
+@font-face {
+  font-family: 'ZhPunctSerif';
+  src: local('Songti SC Regular'), local('STSongti-SC-Regular');
+  unicode-range: U+2014, U+2026;
+}
+@font-face {
+  font-family: 'ZhPunctSans';
+  src: local('PingFang SC Regular'), local('PingFangSC-Regular');
+  unicode-range: U+2014, U+2026;
+}
+@font-face {
+  font-family: 'ComicShannsMono';
+  src: url('../assets/fonts/ComicShannsMonoNerdFontPropo-Regular.otf');
+}
+
+:root {
+  --background: 210 33% 99%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --primary: 200 29% 45%;
+  --primary-foreground: 0 0% 98%;
+  --muted: 240 4.8% 95%;
+  --muted-foreground: 240 3.8% 32%;
+  --faint-foreground: 240 3.8% 52%;
+  --accent: 240 4.8% 95.9%;
+  --border: 240 5.9% 88%;
+  --destructive: 0 72% 51%;
+  --radius: 0.5rem;
+  --shadow: 0 1px 2px hsl(240 10% 4% / 0.04), 0 8px 24px -12px hsl(240 10% 4% / 0.12);
+  --shadow-pop: 0 2px 6px hsl(240 10% 4% / 0.06), 0 18px 48px -16px hsl(240 10% 4% / 0.28);
+  --figure-bg: #fff;
+  --hl-yellow: hsl(48 100% 62% / 0.42);
+  --hl-green: hsl(140 60% 55% / 0.32);
+  --hl-blue: hsl(205 90% 62% / 0.30);
+  --hl-pink: hsl(335 85% 66% / 0.30);
+
+  --font-display: 'Century Gothic', 'Satoshi', 'PingFang SC', -apple-system, sans-serif;
+  --font-ui: 'Satoshi', 'PingFang SC', -apple-system, 'Helvetica Neue', sans-serif;
+  --font-mono: 'ComicShannsMono', 'SF Mono', Menlo, monospace;
+  --font-serif: 'Charter', 'Songti SC', 'STSong', serif;
+  --font-serif-heading: 'Century Gothic', 'PingFang SC', sans-serif;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --background: 240 4% 8%;
+  --foreground: 240 5% 91%;
+  --card: 240 4% 11.5%;
+  --popover: 240 4% 12.5%;
+  --primary: 195 95% 85%;
+  --primary-foreground: 240 3.7% 15.9%;
+  --muted: 240 4% 14%;
+  --muted-foreground: 240 4% 70%;
+  --faint-foreground: 240 4% 52%;
+  --accent: 240 4% 16%;
+  --border: 240 4% 18%;
+  --destructive: 0 70% 60%;
+  --shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 24px -12px hsl(0 0% 0% / 0.5);
+  --shadow-pop: 0 2px 6px hsl(0 0% 0% / 0.3), 0 18px 48px -16px hsl(0 0% 0% / 0.7);
+  --figure-bg: hsl(0 0% 96%);
+  --hl-yellow: hsl(48 90% 55% / 0.30);
+  --hl-green: hsl(140 55% 50% / 0.26);
+  --hl-blue: hsl(205 90% 60% / 0.28);
+  --hl-pink: hsl(335 80% 64% / 0.28);
+  color-scheme: dark;
+}
+
+/* 护眼: warm paper */
+:root[data-theme='sepia'] {
+  --background: 40 36% 93.5%;
+  --foreground: 30 18% 13%;
+  --card: 40 40% 96.5%;
+  --popover: 40 40% 97%;
+  --primary: 200 29% 38%;
+  --muted: 38 26% 88%;
+  --muted-foreground: 30 12% 30%;
+  --faint-foreground: 30 10% 46%;
+  --accent: 38 26% 88%;
+  --border: 36 20% 80%;
+  --figure-bg: hsl(40 30% 98%);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.22);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.12);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--foreground) / 0.22);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---------- shared controls ---------- */
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  cursor: default;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.btn:hover {
+  background: hsl(var(--accent));
+}
+.btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.btn.primary {
+  background: hsl(var(--foreground));
+  border-color: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.btn.primary:hover {
+  opacity: 0.88;
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn.ghost:hover {
+  background: hsl(var(--accent));
+}
+.btn.danger {
+  color: hsl(var(--destructive));
+}
+.btn.sm {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.icon-btn:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+.icon-btn.bordered {
+  border-color: hsl(var(--border));
+}
+.icon-btn.active {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+}
+.icon-btn svg,
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  user-select: text;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.textarea {
+  height: auto;
+  padding: 9px 11px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.input:focus,
+.textarea:focus {
+  border-color: hsl(var(--foreground) / 0.35);
+  box-shadow: 0 0 0 3px hsl(var(--foreground) / 0.06);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: hsl(var(--faint-foreground));
+}
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 1px);
+  background: hsl(var(--muted) / 0.6);
+}
+.seg button {
+  height: 26px;
+  min-width: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 12.5px;
+  cursor: default;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.seg button:hover {
+  color: hsl(var(--foreground));
+}
+.seg button.on {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px hsl(240 10% 4% / 0.08), 0 0 0 1px hsl(var(--border));
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 99px;
+  font-size: 11.5px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+.pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pill.ok {
+  color: hsl(150 45% 38%);
+}
+:root[data-theme='dark'] .pill.ok {
+  color: hsl(150 50% 62%);
+}
+.pill.busy {
+  color: hsl(var(--primary));
+}
+.pill.busy .dot {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.pill.err {
+  color: hsl(var(--destructive));
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.muted {
+  color: hsl(var(--muted-foreground));
+}
+.faint {
+  color: hsl(var(--faint-foreground));
+}
+
+.kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid hsl(var(--border));
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  line-height: 15px;
+  text-align: center;
+  color: hsl(var(--faint-foreground));
+}
+
+.fade-in {
+  animation: fadeIn 0.35s ease both;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- popovers, modal ---------- */
+
+.popover {
+  position: fixed;
+  z-index: 50;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+  animation: popIn 0.14s ease-out both;
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.985);
+  }
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: hsl(240 10% 4% / 0.32);
+  backdrop-filter: blur(3px);
+  animation: fade 0.18s ease both;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.modal {
+  position: fixed;
+  z-index: 61;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 4px);
+  background: hsl(var(--background));
+  box-shadow: var(--shadow-pop);
+  animation: popIn 0.18s ease-out both;
+}
+
+.toast {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  border-radius: 99px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-size: 13px;
+  box-shadow: var(--shadow-pop);
+  animation: popIn 0.18s ease-out both;
+}

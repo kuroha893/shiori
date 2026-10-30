@@ -1,0 +1,54 @@
+{
+  "name": "shiori",
+  "productName": "Shiori",
+  "version": "0.1.0",
+  "description": "A personal paper reader: PDFs re-typeset as bilingual articles, with Claude to help read them",
+  "author": "Kuroha",
+  "private": true,
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "electron-vite preview",
+    "pack": "electron-vite build && electron-builder --mac --dir"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vscode/markdown-it-katex": "^1.1.2",
+    "dompurify": "^3.4.17",
+    "electron": "45.0.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "katex": "^0.16.27",
+    "markdown-it": "^15.0.3",
+    "markdown-it-cjk-friendly": "^3.0.0",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5"
+  },
+  "build": {
+    "appId": "xyz.kuroha.shiori",
+    "productName": "Shiori",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "mac": {
+      "target": "dir",
+      "icon": "build/icon.icns",
+      "category": "public.app-category.education",
+      "identity": null
+    }
+  }
+}
