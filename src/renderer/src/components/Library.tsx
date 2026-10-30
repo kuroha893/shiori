@@ -3,6 +3,7 @@ import type { ClaudeStatus, PaperMeta, Settings } from '../../../shared/types'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
 import { Menu, ThemeButton, type MenuItem } from './Chrome'
+import { VenueTags } from './VenueTags'
 import type { Toast } from './App'
 
 type Filter = 'all' | 'todo' | 'busy' | 'ready' | 'done'
@@ -261,7 +262,7 @@ function PaperCard({
           </p>
         )}
         <div className="paper-foot">
-          <span className="mono faint">{[p.venue, p.year].filter(Boolean).join(' · ') || (p.pages ? `${p.pages} 页` : '')}</span>
+          {p.venue || p.year ? <VenueTags venue={p.venue} year={p.year} /> : <span className="mono faint">{p.pages ? `${p.pages} 页` : ''}</span>}
           <span className="spacer" />
           {p.status === 'ready' &&
             (p.finished ? (

@@ -4,6 +4,7 @@ import { fileUrl } from '../api'
 import { renderMarkdown } from '../lib/markdown'
 import { offsetsToRange } from '../lib/anchors'
 import { Icon } from './Icon'
+import { VenueTags } from './VenueTags'
 
 export type View = Settings['view']
 type Lang = 'en' | 'zh'
@@ -247,10 +248,10 @@ export function Article({ paper, blocks, view, annotations, onJump, onPeek, onZo
       }}
     >
       <header className="doc-head">
-        {paper.venue && (
-          <div className="doc-kicker mono">
-            {[paper.venue, paper.year].filter(Boolean).join(' · ')}
-            {paper.arxiv && <span> · arXiv {paper.arxiv}</span>}
+        {(paper.venue || paper.year || paper.arxiv) && (
+          <div className="doc-kicker">
+            <VenueTags venue={paper.venue} year={paper.year} />
+            {paper.arxiv && <span className="mono">arXiv {paper.arxiv}</span>}
           </div>
         )}
         {view !== 'en' && <h1 className="doc-title">{paper.titleZh || paper.title}</h1>}

@@ -33,6 +33,9 @@ Settings → Claude shows the status and opens the login in Terminal.
 - `src/main/chat.ts`: one Claude session per paper (`--session-id`, then `--resume`), streamed to the panel.
 - `src/main/prompts.ts`: the processing, crop-check and chat prompts, including the document format.
 - `src/main/worker.ts` + `src/renderer/src/worker.ts`: a hidden window running pdf.js for page renders and crops.
+- `src/shared/venue.ts` + `src/shared/ccf.ts`: venue tags. `ccf.ts` is the CCF list, 7th edition (2026-03-31),
+  parsed from the official PDF; `venue.ts` maps free-text venues to a label, family colour (ML / ACL / AI / CV),
+  CCF rank, or Findings / Workshop (which CCF doesn't rank). Update `ccf.ts` when CCF publishes a new edition.
 - `src/shared/doc.ts`: parser for the document format (`@@ <type> key=value` blocks, `@@zh` / `@@table` sections).
 - `src/renderer/`: React UI. `lib/markdown.ts` renders Markdown + KaTeX, sanitizes with DOMPurify (paper text
   and answers are untrusted) and applies typographic fixes; highlights use the CSS Custom Highlight API with

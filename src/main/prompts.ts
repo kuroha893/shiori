@@ -65,7 +65,9 @@ Do this:
    around the graphic itself, including sub-figure labels but excluding the caption. Look closely at the
    gridlines; a box that cuts off part of the graphic is worse than one a little too loose.
 4. Write info.json: {"title": "...", "title_zh": "...", "authors": ["..."], "venue": "...", "year": "..."}
-   (venue: the conference or journal if the paper says so, else "arXiv" or "").
+   venue: the conference or journal's usual short name without the year, as the paper states it: "NeurIPS",
+   "ACL", "CVPR", "TPAMI"; "Findings of EMNLP" for Findings papers; "<venue> Workshop" for workshop papers;
+   "arXiv" for a preprint that names no venue. year: the year of that venue, else of the preprint.
 5. Write summary.md, a reading guide in Chinese for someone about to read the paper:
    ## 一句话 / ## 要解决的问题 / ## 核心方法 / ## 主要结果 / ## 阅读建议 (which sections and figures matter most,
    what to watch for, prerequisites) / ## 关键术语 (term — short explanation). Link to blocks with ids, e.g. [图 3](#fig-3).
