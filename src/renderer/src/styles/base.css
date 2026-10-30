@@ -1,28 +1,6 @@
-/* Design tokens and fonts follow kuroha.xyz (Axi-Theme): Century Gothic + Satoshi, a quiet steel-blue
-   primary, charcoal layers in dark mode, rounded-lg bordered cards. */
+/* Design tokens follow kuroha.xyz (Axi-Theme): a quiet steel-blue primary, charcoal layers in dark mode,
+   rounded-lg bordered cards. Fonts are open-licensed (OFL) and chosen in Settings; see lib/fonts.ts. */
 
-@font-face {
-  font-family: 'Century Gothic';
-  src: url('../assets/fonts/centurygothic.ttf') format('truetype');
-  font-weight: normal;
-}
-@font-face {
-  font-family: 'Century Gothic';
-  src: url('../assets/fonts/centurygothic_bold.ttf') format('truetype');
-  font-weight: bold;
-}
-@font-face {
-  font-family: 'Satoshi';
-  src: url('../assets/fonts/Satoshi-Variable.ttf');
-  font-weight: 300 900;
-  font-style: normal;
-}
-@font-face {
-  font-family: 'Satoshi';
-  src: url('../assets/fonts/Satoshi-VariableItalic.ttf');
-  font-weight: 300 900;
-  font-style: italic;
-}
 /* In Chinese text, dashes and ellipses take the CJK glyphs (——, ……) instead of the Latin font's. */
 @font-face {
   font-family: 'ZhPunctSerif';
@@ -34,11 +12,6 @@
   src: local('PingFang SC Regular'), local('PingFangSC-Regular');
   unicode-range: U+2014, U+2026;
 }
-@font-face {
-  font-family: 'ComicShannsMono';
-  src: url('../assets/fonts/ComicShannsMonoNerdFontPropo-Regular.otf');
-}
-
 :root {
   --background: 210 33% 99%;
   --foreground: 240 10% 3.9%;
@@ -61,11 +34,11 @@
   --hl-blue: hsl(205 90% 62% / 0.30);
   --hl-pink: hsl(335 85% 66% / 0.30);
 
-  --font-display: 'Century Gothic', 'Satoshi', 'PingFang SC', -apple-system, sans-serif;
-  --font-ui: 'Satoshi', 'PingFang SC', -apple-system, 'Helvetica Neue', sans-serif;
-  --font-mono: 'ComicShannsMono', 'SF Mono', Menlo, monospace;
+  /* overridden at runtime from Settings (lib/fonts.ts) */
+  --font-display: 'Geist Variable', 'PingFang SC', -apple-system, sans-serif;
+  --font-ui: 'Geist Variable', 'PingFang SC', -apple-system, 'Helvetica Neue', sans-serif;
+  --font-mono: 'Geist Mono Variable', 'SF Mono', Menlo, monospace;
   --font-serif: 'Charter', 'Songti SC', 'STSong', serif;
-  --font-serif-heading: 'Century Gothic', 'PingFang SC', sans-serif;
   color-scheme: light;
 }
 

@@ -4,6 +4,7 @@ import { api } from '../api'
 import { Icon } from './Icon'
 import { Modal, themeOptions } from './Chrome'
 import { GlossaryList } from './GlossaryList'
+import { FontPicker } from './FontPicker'
 
 const INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash'
 
@@ -191,9 +192,19 @@ export function SettingsModal(props: {
                 宋体 · Charter
               </button>
               <button className={s.readingFont === 'sans' ? 'on' : ''} onClick={() => props.onChange({ readingFont: 'sans' })}>
-                苹方 · Satoshi
+                苹方 · 界面字体
               </button>
             </div>
+          </div>
+          <div className="set-row">
+            <label>界面字体</label>
+            <FontPicker kind="ui" value={s.uiFont} onChange={(uiFont) => props.onChange({ uiFont })} />
+            <span className="faint" style={{ fontSize: 12 }}>标题、按钮和英文界面</span>
+          </div>
+          <div className="set-row">
+            <label>等宽字体</label>
+            <FontPicker kind="mono" value={s.monoFont} onChange={(monoFont) => props.onChange({ monoFont })} />
+            <span className="faint" style={{ fontSize: 12 }}>日期、编号</span>
           </div>
         </div>
       </section>

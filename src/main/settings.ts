@@ -10,6 +10,8 @@ const defaults: Settings = {
   chatModel: 'opus',
   theme: 'system',
   readingFont: 'serif',
+  uiFont: 'Geist Variable',
+  monoFont: 'Geist Mono Variable',
   fontSize: 18,
   lineHeight: 1.85,
   view: 'zh'

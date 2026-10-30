@@ -15,6 +15,13 @@ npm run dev        # development
 npm run pack       # dist/mac-arm64/Shiori.app (unsigned, for this Mac)
 ```
 
+## Fonts
+
+The interface ships only open-licensed fonts (SIL OFL, via Fontsource): Geist (default), Inter, Space Grotesk,
+IBM Plex Sans, Manrope, and Geist Mono (default), JetBrains Mono, IBM Plex Mono. Settings → 阅读 → 界面字体 /
+等宽字体 can switch to any of them or to any font installed on the Mac (install a font in Font Book and it
+appears in the list). Chinese text uses the system's PingFang SC and Songti SC.
+
 Needs Claude Code installed (`curl -fsSL https://claude.ai/install.sh | bash`) and signed in (`claude auth login`).
 Settings → Claude shows the status and opens the login in Terminal.
 

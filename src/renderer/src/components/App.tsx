@@ -4,6 +4,7 @@ import { api } from '../api'
 import { Library } from './Library'
 import { Reader } from './Reader'
 import { SettingsModal } from './SettingsModal'
+import { applyFonts } from '../lib/fonts'
 
 export type Toast = (text: string) => void
 
@@ -47,6 +48,10 @@ export function App() {
     mq.addEventListener('change', h)
     return () => mq.removeEventListener('change', h)
   }, [settings?.theme])
+
+  useEffect(() => {
+    if (settings) applyFonts(settings.uiFont, settings.monoFont)
+  }, [settings?.uiFont, settings?.monoFont])
 
   const showToast: Toast = useCallback((text) => {
     setToast(text)

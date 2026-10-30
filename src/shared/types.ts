@@ -81,6 +81,9 @@ export interface Settings {
   chatModel: string
   theme: 'system' | 'light' | 'dark' | 'sepia'
   readingFont: 'serif' | 'sans'
+  /** CSS family names of the interface and monospace fonts */
+  uiFont: string
+  monoFont: string
   fontSize: number
   lineHeight: number
   view: 'zh' | 'en' | 'both'
