@@ -47,6 +47,15 @@ export function Reader(props: {
     api.loadAnnotations(paper.id).then(setAnnotations)
   }, [paper.id])
 
+  // A guide written in the background appears when it is done.
+  const guideWriting = useRef(paper.guideWriting)
+  useEffect(() => {
+    if (guideWriting.current && !paper.guideWriting) {
+      api.loadDoc(paper.id).then((d: PaperDoc) => setDoc((old) => (old ? { ...old, summary: d.summary } : d)))
+    }
+    guideWriting.current = paper.guideWriting
+  }, [paper.id, paper.guideWriting])
+
   const blocks = doc?.blocks ?? []
   const headings = useMemo(() => blocks.filter((b) => b.type === 'h' && (b.attrs.level ?? '1') !== '3'), [blocks])
 

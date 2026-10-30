@@ -111,13 +111,18 @@ export function SidePanel(p: Props) {
             批注{count ? ` ${count}` : ''}
           </button>
         </div>
+        {p.tab === 'guide' && p.summary && (
+          <button className="btn ghost sm" disabled={p.paper.guideWriting || !p.claudeReady} title="根据全文重新写一版导读" onClick={() => api.writeGuide(p.paper.id)}>
+            {p.paper.guideWriting ? '正在重写…' : '重写'}
+          </button>
+        )}
         {p.tab === 'chat' && p.chat.messages.length > 0 && (
           <button className="btn ghost sm" title="清空对话，开始新的会话" onClick={() => confirm('清空这篇论文的对话记录？') && p.chat.reset()}>
             新对话
           </button>
         )}
       </div>
-      {p.tab === 'guide' && <Guide summary={p.summary} onJump={p.onJump} />}
+      {p.tab === 'guide' && <Guide summary={p.summary} paper={p.paper} claudeReady={p.claudeReady} onJump={p.onJump} />}
       {p.tab === 'chat' && <Chat {...p} />}
       {p.tab === 'notes' && <Notes {...p} />}
     </aside>
@@ -134,10 +139,27 @@ function useRefLinks(onJump: (id: string) => void) {
   }
 }
 
-function Guide({ summary, onJump }: { summary?: string; onJump: (id: string) => void }) {
+function Guide({ summary, paper, claudeReady, onJump }: { summary?: string; paper: PaperMeta; claudeReady: boolean; onJump: (id: string) => void }) {
   const click = useRefLinks(onJump)
-  if (!summary) return <div className="side-empty faint">这篇论文还没有导读。</div>
-  return <div className="side-scroll md guide" onClick={click} dangerouslySetInnerHTML={{ __html: renderMarkdown(summary) }} />
+  if (!summary) {
+    if (paper.guideWriting) return <div className="side-empty faint">正在写导读，写好后会显示在这里。</div>
+    return (
+      <div className="side-empty faint">
+        <p>{paper.guideError ? `导读没有写成：${paper.guideError}` : '这篇论文还没有导读。'}</p>
+        {paper.status === 'ready' && (
+          <button className="btn sm" disabled={!claudeReady} onClick={() => api.writeGuide(paper.id)}>
+            写导读
+          </button>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="side-scroll md guide" onClick={click}>
+      {paper.guideError && <p className="faint">这次重写没有成功，下面仍是原来的导读：{paper.guideError}</p>}
+      <div dangerouslySetInnerHTML={{ __html: renderMarkdown(summary) }} />
+    </div>
+  )
 }
 
 const SUGGESTIONS = ['这篇论文最核心的贡献是什么？', '用直觉讲讲方法部分', '实验结果可信吗？有什么局限？', '读懂这篇需要哪些前置知识？']

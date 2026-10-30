@@ -128,6 +128,8 @@ export interface RunOptions {
   prompt: string
   model: string
   tools: string[]
+  /** Tools that may run without asking; headless runs cannot ask */
+  allowedTools?: string[]
   systemPrompt?: string
   /** Start a new session with this id, or resume it when `resume` is set */
   sessionId: string
@@ -167,6 +169,7 @@ export async function runClaude(opts: RunOptions): Promise<RunResult> {
     opts.sessionId
   ]
   if (opts.writable) args.push('--permission-mode', 'acceptEdits')
+  if (opts.allowedTools?.length) args.push('--allowedTools', opts.allowedTools.join(','))
   if (opts.partial) args.push('--include-partial-messages')
   if (opts.systemPrompt) args.push('--append-system-prompt', opts.systemPrompt)
 

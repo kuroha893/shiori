@@ -5,7 +5,7 @@ import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '
 import * as lib from './library'
 import { getSettings, saveSettings } from './settings'
 import { claudeStatus, openLogin } from './claude'
-import { cancel, enqueue, initJobs, prepare } from './jobs'
+import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
@@ -121,6 +121,7 @@ function registerIpc(): void {
     return meta
   })
   ipcMain.handle('papers:process', (_e, id: string) => enqueue(id))
+  ipcMain.handle('papers:guide', (_e, id: string) => startGuide(id))
   ipcMain.handle('papers:cancel', (_e, id: string) => cancel(id))
   ipcMain.handle('papers:trash', async (_e, id: string) => {
     cancel(id)

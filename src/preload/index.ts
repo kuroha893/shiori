@@ -27,6 +27,7 @@ const api = {
   importArxiv: (input: string) => ipcRenderer.invoke('papers:importArxiv', input),
   updatePaper: (id: string, patch: Partial<PaperMeta>) => ipcRenderer.invoke('papers:update', id, patch),
   processPaper: (id: string) => ipcRenderer.invoke('papers:process', id),
+  writeGuide: (id: string) => ipcRenderer.invoke('papers:guide', id),
   cancelPaper: (id: string) => ipcRenderer.invoke('papers:cancel', id),
   trashPaper: (id: string) => ipcRenderer.invoke('papers:trash', id),
   revealPaper: (id: string) => ipcRenderer.invoke('papers:reveal', id),

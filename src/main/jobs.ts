@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PaperMeta } from '../shared/types'
 import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, readRootText, updateMeta } from './library'
 import { glossaryPrompt } from './glossary'
 import { runClaude } from './claude'
-import { processPrompt, verifyPrompt } from './prompts'
+import { guidePrompt, processPrompt, verifyPrompt } from './prompts'
 import { getSettings } from './settings'
 import { workerCall } from './worker'
 
@@ -15,6 +15,7 @@ type Notify = (meta: PaperMeta) => void
 let notify: Notify = () => {}
 let running: { id: string; abort: AbortController } | undefined
 const queue: string[] = []
+const guides = new Map<string, AbortController>()
 
 export function initJobs(onChange: Notify): void {
   notify = onChange
@@ -23,6 +24,9 @@ export function initJobs(onChange: Notify): void {
     if (p.status === 'processing' || p.status === 'queued') {
       set(p.id, { status: 'queued', stage: '等待处理', progress: 0 })
       queue.push(p.id)
+    } else if (p.guideWriting) {
+      set(p.id, { guideWriting: undefined })
+      startGuide(p.id)
     }
   }
   pump()
@@ -46,6 +50,7 @@ export async function prepare(id: string): Promise<void> {
 
 export function enqueue(id: string): void {
   if (running?.id === id || queue.includes(id)) return
+  guides.get(id)?.abort()
   queue.push(id)
   set(id, { status: 'queued', stage: '等待处理', progress: 0, error: undefined })
   pump()
@@ -55,6 +60,7 @@ export function cancel(id: string): void {
   const i = queue.indexOf(id)
   if (i >= 0) queue.splice(i, 1)
   if (running?.id === id) running.abort.abort()
+  guides.get(id)?.abort()
   const meta = readMeta(id)
   if (meta && meta.status !== 'ready') set(id, { status: meta.processedAt ? 'ready' : 'new', stage: undefined, progress: undefined })
 }
@@ -129,8 +135,6 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
           stage: `正在转写和翻译（第 ${partsWritten} 部分）`,
           progress: Math.min(0.85, 0.3 + 0.55 * (partsWritten / expectedParts))
         })
-      } else if (c.name === 'Write' && file.endsWith('summary.md')) {
-        set(id, { stage: '正在写导读', progress: 0.88 })
       }
     }
   }
@@ -159,7 +163,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
 
   set(id, { stage: '正在裁剪图表', progress: 0.9 })
   const figs = await cropAll(id)
-  return finish(id, dir, figs, async () => {
+  await finish(id, dir, figs, async () => {
     const check = await runClaude({
       cwd: dir,
       prompt: verifyPrompt(figs),
@@ -172,6 +176,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     })
     if (!check.isError && !/^\s*NONE\s*$/i.test(check.text)) await cropAll(id)
   })
+  startGuide(id)
 }
 
 async function finish(id: string, dir: string, figs: string[], verify?: () => Promise<void>): Promise<void> {
@@ -195,6 +200,37 @@ async function finish(id: string, dir: string, figs: string[], verify?: () => Pr
     }
   }
   set(id, { ...patch, status: 'ready', stage: undefined, progress: 1, processedAt: new Date().toISOString() })
+}
+
+/** Write or rewrite the guide in the background; the paper stays readable, and an old guide stays until the new one is done. */
+export function startGuide(id: string): void {
+  if (guides.has(id)) return
+  const abort = new AbortController()
+  guides.set(id, abort)
+  set(id, { guideWriting: true, guideError: undefined })
+  writeGuide(id, abort.signal)
+    .then(() => set(id, { guideWriting: undefined }))
+    .catch((e) => set(id, { guideWriting: undefined, guideError: abort.signal.aborted ? undefined : String(e?.message || e) }))
+    .finally(() => guides.delete(id))
+}
+
+async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
+  const dir = paperDir(id)
+  const next = join(dir, 'summary.next.md')
+  rmSync(next, { force: true })
+  const result = await runClaude({
+    cwd: dir,
+    prompt: guidePrompt({ glossary: glossaryPrompt(), profile: readRootText('profile.md') }),
+    model: getSettings().processModel,
+    tools: ['Read', 'Glob', 'Write', 'WebSearch'],
+    allowedTools: ['WebSearch'],
+    sessionId: randomUUID(),
+    writable: true,
+    signal
+  })
+  if (result.isError) throw new Error(result.text || 'Claude 处理失败')
+  if (!existsSync(next)) throw new Error('Claude 没有写出导读')
+  renameSync(next, join(dir, 'summary.md'))
 }
 
 export const isRunning = (id: string) => running?.id === id

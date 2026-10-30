@@ -24,6 +24,9 @@ export interface PaperMeta {
   processSession?: string
   processedAt?: string
   processModel?: string
+  /** A guide is being written in the background */
+  guideWriting?: boolean
+  guideError?: string
   /** Reading state */
   readPos?: { block: string; ratio: number }
   readAt?: string
