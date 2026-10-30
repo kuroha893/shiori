@@ -47,18 +47,6 @@ The app is written to `dist/mac-arm64/Shiori.app`.
 On first launch, open **Settings → Claude** to check that Claude Code is found and signed in. Papers are stored in
 `~/Documents/Shiori`, one folder per paper.
 
-## Project structure
-
-```
-src/
-  main/       Electron main process: library, processing queue, Claude Code runs, chat
-  preload/    API exposed to the window
-  renderer/   React UI: library, reader, side panel, settings
-  shared/     Types, the transcription format, venue and CCF data
-```
-
-See [docs/development.md](docs/development.md) for how processing works and how to test without Claude.
-
 ## Built with
 
 Electron, React, pdf.js, KaTeX and markdown-it. Fonts: Geist, Inter, Space Grotesk, IBM Plex, Manrope and
