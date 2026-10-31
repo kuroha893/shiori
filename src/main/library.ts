@@ -1,8 +1,8 @@
 import { shell } from 'electron'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync, copyFileSync, statSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { Annotation, ChatState, PaperMeta, PaperDoc } from '../shared/types'
 import { getSettings } from './settings'
 import { parseDoc } from '../shared/doc'
@@ -203,6 +203,27 @@ export const saveAnnotations = (id: string, list: Annotation[]) =>
 export const loadChat = (id: string) => readJson<ChatState>(id, 'chat.json', { messages: [] })
 export const saveChat = (id: string, chat: ChatState) =>
   writeFile(join(paperDir(id), 'chat.json'), JSON.stringify(chat, null, 2))
+
+export const loadNote = (id: string) => readJson<object | null>(id, 'note.json', null)
+
+/** Written through a temporary file: the note is the owner's own writing, a crash must not truncate it. */
+export function saveNote(id: string, doc: object): void {
+  const file = join(paperDir(id), 'note.json')
+  writeFileSync(file + '.tmp', JSON.stringify(doc))
+  renameSync(file + '.tmp', file)
+}
+
+const NOTE_IMAGE_TYPES = ['png', 'jpg', 'jpeg', 'gif', 'webp']
+
+/** Stores an image pasted into the note and returns its path inside the paper folder. */
+export function saveNoteImage(id: string, ext: string, bytes: ArrayBuffer): string {
+  const type = ext.toLowerCase()
+  if (!NOTE_IMAGE_TYPES.includes(type)) throw new Error('unsupported image type')
+  const rel = `note-media/${randomUUID()}.${type}`
+  mkdirSync(paperFile(id, 'note-media'), { recursive: true })
+  writeFileSync(paperFile(id, rel), Buffer.from(bytes))
+  return rel
+}
 
 export function readRootText(name: 'profile.md'): string {
   ensureLibrary()

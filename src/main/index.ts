@@ -155,6 +155,9 @@ function registerIpc(): void {
   ipcMain.handle('papers:annotations', (_e, id: string) => lib.loadAnnotations(id))
   ipcMain.handle('papers:saveAnnotations', (_e, id: string, list: Annotation[]) => lib.saveAnnotations(id, list))
   ipcMain.handle('papers:chat', (_e, id: string) => lib.loadChat(id))
+  ipcMain.handle('papers:note', (_e, id: string) => lib.loadNote(id))
+  ipcMain.handle('papers:saveNote', (_e, id: string, doc: object) => lib.saveNote(id, doc))
+  ipcMain.handle('papers:saveNoteImage', (_e, id: string, ext: string, bytes: ArrayBuffer) => lib.saveNoteImage(id, ext, bytes))
 
   ipcMain.handle('chat:ask', (_e, id: string, input) => ask(id, input, (ev: ChatEvent) => send('chat:event', ev)))
   ipcMain.handle('chat:stop', (_e, id: string) => stopAsking(id))

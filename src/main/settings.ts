@@ -14,6 +14,8 @@ const defaults: Settings = {
   monoFont: 'Geist Mono Variable',
   fontSize: 18,
   lineHeight: 1.85,
+  panelWidth: 400,
+  panelFontSize: 13.5,
   view: 'zh'
 }
 

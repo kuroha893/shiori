@@ -98,6 +98,9 @@ export interface Settings {
   monoFont: string
   fontSize: number
   lineHeight: number
+  /** Side panel: width and text size in px */
+  panelWidth: number
+  panelFontSize: number
   view: 'zh' | 'en' | 'both'
 }
 

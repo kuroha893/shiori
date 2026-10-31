@@ -215,7 +215,7 @@ export function Reader(props: {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      const typing = (e.target as Element).closest?.('input, textarea')
+      const typing = (e.target as Element).closest?.('input, textarea, [contenteditable="true"]')
       if (e.metaKey && e.key === 'j') {
         e.preventDefault()
         setPanel((v) => !v)
@@ -354,6 +354,9 @@ export function Reader(props: {
         {panel && doc && (
           <SidePanel
             paper={paper}
+            width={settings.panelWidth}
+            fontSize={settings.panelFontSize}
+            onWidth={(panelWidth) => props.onSettings({ panelWidth })}
             tab={tab}
             setTab={setTab}
             summary={doc.summary}
@@ -450,6 +453,18 @@ function TypoPanel({ settings, onChange, onClose }: { settings: Settings; onChan
           </button>
           <span className="mono">{settings.fontSize}</span>
           <button className="icon-btn" onClick={() => onChange({ fontSize: Math.min(26, settings.fontSize + 1) })}>
+            <Icon name="plus" size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="typo-row">
+        <span className="faint">侧栏字号</span>
+        <div className="stepper">
+          <button className="icon-btn" onClick={() => onChange({ panelFontSize: Math.max(11.5, settings.panelFontSize - 1) })}>
+            <Icon name="minus" size={14} />
+          </button>
+          <span className="mono">{settings.panelFontSize}</span>
+          <button className="icon-btn" onClick={() => onChange({ panelFontSize: Math.min(21.5, settings.panelFontSize + 1) })}>
             <Icon name="plus" size={14} />
           </button>
         </div>

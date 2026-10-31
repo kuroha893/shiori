@@ -729,13 +729,44 @@ p.doc-title {
 /* ---------- side panel ---------- */
 
 .side {
-  width: 400px;
+  position: relative;
+  width: var(--side-width, 400px);
+  /* The article always keeps a readable column, on any window size. */
+  max-width: max(300px, calc(100vw - 420px));
   flex: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid hsl(var(--border));
   background: hsl(var(--card));
+}
+.with-toc .side {
+  max-width: max(300px, calc(100vw - 656px));
+}
+.side-resize {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 7px;
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+.side-resize:hover,
+.resizing-side .side-resize {
+  background: linear-gradient(to right, transparent 2.5px, hsl(var(--primary) / 0.7) 2.5px, hsl(var(--primary) / 0.7) 4.5px, transparent 4.5px);
+}
+body.resizing-side {
+  cursor: col-resize;
+  user-select: none;
+}
+body.resizing-side * {
+  pointer-events: none;
+  user-select: none;
+}
+body.resizing-side .side-resize {
+  pointer-events: auto;
 }
 :root[data-theme='light'] .side {
   background: hsl(220 20% 98.5%);
@@ -764,7 +795,7 @@ p.doc-title {
   gap: 12px;
   padding: 40px;
   text-align: center;
-  font-size: 13px;
+  font-size: calc(var(--side-size) - 0.5px);
   line-height: 1.7;
 }
 .side-foot {
@@ -773,7 +804,7 @@ p.doc-title {
 }
 
 .md {
-  font-size: 13.5px;
+  font-size: var(--side-size, 13.5px);
   line-height: 1.8;
   color: hsl(var(--foreground) / 0.9);
   overflow-wrap: break-word;
@@ -793,11 +824,11 @@ p.doc-title {
 .md h3 {
   margin: 1.5em 0 0.5em;
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: calc(var(--side-size, 13.5px) + 0.5px);
   color: hsl(var(--foreground));
 }
 .md h1 {
-  font-size: 15px;
+  font-size: calc(var(--side-size, 13.5px) + 1.5px);
 }
 .md ul,
 .md ol {
@@ -815,7 +846,7 @@ p.doc-title {
 }
 .md table {
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: calc(var(--side-size, 13.5px) - 1px);
   margin: 0.8em 0;
 }
 .md th,
@@ -847,7 +878,7 @@ p.doc-title {
   gap: 18px;
 }
 .chat-hello {
-  font-size: 13px;
+  font-size: calc(var(--side-size) - 0.5px);
 }
 .chat-hello p {
   margin: 0 0 12px;
@@ -861,7 +892,7 @@ p.doc-title {
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
-  font-size: 13px;
+  font-size: calc(var(--side-size) - 0.5px);
   text-align: left;
   cursor: default;
   transition: border-color 0.15s, background 0.15s;
@@ -881,7 +912,7 @@ p.doc-title {
   border-radius: 12px 12px 4px 12px;
   background: hsl(var(--foreground));
   color: hsl(var(--background));
-  font-size: 13.5px;
+  font-size: var(--side-size);
   line-height: 1.65;
   white-space: pre-wrap;
 }
@@ -891,7 +922,7 @@ p.doc-title {
   border: 0;
   border-left: 2px solid hsl(var(--primary) / 0.6);
   background: transparent;
-  font-size: 12px;
+  font-size: calc(var(--side-size) - 1.5px);
   line-height: 1.6;
   text-align: left;
   color: hsl(var(--muted-foreground));
@@ -976,7 +1007,7 @@ p.doc-title {
   border-left: 2px solid hsl(var(--primary));
   border-radius: 4px;
   background: hsl(var(--muted));
-  font-size: 12px;
+  font-size: calc(var(--side-size) - 1.5px);
   line-height: 1.55;
   color: hsl(var(--muted-foreground));
 }
@@ -1003,7 +1034,7 @@ p.doc-title {
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--side-size);
   line-height: 1.6;
   user-select: text;
 }
@@ -1057,7 +1088,7 @@ p.doc-title {
   border-left: 3px solid var(--bar);
   background: transparent;
   font-family: var(--font-serif);
-  font-size: 13.5px;
+  font-size: var(--side-size);
   line-height: 1.7;
   text-align: left;
   cursor: default;
@@ -1067,7 +1098,7 @@ p.doc-title {
 }
 .note-text {
   margin: 8px 0 0 14px;
-  font-size: 13px;
+  font-size: calc(var(--side-size) - 0.5px);
 }
 .note-item .textarea {
   margin-top: 8px;
@@ -1270,4 +1301,483 @@ p.doc-title {
 /* narrow columns: justified Chinese would stretch around unbreakable English words and formulas */
 .view-both .pair .lang-zh {
   text-align: start;
+}
+
+/* ---------- note (笔记) ---------- */
+
+:root {
+  --note-gray: hsl(240 4% 46%);
+  --note-red: hsl(0 72% 48%);
+  --note-orange: hsl(25 90% 44%);
+  --note-yellow: hsl(42 90% 36%);
+  --note-green: hsl(140 60% 32%);
+  --note-blue: hsl(212 80% 46%);
+  --note-purple: hsl(270 60% 52%);
+  --note-gray-bg: hsl(240 5% 88% / 0.7);
+  --note-red-bg: hsl(0 85% 65% / 0.2);
+  --note-orange-bg: hsl(28 95% 58% / 0.22);
+  --note-yellow-bg: hsl(48 100% 55% / 0.3);
+  --note-green-bg: hsl(140 60% 50% / 0.2);
+  --note-blue-bg: hsl(212 90% 60% / 0.18);
+  --note-purple-bg: hsl(270 75% 65% / 0.18);
+}
+:root[data-theme='dark'] {
+  --note-gray: hsl(240 4% 66%);
+  --note-red: hsl(0 85% 72%);
+  --note-orange: hsl(28 90% 66%);
+  --note-yellow: hsl(46 85% 64%);
+  --note-green: hsl(140 50% 64%);
+  --note-blue: hsl(212 90% 74%);
+  --note-purple: hsl(270 80% 78%);
+  --note-gray-bg: hsl(240 4% 30% / 0.7);
+  --note-red-bg: hsl(0 70% 50% / 0.26);
+  --note-orange-bg: hsl(28 80% 48% / 0.26);
+  --note-yellow-bg: hsl(46 80% 45% / 0.26);
+  --note-green-bg: hsl(140 50% 42% / 0.26);
+  --note-blue-bg: hsl(212 75% 52% / 0.28);
+  --note-purple-bg: hsl(270 60% 55% / 0.28);
+}
+.fg-gray { color: var(--note-gray); }
+.fg-red { color: var(--note-red); }
+.fg-orange { color: var(--note-orange); }
+.fg-yellow { color: var(--note-yellow); }
+.fg-green { color: var(--note-green); }
+.fg-blue { color: var(--note-blue); }
+.fg-purple { color: var(--note-purple); }
+.bg-gray { background: var(--note-gray-bg); }
+.bg-red { background: var(--note-red-bg); }
+.bg-orange { background: var(--note-orange-bg); }
+.bg-yellow { background: var(--note-yellow-bg); }
+.bg-green { background: var(--note-green-bg); }
+.bg-blue { background: var(--note-blue-bg); }
+.bg-purple { background: var(--note-purple-bg); }
+
+.note-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.note-pane[hidden] {
+  display: none;
+}
+/* The left gutter is where the block handle lives. */
+.note-scroll {
+  padding: 18px 20px 40px 34px;
+  cursor: text;
+}
+.note-doc .ProseMirror {
+  min-height: 100%;
+  outline: 0;
+  font-size: var(--side-size);
+  line-height: 1.75;
+  color: hsl(var(--foreground) / 0.92);
+  overflow-wrap: break-word;
+  text-autospace: normal;
+  user-select: text;
+}
+.note-doc .ProseMirror > :first-child {
+  margin-top: 0;
+}
+.note-doc p {
+  margin: 0.35em 0;
+}
+.note-doc h1,
+.note-doc h2,
+.note-doc h3 {
+  margin: 1.1em 0 0.35em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.4;
+  color: hsl(var(--foreground));
+}
+.note-doc h1 {
+  font-size: 1.55em;
+}
+.note-doc h2 {
+  font-size: 1.3em;
+}
+.note-doc h3 {
+  font-size: 1.12em;
+}
+.note-doc ul,
+.note-doc ol {
+  margin: 0.35em 0;
+  padding-left: 1.4em;
+}
+.note-doc li > p {
+  margin: 0.15em 0;
+}
+.note-doc ul[data-type='taskList'] {
+  padding-left: 0.1em;
+  list-style: none;
+}
+.note-doc li[data-checked] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55em;
+}
+.note-doc li[data-checked] > label {
+  flex: none;
+  display: flex;
+  height: 1.75em;
+  align-items: center;
+  user-select: none;
+}
+.note-doc li[data-checked] > label input {
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  accent-color: hsl(var(--primary));
+}
+.note-doc li[data-checked] > div {
+  flex: 1;
+  min-width: 0;
+}
+.note-doc li[data-checked] > div > p {
+  margin: 0;
+}
+.note-doc li[data-checked='true'] > div {
+  color: hsl(var(--faint-foreground));
+  text-decoration: line-through;
+}
+.note-doc blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.9em;
+  border-left: 3px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+.note-doc div[data-type='callout'] {
+  margin: 0.6em 0;
+  padding: 0.55em 0.85em;
+  border-radius: var(--radius);
+  background: var(--note-blue-bg);
+}
+.note-doc div[data-type='callout'][data-color='gray'] { background: var(--note-gray-bg); }
+.note-doc div[data-type='callout'][data-color='red'] { background: var(--note-red-bg); }
+.note-doc div[data-type='callout'][data-color='orange'] { background: var(--note-orange-bg); }
+.note-doc div[data-type='callout'][data-color='yellow'] { background: var(--note-yellow-bg); }
+.note-doc div[data-type='callout'][data-color='green'] { background: var(--note-green-bg); }
+.note-doc div[data-type='callout'][data-color='purple'] { background: var(--note-purple-bg); }
+.note-doc code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+.note-doc pre {
+  margin: 0.6em 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: hsl(var(--muted));
+  overflow-x: auto;
+}
+.note-doc pre code {
+  padding: 0;
+  background: none;
+}
+.note-doc hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+}
+.note-doc mark {
+  border-radius: 2px;
+  color: inherit;
+}
+.note-doc a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.note-doc img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.note-doc [data-resize-handle] {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: hsl(var(--primary));
+}
+.note-doc .ProseMirror-selectednode img,
+.note-doc [data-type='block-math'].ProseMirror-selectednode,
+.note-doc [data-type='inline-math'].ProseMirror-selectednode {
+  outline: 2px solid hsl(var(--primary) / 0.6);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.note-doc [data-type='inline-math'] {
+  cursor: pointer;
+}
+.note-doc [data-type='block-math'] {
+  margin: 0.6em 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: pointer;
+}
+.note-doc .tableWrapper {
+  margin: 0.6em 0;
+  overflow-x: auto;
+}
+.note-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.note-doc th,
+.note-doc td {
+  position: relative;
+  min-width: 60px;
+  padding: 4px 8px;
+  border: 1px solid hsl(var(--border));
+  vertical-align: top;
+}
+.note-doc th {
+  background: hsl(var(--muted));
+  font-weight: 600;
+  text-align: left;
+}
+.note-doc th p,
+.note-doc td p {
+  margin: 0;
+}
+.note-doc .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--primary) / 0.15);
+  pointer-events: none;
+}
+.note-doc .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 2px;
+  background: hsl(var(--primary));
+  pointer-events: none;
+}
+.note-doc .resize-cursor {
+  cursor: col-resize;
+}
+.note-doc .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: hsl(var(--faint-foreground));
+  pointer-events: none;
+}
+.note-doc .ProseMirror-gapcursor::after {
+  border-top-color: hsl(var(--foreground));
+}
+
+.note-handle {
+  z-index: 6;
+  padding-right: 4px;
+}
+.note-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--faint-foreground));
+  cursor: grab;
+}
+.note-grip:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.note-menu {
+  width: 200px;
+  padding: 4px;
+}
+.note-menu.slash {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.note-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+}
+.note-menu button:hover,
+.note-menu button.on {
+  background: hsl(var(--accent));
+}
+.note-menu button.danger {
+  color: hsl(var(--destructive));
+}
+.note-menu-title {
+  padding: 5px 8px 3px;
+  font-size: 11.5px;
+}
+.note-menu-sep {
+  height: 1px;
+  margin: 4px;
+  background: hsl(var(--border));
+}
+.note-badge {
+  flex: none;
+  width: 22px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+}
+.note-bubble {
+  /* The menu plugin starts it absolute, and floating-ui would then measure from .side. */
+  position: fixed !important;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: max-content;
+}
+.note-bar,
+.note-bar-panel {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+}
+.note-bar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+}
+.note-bar i {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: hsl(var(--border));
+}
+.note-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--font-display);
+  font-size: 13px;
+  cursor: default;
+}
+.note-bar button.wide {
+  padding: 0 7px;
+  font-size: 12px;
+}
+.note-bar button:hover,
+.note-bar button.on {
+  background: hsl(var(--accent));
+}
+.note-bar button.on:not(.wide) {
+  color: hsl(var(--primary));
+}
+.note-bar button.danger {
+  color: hsl(var(--destructive));
+}
+.note-bar code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.note-a {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.note-bar-panel.note-menu {
+  width: 170px;
+}
+.note-link {
+  padding: 6px;
+}
+.note-link .input {
+  width: 240px;
+  user-select: text;
+}
+.note-colors {
+  padding: 8px 10px;
+  font-size: 11.5px;
+}
+.note-colors .note-swatches + .faint {
+  margin-top: 8px;
+}
+.note-swatches {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0 0;
+}
+.note-menu .note-swatches {
+  padding: 2px 4px;
+}
+.note-swatch,
+.note-menu button.note-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+.note-swatch:not([class*='bg-']) {
+  background: transparent;
+}
+.note-menu button.note-swatch[class*='bg-']:hover {
+  filter: brightness(1.15);
+}
+.note-swatch.on {
+  border-color: hsl(var(--foreground));
+}
+.note-math {
+  width: 328px;
+  padding: 8px;
+}
+.note-math .textarea {
+  display: block;
+  width: 100%;
+  resize: none;
+  user-select: text;
+}
+.note-math-preview {
+  margin-top: 8px;
+  max-height: 110px;
+  overflow: auto;
+  font-size: 14px;
+}
+.note-math-hint {
+  margin-top: 6px;
+  font-size: 11px;
 }

@@ -4,8 +4,10 @@ import { api } from '../api'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 import { modelName } from './Library'
+import { NoteEditor } from './NoteEditor'
 
-export type Tab = 'guide' | 'chat' | 'notes'
+// 'notes' are the annotations (批注), 'memo' is the free-form note (笔记).
+export type Tab = 'guide' | 'chat' | 'notes' | 'memo'
 export type Quote = { block: string; text: string; lang?: 'en' | 'zh'; start?: number; end?: number }
 
 export interface ChatApi {
@@ -75,6 +77,9 @@ export function useChat(paperId: string): ChatApi {
 
 interface Props {
   paper: PaperMeta
+  width: number
+  fontSize: number
+  onWidth: (width: number) => void
   tab: Tab
   setTab: (t: Tab) => void
   summary?: string
@@ -95,10 +100,49 @@ interface Props {
   toast: (t: string) => void
 }
 
+const DEFAULT_WIDTH = 400
+const MIN_WIDTH = 300
+
+/** Drag handle on the panel's left edge; the width only reaches React (and settings) on release. */
+function Resizer({ panel, onWidth }: { panel: React.RefObject<HTMLElement | null>; onWidth: (width: number) => void }) {
+  const start = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = panel.current
+    if (!el) return
+    e.preventDefault()
+    // Capture keeps the drag alive outside the window; the listeners on window work whatever the target is.
+    e.currentTarget.setPointerCapture(e.pointerId)
+    document.body.classList.add('resizing-side')
+    const right = el.getBoundingClientRect().right
+    let width = el.offsetWidth
+    const move = (ev: PointerEvent) => {
+      width = Math.max(MIN_WIDTH, Math.round(right - ev.clientX))
+      el.style.setProperty('--side-width', `${width}px`)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      document.body.classList.remove('resizing-side')
+      // The CSS max-width may have held it narrower than the pointer asked for.
+      onWidth(el.offsetWidth)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+  return <div className="side-resize" title="拖动调整宽度，双击恢复" onPointerDown={start} onDoubleClick={() => onWidth(DEFAULT_WIDTH)} />
+}
+
 export function SidePanel(p: Props) {
   const count = p.annotations.length
+  const panel = useRef<HTMLElement>(null)
+  // The note stays mounted once opened, so its undo history and scroll survive switching tabs.
+  const [memoOpened, setMemoOpened] = useState(false)
+  if (p.tab === 'memo' && !memoOpened) setMemoOpened(true)
+  const panelVars = { '--side-width': `${p.width}px`, '--side-size': `${p.fontSize}px` } as React.CSSProperties
   return (
-    <aside className="side">
+    <aside className="side" ref={panel} style={panelVars}>
+      <Resizer panel={panel} onWidth={p.onWidth} />
       <div className="side-tabs">
         <div className="seg">
           <button className={p.tab === 'guide' ? 'on' : ''} onClick={() => p.setTab('guide')}>
@@ -109,6 +153,9 @@ export function SidePanel(p: Props) {
           </button>
           <button className={p.tab === 'notes' ? 'on' : ''} onClick={() => p.setTab('notes')}>
             批注{count ? ` ${count}` : ''}
+          </button>
+          <button className={p.tab === 'memo' ? 'on' : ''} onClick={() => p.setTab('memo')}>
+            笔记
           </button>
         </div>
         {p.tab === 'guide' && p.summary && (
@@ -125,6 +172,7 @@ export function SidePanel(p: Props) {
       {p.tab === 'guide' && <Guide summary={p.summary} paper={p.paper} claudeReady={p.claudeReady} onJump={p.onJump} />}
       {p.tab === 'chat' && <Chat {...p} />}
       {p.tab === 'notes' && <Notes {...p} />}
+      {memoOpened && <NoteEditor paperId={p.paper.id} active={p.tab === 'memo'} toast={p.toast} />}
     </aside>
   )
 }
