@@ -43,6 +43,17 @@
   display: flex;
   min-height: 0;
 }
+.reader-main {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+/* Stays clear of the side panel and its chat box, and of the scrollbar. */
+.reader-main .pet-btn {
+  position: absolute;
+  right: 12px;
+}
 .scroller {
   position: relative;
   flex: 1;

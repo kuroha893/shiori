@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, Folder, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, Folder, GlossaryEntry, PaperMeta, PetState, Settings } from '../shared/types'
 
 const on = <T>(channel: string, fn: (v: T) => void) => {
   const h = (_e: unknown, v: T) => fn(v)
@@ -49,6 +49,10 @@ const api = {
   stopAsking: (id: string) => ipcRenderer.invoke('chat:stop', id),
   resetChat: (id: string) => ipcRenderer.invoke('chat:reset', id),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+
+  petState: (): Promise<PetState> => ipcRenderer.invoke('pet:state'),
+  togglePet: (): Promise<PetState> => ipcRenderer.invoke('pet:toggle'),
+  onPetChanged: (fn: (s: PetState) => void) => on('pet:changed', fn),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),
   onFoldersChanged: (fn: (f: Folder[]) => void) => on('folders:changed', fn),

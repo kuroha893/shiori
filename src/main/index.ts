@@ -10,6 +10,7 @@ import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
+import { closePet, initPet, libraryChanged, petFile } from './pet'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -57,7 +58,10 @@ function createWindow(): void {
   })
   if (process.env.ELECTRON_RENDERER_URL) main.loadURL(process.env.ELECTRON_RENDERER_URL)
   else main.loadFile(join(__dirname, '../renderer/index.html'))
-  main.on('closed', () => (main = undefined))
+  main.on('closed', () => {
+    main = undefined
+    closePet()
+  })
 }
 
 const send = (channel: string, payload: unknown) => main?.webContents.send(channel, payload)
@@ -78,6 +82,7 @@ function registerIpc(): void {
     if (patch.libraryPath) {
       lib.ensureLibrary()
       loadGlossary()
+      libraryChanged()
     }
     return s
   })
@@ -87,6 +92,7 @@ function registerIpc(): void {
     const s = saveSettings({ libraryPath: r.filePaths[0] })
     lib.ensureLibrary()
     loadGlossary()
+    libraryChanged()
     return s
   })
   ipcMain.handle('text:get', (_e, name: 'profile.md') => lib.readRootText(name))
@@ -170,9 +176,16 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   app.setName('Shiori')
-  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails).
+  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://pet/<path> the character pack.
   protocol.handle('shiori', (req) => {
     const u = new URL(req.url)
+    if (u.host === 'pet') {
+      try {
+        return net.fetch(pathToFileURL(petFile(decodeURIComponent(u.pathname.slice(1)))).toString())
+      } catch {
+        return new Response('forbidden', { status: 403 })
+      }
+    }
     if (u.host !== 'paper') return new Response('not found', { status: 404 })
     const [id, ...rest] = u.pathname.slice(1).split('/').map(decodeURIComponent)
     try {
@@ -184,6 +197,7 @@ app.whenReady().then(() => {
   lib.ensureLibrary()
   loadGlossary()
   registerIpc()
+  initPet((state) => send('pet:changed', state))
   createWindow()
   initJobs(paperChanged)
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))

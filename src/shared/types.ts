@@ -101,7 +101,16 @@ export interface Settings {
   /** Side panel: width and text size in px */
   panelWidth: number
   panelFontSize: number
+  /** Where the desktop character was last left */
+  petPosition?: { x: number; y: number }
+  petScale?: number
   view: 'zh' | 'en' | 'both'
+}
+
+export interface PetState {
+  /** A character pack exists in the library */
+  available: boolean
+  visible: boolean
 }
 
 export interface ClaudeStatus {

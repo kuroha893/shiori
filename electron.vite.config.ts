@@ -4,7 +4,16 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {},
-  preload: {},
+  preload: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          pet: resolve(__dirname, 'src/preload/pet.ts')
+        }
+      }
+    }
+  },
   renderer: {
     plugins: [react()],
     build: {

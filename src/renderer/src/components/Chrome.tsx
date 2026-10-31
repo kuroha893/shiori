@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import type { Settings } from '../../../shared/types'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { PetState, Settings } from '../../../shared/types'
+import { api } from '../api'
 import { Icon } from './Icon'
 
 const THEMES: { id: Settings['theme']; icon: string; label: string }[] = [
@@ -20,6 +21,21 @@ export function ThemeButton({ theme, onChange }: { theme: Settings['theme']; onC
 }
 
 export const themeOptions = THEMES
+
+/** The character's face: click to call her onto the desktop, click again to send her away. */
+export function PetButton() {
+  const [pet, setPet] = useState<PetState>()
+  useEffect(() => {
+    api.petState().then(setPet)
+    return api.onPetChanged(setPet)
+  }, [])
+  if (!pet?.available) return null
+  return (
+    <button className={`pet-btn no-drag ${pet.visible ? 'on' : ''}`} title={pet.visible ? '收起助手' : '唤起助手'} onClick={() => api.togglePet().then(setPet)}>
+      <img src="shiori://pet/avatar.png" alt="" draggable={false} />
+    </button>
+  )
+}
 
 /** Close on outside click or Escape. */
 export function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void, active = true) {
