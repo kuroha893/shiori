@@ -1,0 +1,708 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body.check { background: repeating-conic-gradient(#c8d0d8 0 25%, #eef1f4 0 50%) 0 0 / 32px 32px; }
+  body.dark { background: #20242c; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #size {
+    position: fixed; left: 76%; top: 92%; width: 16px; height: 16px; margin: -8px 0 0 -8px; color: #fff;
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.6)); opacity: 0; pointer-events: none; transition: opacity 0.2s; cursor: nwse-resize;
+  }
+  #size.show { opacity: 1; pointer-events: auto; }
+</style>
+<canvas id="c"></canvas>
+<div id="size" title="拖动调整大小，双击恢复"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 3.5v3.5a6.5 6.5 0 0 1-6.5 6.5H3.5"/></svg></div>
+<video id="v" muted playsinline style="display:none"></video>
+<script>
+const SRC = 'image.png'
+const W = 1122, H = 1402
+const params = new URLSearchParams(location.search)
+if (params.get('bg')) document.body.classList.add(params.get('bg'))
+
+const load = (src) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = src })
+
+// Everything connected to the image border, or any large patch, in the background colour becomes transparent.
+function cutOut(img) {
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H
+  const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0)
+  const im = g.getImageData(0, 0, W, H), d = im.data
+  const dist = (i) => Math.max(Math.abs(d[i] - 6), Math.abs(d[i + 1] - 10), Math.abs(d[i + 2] - 20))
+  const isBg = new Uint8Array(W * H)
+  for (let i = 0; i < W * H; i++) isBg[i] = dist(i * 4) < 22 ? 1 : 0
+  const seen = new Uint8Array(W * H), out = new Uint8Array(W * H), stack = new Int32Array(W * H)
+  for (let s = 0; s < W * H; s++) {
+    if (!isBg[s] || seen[s]) continue
+    let n = 0, top = 0; const list = []; stack[top++] = s; seen[s] = 1
+    while (top) {
+      const p = stack[--top]; list.push(p); n++
+      const x = p % W
+      for (const q of [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, p - W, p + W]) {
+        if (q >= 0 && q < W * H && isBg[q] && !seen[q]) { seen[q] = 1; stack[top++] = q }
+      }
+    }
+    if (n > 120) for (const p of list) out[p] = 1
+  }
+  // Soft edge: pixels next to the cut-out fade with how dark they still are.
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const p = y * W + x, i = p * 4
+    if (out[p]) { d[i + 3] = 0; continue }
+    if (out[p - 1] || out[p + 1] || out[p - W] || out[p + W]) {
+      const lum = Math.max(d[i], d[i + 1], d[i + 2])
+      d[i + 3] = Math.min(255, Math.max(0, lum * 1.15))
+      d[i] = d[i + 1] = d[i + 2] = 245
+    }
+  }
+  for (let x = 0; x < W; x++) for (const y of [0, H - 1]) d[(y * W + x) * 4 + 3] = 0
+  for (let y = 0; y < H; y++) for (const x of [0, W - 1]) d[(y * W + x) * 4 + 3] = 0
+  g.putImageData(im, 0, 0)
+  return cv
+}
+
+const crop = ([x, y]) => [230 + x / 2.5, 480 + y / 2.5]
+const L8 = ([x, y]) => [350 + x / 8, 555 + y / 8]
+const R8 = ([x, y]) => [560 + x / 8, 515 + y / 8]
+
+// Traced on enlarged crops of the eyes. The outer end of each lash is pinned and the lid closes around it.
+const EYES = [
+  {
+    eye: [[300,470],[480,310],[640,240],[880,250],[1030,330],[1070,640],[1020,770],[680,840],[560,790],[400,690],[310,560]].map(L8),
+    erase: [[55,490],[170,420],[205,330],[290,150],[345,190],[400,175],[520,115],[640,100],[760,105],[860,150],[960,235],[1045,325],[1000,340],[880,262],[795,245],[640,242],[500,285],[440,345],[330,420],[300,470],[305,540],[375,680],[330,655],[245,575],[170,520]].map(L8),
+    hairAbove: 610,
+    lash: [[55,490],[170,420],[205,330],[300,250],[400,175],[520,115],[640,100],[760,105],[800,130],[795,240],[640,242],[500,285],[440,345],[330,420],[300,470],[305,540],[375,680],[330,655],[245,575],[170,520]].map(L8),
+    center: [[330,345],[450,268],[600,188],[760,176],[900,240],[1030,320]].map(L8),
+    lower: [[300,470],[330,420],[440,345],[500,285],[640,242],[780,238],[880,255],[1030,330]].map(L8),
+    pin: L8([330, 0])[0], end: 482, visible: L8([775, 0])[0],
+    crease: [[490,85],[560,40],[700,10],[730,40],[600,75],[520,100]].map(L8), creaseLine: [[490,90],[560,60],[700,28]].map(L8), creaseShift: 13, bandFrom: L8([400, 0])[0],
+    closed: [[391.25, 633.7], [429, 635], [482, 621]], stop: 384.5,
+    notches: [{ from: L8([225, 300]), bend: L8([195, 450]), to: L8([265, 600]), tip: [[170, 540], [50, 485], [165, 400]].map(L8) }]
+  },
+  {
+    eye: [[60,430],[230,340],[480,280],[720,310],[880,420],[885,610],[780,800],[640,870],[300,870],[200,740],[130,560]].map(R8),
+    erase: [[45,440],[60,350],[70,285],[180,170],[350,135],[600,130],[690,80],[720,85],[725,155],[865,155],[850,215],[940,265],[1100,338],[985,440],[960,525],[890,620],[880,430],[830,360],[720,318],[600,288],[400,282],[230,342],[120,385]].map(R8),
+    hairAbove: 580,
+    lash: [[45,440],[75,345],[190,225],[350,140],[600,132],[725,158],[850,205],[940,265],[1100,338],[985,440],[960,525],[890,620],[880,430],[830,360],[720,318],[600,288],[400,282],[230,342],[120,385]].map(R8),
+    center: [[45,435],[230,275],[400,216],[600,216],[780,268],[900,345]].map(R8),
+    lower: [[45,440],[120,385],[230,345],[400,283],[600,288],[720,318],[830,360],[880,430]].map(R8),
+    pin: R8([900, 0])[0], end: R8([45, 0])[0], visible: R8([45, 0])[0],
+    creaseErase: [[40,200],[70,120],[200,85],[380,70],[385,100],[210,125],[110,150],[75,205]].map(R8), crease: [[105,135],[200,88],[380,70],[385,100],[210,125],[112,158]].map(R8), creaseLine: [[105,148],[200,105],[380,84]].map(R8), creaseShift: 0, bandFrom: R8([860, 0])[0], clear: [[640,62],[790,145],[930,250],[930,305],[780,200],[630,112]].map(R8),
+    closed: [[672.5, 583.1], [620, 601], [566, 604.5]], stop: 675.5,
+    notches: [
+      { from: R8([930, 250]), bend: R8([965, 400]), to: R8([940, 540]), tip: [[1010, 470], [1115, 345], [1010, 285]].map(R8) },
+      { from: R8([640, 62]), bend: R8([790, 145]), to: R8([930, 250]), tip: [[985, 215], [790, 70], [670, 10]].map(R8) }
+    ]
+  }
+]
+
+// In the reference video the eyes snap shut, stay closed for a few frames and snap open.
+const BLINK_STAGES = [0, 0.55, 1]
+const LID_THICKNESS = 15.5, END_INNER = 18, END_OUTER = 12
+const SKIN = [253, 238, 230]
+const clamp01 = (v) => Math.max(0, Math.min(1, v))
+
+function along(poly, x) {
+  const pts = [...poly].sort((a, b) => a[0] - b[0])
+  if (x <= pts[0][0]) return pts[0][1]
+  for (let i = 1; i < pts.length; i++) {
+    if (x <= pts[i][0]) return pts[i - 1][1] + ((pts[i][1] - pts[i - 1][1]) * (x - pts[i - 1][0])) / (pts[i][0] - pts[i - 1][0])
+  }
+  return pts[pts.length - 1][1]
+}
+
+function smooth(values, radius) {
+  let out = values
+  for (let pass = 0; pass < 3; pass++) {
+    out = out.map((_, i) => {
+      let sum = 0, n = 0
+      for (let k = Math.max(0, i - radius); k <= Math.min(out.length - 1, i + radius); k++) { sum += out[k]; n++ }
+      return sum / n
+    })
+  }
+  return out
+}
+
+function polygonMask(polys, x0, y0, w, h, grow = 0) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h
+  const g = cv.getContext('2d', { willReadFrequently: true }); g.fillStyle = g.strokeStyle = '#fff'; g.lineWidth = grow * 2; g.lineJoin = 'round'
+  for (const poly of polys) {
+    g.beginPath(); poly.forEach(([x, y], i) => (i ? g.lineTo(x - x0, y - y0) : g.moveTo(x - x0, y - y0))); g.closePath(); g.fill()
+    if (grow) g.stroke()
+  }
+  return g.getImageData(0, 0, w, h).data
+}
+
+const boundsOf = (poly, pad) => {
+  const x0 = Math.floor(Math.min(...poly.map((p) => p[0]))) - pad, x1 = Math.ceil(Math.max(...poly.map((p) => p[0]))) + pad
+  const y0 = Math.floor(Math.min(...poly.map((p) => p[1]))) - pad, y1 = Math.ceil(Math.max(...poly.map((p) => p[1]))) + pad
+  return { x0, y0, w: x1 - x0, h: y1 - y0 }
+}
+
+// Lifts the lash off the original art: how dark a pixel is against the skin becomes its alpha.
+function liftLash(eye, src) {
+  const { x0, y0, w, h } = boundsOf(eye.lash, 2)
+  const m = polygonMask([eye.lash], x0, y0, w, h)
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h
+  const g = cv.getContext('2d', { willReadFrequently: true })
+  const im = g.createImageData(w, h), d = im.data
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, s = ((y + y0) * W + x + x0) * 4
+    if (!m[i + 3]) continue
+    const a = clamp01((190 - src[s + 1]) / 70) * (m[i + 3] / 255)
+    d[i + 3] = a * 255
+    if (a > 0) for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, (src[s + c] - (1 - a) * SKIN[c]) / a))
+  }
+  // Thin strands of hair crossing the lash leave gaps; bridge them from both sides.
+  const copy = new Uint8ClampedArray(d)
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && copy[(y * w + x) * 4 + 3] > 150
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4
+    if (copy[i + 3] > 150 || !m[i + 3]) continue
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      let a = 0, b = 0
+      for (let k = 1; k <= 3 && !a; k++) if (solid(x - dx * k, y - dy * k)) a = k
+      for (let k = 1; k <= 3 && !b; k++) if (solid(x + dx * k, y + dy * k)) b = k
+      if (a && b) {
+        const p = ((y - dy * a) * w + x - dx * a) * 4, q = ((y + dy * b) * w + x + dx * b) * 4
+        for (let c = 0; c < 3; c++) d[i + c] = (copy[p + c] * b + copy[q + c] * a) / (a + b)
+        d[i + 3] = 255
+        break
+      }
+    }
+  }
+  g.putImageData(im, 0, 0)
+  // Where the lash starts and ends in each column.
+  const top = new Array(w).fill(-1), bottom = new Array(w).fill(-1)
+  for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) {
+    if (d[(y * w + x) * 4 + 3] > 110) { if (top[x] < 0) top[x] = y; bottom[x] = y }
+  }
+  eye.sprite = { cv, x0, y0, w, h, top, bottom }
+
+  // The lid crease above the eye travels down with the lid.
+  const c = boundsOf(eye.crease, 2), cm = polygonMask([eye.crease], c.x0, c.y0, c.w, c.h)
+  const cc = document.createElement('canvas'); cc.width = c.w; cc.height = c.h
+  const cg = cc.getContext('2d'); const ci = cg.createImageData(c.w, c.h)
+  for (let y = 0; y < c.h; y++) for (let x = 0; x < c.w; x++) {
+    const i = (y * c.w + x) * 4, p = ((y + c.y0) * W + x + c.x0) * 4
+    if (!cm[i + 3]) continue
+    const a = clamp01((228 - src[p + 1]) / 40) * (cm[i + 3] / 255)
+    ci.data[i + 3] = a * 255
+    if (a > 0) for (let k = 0; k < 3; k++) ci.data[i + k] = Math.max(0, Math.min(255, (src[p + k] - (1 - a) * SKIN[k]) / a))
+  }
+  cg.putImageData(ci, 0, 0)
+  eye.creaseSprite = { cv: cc, x0: c.x0, y0: c.y0, w: c.w, h: c.h }
+}
+
+// Removes the open eye: skin grows inwards from the surrounding skin; hair that falls over the eye stays.
+function bareEye(eye, g) {
+  const eraseCrease = eye.creaseErase ?? eye.crease
+  const { x0, y0, w, h } = boundsOf([...eye.eye, ...eye.erase, ...eraseCrease, ...(eye.clear ?? [])], 8)
+  const im = g.getImageData(x0, y0, w, h), d = im.data
+  const m = polygonMask([eye.eye, eye.erase, eraseCrease, ...(eye.clear ? [eye.clear] : [])], x0, y0, w, h, 2.5)
+  const hair = (i) => d[i + 2] - d[i] >= 8 && d[i] >= 190 && d[i + 1] >= 200
+  const skin = (i) => d[i] > 232 && d[i + 1] > 205 && d[i + 2] > 190 && d[i] - d[i + 2] > 6
+  const keep = new Uint8Array(w * h), seen = new Uint8Array(w * h)
+  for (let s0 = 0; s0 < w * h; s0++) {
+    if (seen[s0] || !hair(s0 * 4)) continue
+    const list = [s0]; seen[s0] = 1
+    let outside = false, top = h
+    for (let k = 0; k < list.length; k++) {
+      const p = list[k]
+      if (m[p * 4 + 3] <= 128) outside = true
+      top = Math.min(top, Math.floor(p / w))
+      for (const q of [p - 1, p + 1, p - w, p + w]) {
+        if (q >= 0 && q < w * h && !seen[q] && hair(q * 4)) { seen[q] = 1; list.push(q) }
+      }
+    }
+    // Real hair reaches beyond the erased area; pale parts of the iris and specks stay inside it.
+    if (outside || (list.length >= 60 && top + y0 < eye.hairAbove)) for (const p of list) keep[p] = 1
+  }
+  // Hair outlines next to kept hair stay as well, so the edge of the hair is not eaten.
+  const line = (i) => Math.max(d[i], d[i + 1], d[i + 2]) > 150
+  const near = keep.slice()
+  for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+    const p = y * w + x
+    if (keep[p] || m[p * 4 + 3] <= 128 || !line(p * 4)) continue
+    let touching = 0
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) touching += keep[p + dy * w + dx]
+    if (touching >= 6) near[p] = 1
+  }
+  keep.set(near)
+  // Fragments the small lash tufts left along the hair edge go; a clean edge is drawn there afterwards.
+  if (eye.clear) {
+    const cm = polygonMask([eye.clear], x0, y0, w, h)
+    for (let p = 0; p < w * h; p++) if (cm[p * 4 + 3] > 128) keep[p] = 0
+  }
+  // 0 ignored, 1 known skin, 2 to fill
+  const kind = new Uint8Array(w * h), c = [new Float32Array(w * h), new Float32Array(w * h), new Float32Array(w * h)]
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4
+    if (m[i + 3] > 128 && !keep[p]) { kind[p] = 2; c[0][p] = SKIN[0]; c[1][p] = SKIN[1]; c[2][p] = SKIN[2] }
+    else if (m[i + 3] <= 128 && skin(i)) { kind[p] = 1; c[0][p] = d[i]; c[1][p] = d[i + 1]; c[2][p] = d[i + 2] }
+  }
+  for (let it = 0; it < 500; it++) for (let p = w + 1; p < w * h - w - 1; p++) {
+    if (kind[p] !== 2) continue
+    let n = 0, r = 0, gg = 0, b = 0
+    for (const q of [p - 1, p + 1, p - w, p + w]) if (kind[q]) { n++; r += c[0][q]; gg += c[1][q]; b += c[2][q] }
+    if (n) { c[0][p] = r / n; c[1][p] = gg / n; c[2][p] = b / n }
+  }
+  // The hair stays on top of the lash in every stage.
+  const hairCv = document.createElement('canvas'); hairCv.width = w; hairCv.height = h
+  const hg = hairCv.getContext('2d'); const hi = hg.createImageData(w, h)
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4
+    if (keep[p]) { for (let k = 0; k < 3; k++) hi.data[i + k] = d[i + k]; hi.data[i + 3] = 255 }
+    if (kind[p] === 2) {
+      // The edge of the filled area fades into the art, so it leaves no hard pixel steps.
+      let filled = 0, n = 0
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const q = p + dy * w + dx; if (q >= 0 && q < w * h) { n++; if (kind[q] === 2) filled++ } }
+      const f = filled / n
+      for (let k = 0; k < 3; k++) d[i + k] = d[i + k] * (1 - f) + c[k][p] * f
+      d[i + 3] = 255
+    }
+  }
+  hg.putImageData(hi, 0, 0)
+  g.putImageData(im, x0, y0)
+  Object.assign(eye, { box: { x0, y0, w, h }, inside: m, keep, hairCv })
+}
+
+// The hair has a notch under the wing's tip. Once the wing is gone, hair closes it along a smooth edge.
+function closeNotch(notch, g) {
+  const { from, bend, to, tip } = notch
+  const path = (c) => {
+    c.beginPath(); c.moveTo(from[0], from[1]); c.quadraticCurveTo(bend[0], bend[1], to[0], to[1])
+    for (const p of tip) c.lineTo(p[0], p[1])
+    c.closePath()
+  }
+  const { x0, y0, w, h } = boundsOf([from, bend, to, ...tip], 6)
+  const mc = document.createElement('canvas'); mc.width = w; mc.height = h
+  const mg = mc.getContext('2d', { willReadFrequently: true }); mg.translate(-x0, -y0); mg.fillStyle = '#fff'; path(mg); mg.fill()
+  const m = mg.getImageData(0, 0, w, h).data
+  const im = g.getImageData(x0, y0, w, h), d = im.data
+  const hair = (i) => d[i + 2] - d[i] >= 8 && d[i] >= 190 && d[i + 1] >= 200
+  const kind = new Uint8Array(w * h), c = [new Float32Array(w * h), new Float32Array(w * h), new Float32Array(w * h)]
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4
+    if (m[i + 3] > 128 && !hair(i)) { kind[p] = 2; c[0][p] = 226; c[1][p] = 232; c[2][p] = 248 }
+    else if (hair(i)) { kind[p] = 1; c[0][p] = d[i]; c[1][p] = d[i + 1]; c[2][p] = d[i + 2] }
+  }
+  for (let it = 0; it < 300; it++) for (let p = w + 1; p < w * h - w - 1; p++) {
+    if (kind[p] !== 2) continue
+    let n = 0, r = 0, gg = 0, b = 0
+    for (const q of [p - 1, p + 1, p - w, p + w]) if (kind[q]) { n++; r += c[0][q]; gg += c[1][q]; b += c[2][q] }
+    if (n) { c[0][p] = r / n; c[1][p] = gg / n; c[2][p] = b / n }
+  }
+  for (let p = 0; p < w * h; p++) if (kind[p] === 2) { const i = p * 4; d[i] = c[0][p]; d[i + 1] = c[1][p]; d[i + 2] = c[2][p]; d[i + 3] = 255 }
+  g.putImageData(im, x0, y0)
+  g.save(); g.strokeStyle = 'rgba(138, 100, 128, 0.8)'; g.lineWidth = 1.5; g.lineCap = 'round'
+  g.beginPath(); g.moveTo(from[0], from[1]); g.quadraticCurveTo(bend[0], bend[1], to[0], to[1]); g.stroke(); g.restore()
+}
+
+function curves(eye) {
+  const s = eye.sprite
+  const from = Math.min(s.x0, eye.pin, eye.end) - 4, to = Math.max(s.x0 + s.w, eye.pin, eye.end) + 4
+  const xs = []; for (let x = from; x <= to; x++) xs.push(x)
+  const lower = smooth(xs.map((x) => along(eye.lower, x)), 3)
+  const at = (arr, x) => arr[Math.max(0, Math.min(arr.length - 1, Math.round(x) - from))]
+  const [[ax, ay], [bx, by], [cx, cy]] = eye.closed
+  // The closed lash: a shallow curve, low in the middle, tilted with the head.
+  const target = (x) => ay * ((x - bx) * (x - cx)) / ((ax - bx) * (ax - cx)) + by * ((x - ax) * (x - cx)) / ((bx - ax) * (bx - cx)) + cy * ((x - ax) * (x - bx)) / ((cx - ax) * (cx - bx))
+  const dir = Math.sign(eye.end - eye.pin), span = (eye.end - eye.stop) * dir
+  // Thick along its whole length, a little fuller in the middle, with short pointed ends.
+  const thickness = (x) => {
+    const u = (x - eye.stop) * dir, v = (eye.end - x) * dir
+    if (u <= 0 || v <= 0) return 0
+    const ends = Math.pow(clamp01(u / END_OUTER), 0.6) * Math.pow(clamp01(v / END_INNER), 0.6)
+    return LID_THICKNESS * (0.82 + 0.18 * Math.sin((Math.PI * u) / span)) * ends
+  }
+  const lineTop = (x) => target(x) - thickness(x) * 0.42, lineBottom = (x) => target(x) + thickness(x) * 0.58
+  // Where the lash column sits while open, smoothed, for the frames in between.
+  const edge = (arr, x) => { const i = Math.round(x) - s.x0; return arr[i] >= 0 && arr[i] !== undefined ? s.y0 + arr[i] : null }
+  eye.at = (x) => ({ lower: at(lower, x), target: target(x), thickness: thickness(x), top: lineTop(x), bottom: lineBottom(x), openTop: edge(s.top, x), openBottom: edge(s.bottom, x) })
+}
+
+function closeEye(eye, g, src, b) {
+  const dir = Math.sign(eye.end - eye.pin)
+  const { x0, y0, w, h } = eye.box
+  const mix = (a, c) => a + (c - a) * b
+  const im = g.getImageData(x0, y0, w, h), d = im.data
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const p = y * w + x, i = p * 4
+    if (eye.inside[i + 3] <= 128 || eye.keep[p]) continue
+    const X = x + x0, Y = y + y0, c = eye.at(X)
+    const a = clamp01(Y - (mix(c.lower, c.bottom) - 1.5)) * clamp01(c.target + (1 - b) * 62 - Y)
+    if (a <= 0) continue
+    const s = (Y * W + X) * 4
+    for (let k = 0; k < 3; k++) d[i + k] = d[i + k] * (1 - a) + src[s + k] * a
+  }
+  g.putImageData(im, x0, y0)
+
+  // The crease follows, just above the lash.
+  const cr = eye.creaseSprite
+  for (let X = cr.x0; X < cr.x0 + cr.w; X++) {
+    const c = eye.at(X), from = along(eye.creaseLine, X)
+    const shift = eye.creaseShift * b, k = eye.at(X + shift)
+    g.drawImage(cr.cv, X - cr.x0, 0, 1, cr.h, X + shift, cr.y0 + mix(from, k.target - LID_THICKNESS * 0.42 - 7) - from, 1, cr.h)
+  }
+
+  // The lash, column by column: the art's own colours stretched into the closed shape.
+  const sp = eye.sprite
+  const layer = document.createElement('canvas'); layer.width = W; layer.height = H
+  const lg = layer.getContext('2d')
+  lg.imageSmoothingEnabled = true; lg.imageSmoothingQuality = 'high'
+  const first = Math.min(sp.x0, eye.end), last = Math.max(sp.x0 + sp.w - 1, eye.end)
+  for (let X = first; X <= last; X++) {
+    const v = (eye.end - X) * dir
+    if (v < 0) continue
+    const inner = Math.round(eye.visible), outer = Math.round(eye.bandFrom)
+    const sx = dir > 0 ? Math.max(outer, Math.min(X, inner)) : Math.min(outer, Math.max(X, inner))
+    const i = sx - sp.x0
+    if (i < 0 || i >= sp.w || sp.top[i] < 0) continue
+    const c = eye.at(X)
+    const hidden = (X - inner) * dir > 0
+    const fade = clamp01(((eye.end - X) * dir) / ((eye.end - inner) * dir))
+    const openTop = hidden ? c.lower - (sp.bottom[i] - sp.top[i]) * fade : c.openTop ?? c.lower
+    const openBottom = hidden ? c.lower : c.openBottom ?? c.lower
+    const top = mix(openTop, c.top), bottom = mix(openBottom, c.bottom)
+    if (bottom - top < 0.2) continue
+    lg.drawImage(sp.cv, i, sp.top[i], 1, sp.bottom[i] - sp.top[i] + 1, X, top, 1, bottom - top)
+  }
+  // Both ends warm up to the brown of the lash's own outer edge.
+  lg.globalCompositeOperation = 'source-atop'
+  const warm = (from, to, alpha) => {
+    const grad = lg.createLinearGradient(from, 0, to, 0)
+    grad.addColorStop(0, 'rgba(122, 46, 38, 0)'); grad.addColorStop(1, `rgba(122, 46, 38, ${alpha})`)
+    lg.fillStyle = grad
+    lg.fillRect(Math.min(from, to), 0, Math.abs(to - from), H)
+  }
+  warm(eye.end - dir * 24, eye.end, 0.8 * b)
+  warm(eye.stop + dir * 12, eye.stop, 0.45 * b)
+  g.save(); g.filter = 'blur(0.7px)'; g.drawImage(layer, 0, 0); g.restore()
+  g.drawImage(eye.hairCv, x0, y0)
+}
+
+function blinkStages(base) {
+  const src = base.getContext('2d').getImageData(0, 0, W, H).data
+  const blank = () => { const cv = document.createElement('canvas'); cv.width = W; cv.height = H; return [cv, cv.getContext('2d', { willReadFrequently: true })] }
+  const [bare, bg] = blank(); bg.drawImage(base, 0, 0)
+  for (const eye of EYES) { liftLash(eye, src); bareEye(eye, bg); eye.notches.forEach((n) => closeNotch(n, bg)); curves(eye) }
+  return BLINK_STAGES.map((b) => {
+    if (!b) return base
+    const [cv, g] = blank(); g.drawImage(bare, 0, 0)
+    for (const eye of EYES) closeEye(eye, g, src, b)
+    return cv
+  })
+}
+
+const VS = `#version 300 es
+in vec2 a; out vec2 p;
+void main() { p = vec2((a.x + 1.) * .5 * ${W}., (1. - a.y) * .5 * ${H}.); gl_Position = vec4(a, 0., 1.); }`
+
+const FS = `#version 300 es
+precision highp float;
+in vec2 p; out vec4 o;
+uniform sampler2D open;
+uniform float t, amp, gain;
+const float TAU = 6.2831853, L = 8.;
+
+float ss(float a, float b, float x) { return smoothstep(a, b, x); }
+float ell(vec2 q, vec2 c, vec2 r, float soft) { return 1. - ss(1. - soft, 1. + soft, length((q - c) / r)); }
+vec2 rot(vec2 q, vec2 c, float a) { q -= c; float s = sin(a), k = cos(a); return vec2(k * q.x - s * q.y, s * q.x + k * q.y) + c - (q + c); }
+float box(vec2 q, vec2 a, vec2 b, float f) { return ss(a.x, a.x + f, q.x) * (1. - ss(b.x - f, b.x, q.x)) * ss(a.y, a.y + f, q.y) * (1. - ss(b.y - f, b.y, q.y)); }
+
+void main() {
+  float th = TAU * t / L;
+  float breath = sin(th * 2.);
+  vec2 d = vec2(0.);
+
+  // Breathing: the feet stay put, everything above lifts and the waist narrows a little.
+  float lift = ss(1320., 780., p.y);
+  d.y += -5.5 * breath * lift;
+  d.x += (p.x - 560.) * .0035 * breath * ss(1250., 1040., p.y) * ss(800., 960., p.y);
+
+  // Plush: held in both arms, so only a soft squeeze behind the breath; its ear wiggles.
+  float plush = ell(p, vec2(430., 815.), vec2(205., 125.), .22);
+  d.y += -1.6 * sin(th * 2. - 1.) * plush;
+  float ear = ell(p, vec2(285., 835.), vec2(72., 62.), .4);
+  d += vec2(-1.2, 3.) * sin(th * 2. - 1.8) * ear;
+
+  // Head: a slow tilt around the neck, with the hair loops and ribbons.
+  float head = ell(p, vec2(510., 440.), vec2(345., 340.), .14);
+  d += rot(p, vec2(530., 720.), .016 * sin(th) + .004 * sin(th * 3. + 1.)) * head;
+
+  // Hair loops bob a little after the head moves.
+  float loopL = ell(p, vec2(320., 228.), vec2(120., 110.), .3), loopR = ell(p, vec2(712., 225.), vec2(125., 110.), .3);
+  d += vec2(0., -2.2 * sin(th * 2. - 1.6)) * (loopL + loopR);
+
+  // Ribbons: free ends swing more than the knots.
+  float ribL = box(p, vec2(150., 340.), vec2(325., 550.), 26.), ribR = box(p, vec2(700., 305.), vec2(875., 495.), 26.);
+  d.x += ribL * ss(320., 185., p.x) * 7. * sin(th * 2. + 1.);
+  d.x += ribR * ss(720., 850., p.x) * 7. * sin(th * 2. + 2.2);
+  float tagL = ell(p, vec2(280., 690.), vec2(36., 44.), .4), tagR = ell(p, vec2(790., 630.), vec2(56., 44.), .4);
+  d += vec2(3.5 * sin(th * 2. - .6), 1.) * tagL + vec2(3.5 * sin(th * 2. + .3), 1.) * tagR;
+
+  // Twin tails: pinned at the root, the tips lag behind in a travelling wave; sleeves and the plush stay out.
+  float ul = clamp((p.y - 640.) / 400., 0., 1.);
+  float edgeL = 330. - ul * 105.;
+  float tailL = box(p, vec2(110., 610.), vec2(400., 1060.), 28.) * (1. - ss(edgeL - 22., edgeL, p.x));
+  d.x += tailL * 12. * pow(ul, 1.6) * sin(th - ul * 2.4);
+  d.y += tailL * 2.5 * pow(ul, 2.) * sin(th * 2. - ul * 2.);
+  float ur = clamp((p.y - 620.) / 420., 0., 1.);
+  float edgeR = 790. + ur * 75.;
+  float tailR = box(p, vec2(740., 600.), vec2(985., 1060.), 28.) * ss(edgeR, edgeR + 22., p.x);
+  d.x += tailR * 12. * pow(ur, 1.6) * sin(th + .9 - ur * 2.4);
+  d.y += tailR * 2.5 * pow(ur, 2.) * sin(th * 2. + .9 - ur * 2.);
+
+  // Umbrella: sways around the hand that holds it, independent of the head.
+  float umb = ell(p, vec2(730., 420.), vec2(392., 368.), .06) * (1. - head);
+  d += rot(p, vec2(640., 770.), .012 * sin(th + 1.1)) * umb;
+
+  // Skirt: the hem ripples, the legs below do not.
+  float hem = ss(1010., 1250., p.y) * (1. - ss(1262., 1290., p.y));
+  float legs = box(p, vec2(470., 1170.), vec2(690., 1400.), 24.);
+  d.x += hem * (1. - legs) * 3.6 * sin(th * 2. + p.x * .018);
+  d.y += hem * (1. - legs) * 1.8 * sin(th * 2. + p.x * .024 + 1.);
+  float tassel = box(p, vec2(355., 975.), vec2(735., 1075.), 22.);
+  d.x += tassel * 2.4 * sin(th * 2. - 1.4) * ss(975., 1065., p.y);
+
+  vec2 uv = (p - d * amp) / vec2(${W}., ${H}.);
+  o = texture(open, uv);
+  o.rgb *= o.a;
+  o *= gain;
+}`
+
+function program(gl, vs = VS, fs = FS) {
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s }
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr)
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr))
+  return pr
+}
+
+function texture(gl, unit, source) {
+  const tx = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tx)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+  gl.generateMipmap(gl.TEXTURE_2D)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+}
+
+const stageAt = (b) => BLINK_STAGES.reduce((best, v, i) => (Math.abs(v - b) < Math.abs(BLINK_STAGES[best] - b) ? i : best), 0)
+
+// How often things happen, in seconds. These are the numbers to tune.
+const BLINK_EVERY = [3, 7], DOUBLE_BLINK = 0.15, TURN_EVERY = [30, 90], FIRST_TURN = 10
+const SETTLE = 0.5, RECOVER = 0.9, CROSSFADE = 0.08
+// Video pixel = image pixel * scale + offset, measured by matching her silhouette in both.
+const FIT = { scale: 0.53065, x: 332.955, y: -9.866 }
+
+const CLIP_VS = `#version 300 es
+in vec2 a; out vec2 uv;
+uniform vec2 size;
+void main() {
+  vec2 p = vec2((a.x + 1.) * .5 * ${W}., (1. - a.y) * .5 * ${H}.);
+  uv = (p * ${FIT.scale} + vec2(${FIT.x}, ${FIT.y})) / size;
+  gl_Position = vec4(a, 0., 1.);
+}`
+
+const CLIP_FS = `#version 300 es
+precision highp float;
+in vec2 uv; out vec4 o;
+uniform sampler2D v;
+uniform vec2 px, key;
+uniform float gain;
+
+vec2 chroma(vec3 c) { float y = dot(c, vec3(.299, .587, .114)); return vec2((c.b - y) * .564, (c.r - y) * .713); }
+// Video stores colour at half resolution, so the distance from the green is measured on colour alone.
+float solid(vec2 q) { return smoothstep(.075, .165, length(chroma(texture(v, q).rgb) - key)); }
+
+void main() {
+  if (uv.x < 0. || uv.y < 0. || uv.x > 1. || uv.y > 1.) { o = vec4(0.); return; }
+  float a = solid(uv);
+  // The tightest of the neighbours: pulls the edge in by a pixel, away from the green bleeding out of the screen.
+  float tight = a, wide = 1.;
+  for (int i = 0; i < 8; i++) {
+    vec2 dir = vec2(cos(float(i) * .7853982), sin(float(i) * .7853982));
+    tight = min(tight, solid(uv + dir * px * 1.2));
+    wide = min(wide, solid(uv + dir * px * 3.2));
+  }
+  a = mix(a, tight, .75);
+  vec3 c = texture(v, uv).rgb;
+  float limit = max(c.r, c.b);
+  // Near the edge, and wherever green has no more blue than red, the green cast goes; the teal skirt is left alone.
+  if (c.g > limit) c.g = mix(c.g, limit, max(1. - wide, 1. - smoothstep(.04, .18, c.b - c.r)));
+  o = vec4(c * a, a) * gain;
+}`
+
+const VIDEO_UNIT = BLINK_STAGES.length
+const random = ([from, to]) => from + Math.random() * (to - from)
+const ease = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t) }
+const log = (...a) => console.log(...a)
+
+async function main() {
+  const base = cutOut(await load(SRC))
+  const stages = blinkStages(base)
+  const c = document.getElementById('c'), v = document.getElementById('v')
+  const gl = c.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: true })
+  const rig = program(gl), clip = program(gl, CLIP_VS, CLIP_FS)
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer())
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW)
+  for (const pr of [rig, clip]) { const a = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0) }
+  stages.forEach((cv, i) => texture(gl, i, cv))
+
+  v.src = URL.createObjectURL(await (await fetch('turn.mp4')).blob())
+  await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error('video')) })
+  gl.activeTexture(gl.TEXTURE0 + VIDEO_UNIT)
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture())
+  // Mipmaps: at small sizes the video is drawn at a third of its pixels and would shimmer without them.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  const upload = () => { gl.activeTexture(gl.TEXTURE0 + VIDEO_UNIT); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, v); gl.generateMipmap(gl.TEXTURE_2D) }
+  const seekTo = async (t) => { await new Promise((ok) => { v.onseeked = ok; v.currentTime = t }); await new Promise((ok) => setTimeout(ok, 60)); upload() }
+
+  // The screen colour, read from the clip itself once a frame has really painted.
+  await seekTo(0)
+  const sample = () => {
+    const s = document.createElement('canvas'); s.width = v.videoWidth; s.height = v.videoHeight
+    const g = s.getContext('2d', { willReadFrequently: true }); g.drawImage(v, 0, 0)
+    let r = 0, gg = 0, b = 0, n = 0
+    for (const [x, y] of [[20, 20], [s.width - 60, 20], [20, s.height - 60], [s.width - 60, s.height - 60], [200, 360], [1080, 360]]) {
+      const d = g.getImageData(x, y, 40, 40).data
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++ }
+    }
+    return [r / n / 255, gg / n / 255, b / n / 255]
+  }
+  let k = sample()
+  for (let i = 0; i < 40 && k[1] < 0.2; i++) { await new Promise((ok) => setTimeout(ok, 50)); k = sample() }
+  if (k[1] < 0.2) throw new Error('could not read the screen colour')
+  const ky = 0.299 * k[0] + 0.587 * k[1] + 0.114 * k[2]
+  gl.useProgram(clip)
+  gl.uniform2f(gl.getUniformLocation(clip, 'key'), (k[2] - ky) * 0.564, (k[0] - ky) * 0.713)
+  gl.uniform2f(gl.getUniformLocation(clip, 'px'), 1 / v.videoWidth, 1 / v.videoHeight)
+  gl.uniform2f(gl.getUniformLocation(clip, 'size'), v.videoWidth, v.videoHeight)
+  gl.uniform1i(gl.getUniformLocation(clip, 'v'), VIDEO_UNIT)
+  const clipGain = gl.getUniformLocation(clip, 'gain')
+  const rigT = gl.getUniformLocation(rig, 't'), rigOpen = gl.getUniformLocation(rig, 'open'), rigAmp = gl.getUniformLocation(rig, 'amp'), rigGain = gl.getUniformLocation(rig, 'gain')
+  log('screen colour', k.map((n) => Math.round(n * 255)).join(','), 'clip', v.videoWidth + 'x' + v.videoHeight, v.duration.toFixed(2) + 's')
+
+  const draw = ({ t, stage, amp, fade }) => {
+    const r = window.devicePixelRatio || 1, w = Math.round(c.clientWidth * r), h = Math.round(c.clientHeight * r)
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; gl.viewport(0, 0, w, h) }
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT)
+    // A crossfade adds the two layers, each already weighted.
+    if (fade > 0 && fade < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE) } else gl.disable(gl.BLEND)
+    if (fade < 1) {
+      gl.useProgram(rig)
+      gl.uniform1f(rigT, t); gl.uniform1i(rigOpen, stage); gl.uniform1f(rigAmp, amp); gl.uniform1f(rigGain, 1 - fade)
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    }
+    if (fade > 0) {
+      gl.useProgram(clip)
+      gl.uniform1f(clipGain, fade)
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    }
+  }
+
+  // Playing: mostly idle, with a blink now and then and a head turn once in a while.
+  let mode = 'idle', since = performance.now() / 1000, fresh = false, fade = 0, amp = 1
+  const started = since
+  let nextBlink = since + random(BLINK_EVERY), blinks = [], nextTurn = since + FIRST_TURN
+  const history = []
+  const go = (next, now) => { mode = next; since = now; history.push([next, +(now - started).toFixed(3)]) }
+  const worst = {}
+  let lastTick = since, ticks = 0
+  window.report = () => ({ mode, worstFrameGapMs: worst, ticksPerSecond: Math.round(ticks / (performance.now() / 1000 - started)), history: history.slice(-14), nextBlinkIn: +(nextBlink - performance.now() / 1000).toFixed(2), nextTurnIn: +(nextTurn - performance.now() / 1000).toFixed(2), clipFrames, blinkCount })
+  let clipFrames = 0, blinkCount = 0
+  const onFrame = () => { upload(); if (!v.paused) { fresh = true; clipFrames++ } v.requestVideoFrameCallback(onFrame) }
+  v.requestVideoFrameCallback(onFrame)
+
+  const shut = 0.034, hold = 0.14, open = 0.05
+  const blinkLevel = (now) => {
+    let b = 0
+    for (const at of blinks) {
+      const dt = now - at
+      if (dt < 0 || dt > shut + hold + open) continue
+      b = Math.max(b, dt < shut ? dt / shut : dt < shut + hold ? 1 : 1 - (dt - shut - hold) / open)
+    }
+    return b
+  }
+  const loop = () => {
+    const now = performance.now() / 1000, age = now - since
+    worst[mode] = Math.max(worst[mode] || 0, Math.round((now - lastTick) * 1000)); lastTick = now; ticks++
+    if (mode === 'idle') {
+      amp = 1; fade = 0
+      if (now >= nextBlink) {
+        blinks = [now]; blinkCount++
+        if (Math.random() < DOUBLE_BLINK) { blinks.push(now + 0.48); blinkCount++ }
+        nextBlink = now + random(BLINK_EVERY)
+      }
+      const blinking = blinks.some((at) => now < at + shut + hold + open)
+      if (now >= nextTurn && !blinking) go('settle', now)
+    } else if (mode === 'settle') {
+      amp = 1 - ease(age / SETTLE)
+      if (age >= SETTLE) { fresh = false; v.play(); go('waiting', now) }
+    } else if (mode === 'waiting') {
+      amp = 0
+      if (fresh) go('fadeIn', now)
+    } else if (mode === 'fadeIn') {
+      fade = clamp01(age / CROSSFADE)
+      if (age >= CROSSFADE) go('clip', now)
+    } else if (mode === 'clip') {
+      fade = 1
+      if (v.ended || v.currentTime >= v.duration - 0.018) go('fadeOut', now)
+    } else if (mode === 'fadeOut') {
+      fade = 1 - clamp01(age / CROSSFADE)
+      if (age >= CROSSFADE) {
+        fade = 0; go('recover', now)
+        v.pause(); seekTo(0)
+        nextTurn = now + random(TURN_EVERY)
+      }
+    } else if (mode === 'recover') {
+      amp = ease(age / RECOVER)
+      if (age >= RECOVER) { nextBlink = Math.max(nextBlink, now + 0.8); go('idle', now) }
+    }
+    draw({ t: (now - started) % 8, stage: mode === 'idle' ? stageAt(blinkLevel(now)) : 0, amp, fade })
+    requestAnimationFrame(loop)
+  }
+  requestAnimationFrame(loop)
+
+  // Empty parts of the window let clicks through; on her own pixels the mouse can drag her.
+  const bridge = window.petBridge, handle = document.getElementById('size')
+  // Her feet, as fractions of the window: they stay where they are while she changes size.
+  const FEET = [0.53, 0.94], BASE_HEIGHT = 420, DEFAULT_SCALE = 0.4
+  const onHer = (e) => {
+    const r = window.devicePixelRatio || 1, px = new Uint8Array(4)
+    gl.readPixels(Math.round(e.clientX * r), c.height - 1 - Math.round(e.clientY * r), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px)
+    return px[3] > 24
+  }
+  const onHandle = (e) => {
+    const b = handle.getBoundingClientRect()
+    return Math.hypot(e.clientX - (b.left + b.width / 2), e.clientY - (b.top + b.height / 2)) <= 11
+  }
+  let over = false, grip = null, sizing = null, hideTimer = 0
+  const setOver = (on) => { if (on !== over) { over = on; bridge.setInteractive(on) } }
+  const showHandle = () => { clearTimeout(hideTimer); handle.classList.add('show') }
+  const hideHandle = () => { clearTimeout(hideTimer); hideTimer = setTimeout(() => handle.classList.remove('show'), 700) }
+  const release = () => { if (grip || sizing) { grip = sizing = null; bridge.dragEnd() } }
+  document.addEventListener('pointermove', (e) => {
+    // She can shrink out from under the mouse, so the release may never reach this window.
+    if ((grip || sizing) && e.buttons === 0) release()
+    if (grip) return bridge.moveTo(e.screenX - grip.x, e.screenY - grip.y)
+    if (sizing) {
+      // Right and down make her bigger, left and up smaller.
+      return bridge.resizeTo(sizing.scale + ((e.screenX - sizing.x + e.screenY - sizing.y) * 1.6) / BASE_HEIGHT, FEET[0], FEET[1])
+    }
+    const on = onHandle(e) || onHer(e)
+    setOver(on)
+    if (on) showHandle(); else hideHandle()
+  })
+  document.addEventListener('pointerdown', (e) => {
+    if (onHandle(e)) sizing = { x: e.screenX, y: e.screenY, scale: window.innerHeight / BASE_HEIGHT }
+    else if (onHer(e)) grip = { x: e.clientX, y: e.clientY }
+    else return
+    document.documentElement.setPointerCapture?.(e.pointerId)
+  })
+  document.addEventListener('pointerup', release)
+  document.addEventListener('pointercancel', release)
+  handle.addEventListener('dblclick', () => { bridge.resizeTo(DEFAULT_SCALE, FEET[0], FEET[1]); bridge.dragEnd() })
+  document.addEventListener('mouseleave', () => { if (!grip && !sizing) { setOver(false); hideHandle() } })
+}
+main().catch((e) => { document.title = 'ERROR ' + e.message; console.error(e) })
+</script>
