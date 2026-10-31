@@ -10,7 +10,7 @@ import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
-import { closePet, initPet, libraryChanged, petFile } from './pet'
+import { closePet, initPet, petFile } from './pet'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -82,7 +82,6 @@ function registerIpc(): void {
     if (patch.libraryPath) {
       lib.ensureLibrary()
       loadGlossary()
-      libraryChanged()
     }
     return s
   })
@@ -92,7 +91,6 @@ function registerIpc(): void {
     const s = saveSettings({ libraryPath: r.filePaths[0] })
     lib.ensureLibrary()
     loadGlossary()
-    libraryChanged()
     return s
   })
   ipcMain.handle('text:get', (_e, name: 'profile.md') => lib.readRootText(name))
@@ -176,7 +174,7 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   app.setName('Shiori')
-  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://pet/<path> the character pack.
+  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://pet/<path> the character's files.
   protocol.handle('shiori', (req) => {
     const u = new URL(req.url)
     if (u.host === 'pet') {

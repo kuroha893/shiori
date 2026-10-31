@@ -108,7 +108,7 @@ export interface Settings {
 }
 
 export interface PetState {
-  /** A character pack exists in the library */
+  /** Her files are present */
   available: boolean
   visible: boolean
 }

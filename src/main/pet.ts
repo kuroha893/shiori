@@ -1,11 +1,10 @@
-import { BrowserWindow, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import type { PetState } from '../shared/types'
-import { root } from './library'
 import { getSettings, saveSettings } from './settings'
 
-/* The desktop character. Her page and art are a pack in <library>/pet, kept out of this repository; no pack, no button. */
+/* The desktop character. Her page and art ship with the app in resources/pet. */
 
 const WIDTH = 336
 const HEIGHT = 420
@@ -18,7 +17,7 @@ let win: BrowserWindow | undefined
 let anchor: { x: number; y: number } | undefined
 let notify: (state: PetState) => void = () => {}
 
-const folder = () => join(root(), 'pet')
+const folder = () => join(app.getAppPath(), 'resources', 'pet')
 
 export const petState = (): PetState => ({ available: existsSync(join(folder(), 'pet.html')), visible: !!win })
 
@@ -113,10 +112,4 @@ export function initPet(onChange: (state: PetState) => void): void {
     const [x, y] = win.getPosition()
     saveSettings({ petPosition: { x, y } })
   })
-}
-
-/** After the library changes, the pack may be a different one or none at all. */
-export function libraryChanged(): void {
-  closePet()
-  notify(petState())
 }
