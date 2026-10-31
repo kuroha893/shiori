@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ClaudeStatus, Settings } from '../../../shared/types'
 import { api } from '../api'
 import { Icon } from './Icon'
@@ -24,37 +24,6 @@ function Copyable({ text }: { text: string }) {
       >
         <Icon name={done ? 'check' : 'copy'} size={14} />
       </button>
-    </div>
-  )
-}
-
-function TextFile({ name, rows }: { name: 'profile.md'; rows: number }) {
-  const [text, setText] = useState<string>()
-  const [saved, setSaved] = useState(true)
-  useEffect(() => {
-    api.getText(name).then(setText)
-  }, [name])
-  useEffect(() => {
-    if (text === undefined || saved) return
-    const t = setTimeout(() => api.setText(name, text).then(() => setSaved(true)), 500)
-    return () => clearTimeout(t)
-  }, [text, saved, name])
-  if (text === undefined) return null
-  return (
-    <div>
-      <textarea
-        className="textarea code"
-        rows={rows}
-        value={text}
-        spellCheck={false}
-        onChange={(e) => {
-          setText(e.target.value)
-          setSaved(false)
-        }}
-      />
-      <p className="help" style={{ marginTop: 6 }}>
-        {saved ? '已自动保存' : '保存中…'}
-      </p>
     </div>
   )
 }
@@ -211,10 +180,69 @@ export function SettingsModal(props: {
 
       <section className="set-section">
         <h3>
-          研究者档案
-          <small>告诉 Claude 你是谁、懂什么。讲解和翻译会照着它调整深浅。</small>
+          通话
+          <small>点右下角的头像和八千代通话。你打字，她说话。没填声音时只有字幕。</small>
         </h3>
-        <TextFile name="profile.md" rows={9} />
+        <div className="set-rows">
+          <div className="set-row">
+            <label>模型</label>
+            <div className="seg">
+              {['opus', 'sonnet', 'haiku'].map((m) => (
+                <button key={m} className={s.callModel === m ? 'on' : ''} onClick={() => props.onChange({ callModel: m })}>
+                  {m[0].toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+            <span className="faint" style={{ fontSize: 12 }}>下次通话生效</span>
+          </div>
+          <div className="set-row">
+            <label>她说</label>
+            <div className="seg">
+              {(['ja', 'zh'] as const).map((l) => (
+                <button key={l} className={s.callLanguage === l ? 'on' : ''} onClick={() => props.onChange({ callLanguage: l })}>
+                  {l === 'ja' ? '日语' : '中文'}
+                </button>
+              ))}
+            </div>
+            <span className="faint" style={{ fontSize: 12 }}>都有中文字幕</span>
+          </div>
+          <div className="set-row">
+            <label>桌宠形象</label>
+            <div className="seg">
+              {[false, true].map((v) => (
+                <button key={String(v)} className={s.petShown === v ? 'on' : ''} onClick={() => props.onChange({ petShown: v })}>
+                  {v ? '显示' : '隐藏'}
+                </button>
+              ))}
+            </div>
+            <span className="faint" style={{ fontSize: 12 }}>通话时站在桌面上</span>
+          </div>
+          <div className="set-row">
+            <label>Fish Audio 密钥</label>
+            <input className="input" type="password" spellCheck={false} value={s.fishKey} onChange={(e) => props.onChange({ fishKey: e.target.value.trim() })} />
+          </div>
+          <div className="set-row">
+            <label>音色 ID</label>
+            <input className="input" spellCheck={false} value={s.fishVoice} onChange={(e) => props.onChange({ fishVoice: e.target.value.trim() })} />
+          </div>
+          <div className="set-row">
+            <label>声音模型</label>
+            <div className="seg">
+              {['s2.1-pro', 's2.1-pro-free', 'drama-3'].map((m) => (
+                <button key={m} className={s.fishModel === m ? 'on' : ''} onClick={() => props.onChange({ fishModel: m })}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
+            <label>她的记忆</label>
+            <button className="btn sm" onClick={() => api.revealMemory()}>
+              在 Finder 中显示
+            </button>
+            <span className="faint" style={{ fontSize: 12 }}>每次通话后她自己记，你可以直接改这个文件</span>
+          </div>
+        </div>
       </section>
 
       <section className="set-section">

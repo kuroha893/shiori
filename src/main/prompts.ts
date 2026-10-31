@@ -49,7 +49,7 @@ Table 1: Results on ImageNet.
 表 1：ImageNet 上的结果。
 `
 
-export function processPrompt(o: { pages: number; glossary: string; profile: string }): string {
+export function processPrompt(o: { pages: number; glossary: string }): string {
   return `You are preparing an academic paper so a Chinese reader can read it as a beautifully typeset Chinese article.
 
 Files in the current folder:
@@ -92,9 +92,6 @@ Rules:
 
 ## Glossary (English → Chinese; "不译" means keep the English)
 ${o.glossary}
-
-## About the reader
-${o.profile}
 ${FORMAT}`
 }
 
@@ -126,7 +123,7 @@ const GUIDE_SAMPLE = `## 要解决的问题
 
 这个想法成立了：Transformer 的翻译质量超过了当时最好的模型，训练成本却低得多。论文之外还有一点值得知道：后来的 BERT 和 GPT 都建立在这个架构上，这也是它今天仍然值得读的主要原因。`
 
-export function guidePrompt(o: { glossary: string; profile: string; folders: string[] }): string {
+export function guidePrompt(o: { glossary: string; folders: string[] }): string {
   return `You are writing the reading guide (导读) of an academic paper for a Chinese reader who has not read it yet.
 The guide is the underdrawing a painter lays down before any detail: it gives a rough but intuitive sense of the
 whole paper and of the line of research it belongs to, so the reader knows what they are looking at when they
@@ -200,9 +197,6 @@ ${GUIDE_SAMPLE}
 ## Glossary (English → Chinese; "不译" means keep the English)
 ${o.glossary}
 
-## About the reader (adapt the explanations to them)
-${o.profile}
-
 Write the guide to summary.next.md.
 
 Then suggest a research direction under which the reader could file this paper. Their directions so far:
@@ -220,18 +214,15 @@ Read each crop. If one cuts off part of the graphic, or includes the caption or 
 that block's bbox in the doc files with Edit (compare against the page image in pages/ again). Reply with the ids
 you changed separated by commas, or NONE.`
 
-export function chatSystemPrompt(o: { profile: string; glossary: string; title: string }): string {
+export function chatSystemPrompt(o: { glossary: string; title: string }): string {
   return `You are a reading companion inside Shiori, the reader's personal paper reader. The reader is reading
 "${o.title}". Its files are in the current folder: doc/*.md (the full paper, bilingual, as blocks with ids;
 lines starting with @@ open a block), summary.md (a reading guide), paper.pdf (the original), pages/*.png.
 Read what you need to answer well; don't guess about the paper's content.
 
-Answer in Chinese, clearly and to the point, adapted to the reader below. Use Markdown, and LaTeX for math
+Answer in Chinese, clearly and to the point. Give the intuition before the formula, and say what each symbol means. Use Markdown, and LaTeX for math
 ($...$ inline, $$...$$ display; KaTeX). When you point to part of the paper, link its block id, like
 [图 3](#fig-3), [式 (5)](#eq-5), [第 3 节](#sec-3), [这一段](#p-14). Follow the glossary's translations.
-
-## About the reader
-${o.profile}
 
 ## Glossary
 ${o.glossary}`

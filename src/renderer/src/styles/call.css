@@ -1,0 +1,146 @@
+/* The call floats over whatever is on the desktop, so it has its own dark glass instead of the app's themes. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: var(--ui-font), -apple-system, 'PingFang SC', sans-serif;
+  color: #f4f4f6;
+}
+.call {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 2px;
+}
+.call-subtitle,
+.call-history,
+.call-notice,
+.call-bar {
+  background: rgba(24, 24, 28, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+}
+.call-subtitle {
+  padding: 9px 12px;
+  animation: call-in 0.18s ease-out;
+}
+.call-subtitle p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.call-subtitle small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.5);
+}
+.call-history {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.call-history p {
+  margin: 0 0 6px;
+}
+.call-history p.you {
+  color: rgba(255, 255, 255, 0.55);
+  text-align: right;
+}
+.call-empty {
+  color: rgba(255, 255, 255, 0.4);
+}
+.call-notice {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #f5b7a8;
+}
+.call-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  flex: none;
+  padding: 0 6px 0 11px;
+}
+.call-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #5fd38a;
+}
+.call-dot.thinking {
+  animation: call-pulse 0.9s ease-in-out infinite;
+}
+.call-dot,
+.call-time {
+  /* Hold the bar by its clock to move the call. */
+  -webkit-app-region: drag;
+}
+.call-time {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.65);
+}
+.call-bar input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.call-bar input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+.call-bar button {
+  flex: none;
+  height: 25px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.call-bar button:hover,
+.call-bar button.on {
+  background: rgba(255, 255, 255, 0.17);
+}
+.call-bar button.hang {
+  background: rgba(224, 82, 82, 0.85);
+  color: #fff;
+}
+.call-bar button.hang:hover {
+  background: rgb(224, 82, 82);
+}
+@keyframes call-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes call-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}

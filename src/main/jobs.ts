@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeF
 import { join } from 'node:path'
 import type { PaperMeta } from '../shared/types'
 import { parseDoc } from '../shared/doc'
-import { listPapers, paperDir, readDocSource, readMeta, readRootText, updateMeta } from './library'
+import { listPapers, paperDir, readDocSource, readMeta, updateMeta } from './library'
 import { findFolder, loadFolders } from './folders'
 import { glossaryPrompt } from './glossary'
 import { runClaude } from './claude'
@@ -141,7 +141,6 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
   }
 
   const glossary = glossaryPrompt()
-  const profile = readRootText('profile.md')
   // Development only: SHIORI_FAKE_CLAUDE=<dir> copies <dir>/<paper id>/ in place of Claude's output.
   const fake = globalThis.process.env.SHIORI_FAKE_CLAUDE
   if (fake) {
@@ -151,7 +150,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
   }
   const first = await runClaude({
     cwd: dir,
-    prompt: processPrompt({ pages, glossary, profile }),
+    prompt: processPrompt({ pages, glossary }),
     model: settings.processModel,
     tools: ['Read', 'Write', 'Edit', 'Glob'],
     sessionId,
@@ -223,7 +222,7 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   rmSync(suggestion, { force: true })
   const result = await runClaude({
     cwd: dir,
-    prompt: guidePrompt({ glossary: glossaryPrompt(), profile: readRootText('profile.md'), folders: loadFolders().map((f) => f.name) }),
+    prompt: guidePrompt({ glossary: glossaryPrompt(), folders: loadFolders().map((f) => f.name) }),
     model: getSettings().processModel,
     tools: ['Read', 'Glob', 'Write', 'WebSearch'],
     allowedTools: ['WebSearch'],

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ChatEvent, ChatMessage } from '../shared/types'
-import { loadChat, paperDir, readMeta, readRootText, saveChat } from './library'
+import { loadChat, paperDir, readMeta, saveChat } from './library'
 import { runClaude } from './claude'
 import { chatSystemPrompt } from './prompts'
 import { glossaryPrompt } from './glossary'
@@ -55,7 +55,6 @@ export async function ask(
       resume,
       partial: true,
       systemPrompt: chatSystemPrompt({
-        profile: readRootText('profile.md'),
         glossary: glossaryPrompt(),
         title: meta.titleZh || meta.title
       }),

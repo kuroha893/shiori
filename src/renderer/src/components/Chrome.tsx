@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { PetState, Settings } from '../../../shared/types'
+import type { PaperMeta, PetState, Settings } from '../../../shared/types'
 import { api } from '../api'
 import { Icon } from './Icon'
 
@@ -22,7 +22,7 @@ export function ThemeButton({ theme, onChange }: { theme: Settings['theme']; onC
 
 export const themeOptions = THEMES
 
-/** The character's face: click to call her onto the desktop, click again to send her away. */
+/** The character's face: click to call her, click again to hang up. */
 export function PetButton() {
   const [pet, setPet] = useState<PetState>()
   useEffect(() => {
@@ -31,8 +31,25 @@ export function PetButton() {
   }, [])
   if (!pet?.available) return null
   return (
-    <button className={`pet-btn no-drag ${pet.visible ? 'on' : ''}`} title={pet.visible ? '收起助手' : '唤起助手'} onClick={() => api.togglePet().then(setPet)}>
+    <button className={`pet-btn no-drag ${pet.visible ? 'on' : ''}`} title={pet.visible ? '挂断' : '和八千代通话'} onClick={() => api.togglePet().then(setPet)}>
       <img src="shiori://pet/avatar.png" alt="" draggable={false} />
+    </button>
+  )
+}
+
+/** Red when the owner likes the paper; click to change your mind. */
+export function HeartButton({ paper, bordered }: { paper: PaperMeta; bordered?: boolean }) {
+  const liked = !!paper.likedAt
+  return (
+    <button
+      className={`icon-btn heart ${bordered ? 'bordered' : ''} ${liked ? 'on' : ''}`}
+      title={liked ? '取消喜欢' : '喜欢这篇'}
+      onClick={(e) => {
+        e.stopPropagation()
+        api.updatePaper(paper.id, { likedAt: liked ? undefined : new Date().toISOString() })
+      }}
+    >
+      <Icon name="heart" />
     </button>
   )
 }

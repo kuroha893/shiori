@@ -11,17 +11,6 @@ export const root = () => getSettings().libraryPath
 export const papersDir = () => join(root(), 'papers')
 export const paperDir = (id: string) => join(papersDir(), id)
 
-export const DEFAULT_PROFILE = `# 我的研究者档案
-
-<!-- Claude 在讲解和翻译时会读这份档案。随时改。 -->
-
-- 身份：
-- 方向：
-- 已经比较熟悉的：
-- 还不熟悉、需要讲细一点的：
-- 讲解偏好：用中文，先讲直觉再讲公式，符号要说明含义
-`
-
 export const DEFAULT_GLOSSARY = `# 术语表
 
 <!-- 翻译时会遵循这里的译法。一行一个：英文 → 中文；写"不译"则保留英文。 -->
@@ -36,8 +25,6 @@ ablation study → 消融实验
 
 export function ensureLibrary(): void {
   mkdirSync(papersDir(), { recursive: true })
-  const profile = join(root(), 'profile.md')
-  if (!existsSync(profile)) writeFileSync(profile, DEFAULT_PROFILE)
 }
 
 /** Resolve a path inside a paper folder, refusing anything that escapes it. */
@@ -223,16 +210,6 @@ export function saveNoteImage(id: string, ext: string, bytes: ArrayBuffer): stri
   mkdirSync(paperFile(id, 'note-media'), { recursive: true })
   writeFileSync(paperFile(id, rel), Buffer.from(bytes))
   return rel
-}
-
-export function readRootText(name: 'profile.md'): string {
-  ensureLibrary()
-  return readFileSync(join(root(), name), 'utf8')
-}
-
-export function writeRootText(name: 'profile.md', text: string): void {
-  ensureLibrary()
-  writeFileSync(join(root(), name), text)
 }
 
 export function fileExists(id: string, rel: string): boolean {

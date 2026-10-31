@@ -355,6 +355,13 @@ input.bare::placeholder {
 .spacer {
   flex: 1;
 }
+/* An unliked heart shows only under the mouse, so the shelf stays quiet. */
+.paper .heart:not(.on) {
+  opacity: 0;
+}
+.paper:hover .heart {
+  opacity: 1;
+}
 .paper .more {
   width: 26px;
   height: 26px;

@@ -16,6 +16,12 @@ const defaults: Settings = {
   lineHeight: 1.85,
   panelWidth: 400,
   panelFontSize: 13.5,
+  callModel: 'opus',
+  callLanguage: 'ja',
+  petShown: false,
+  fishKey: '',
+  fishVoice: '',
+  fishModel: 's2.1-pro',
   view: 'zh'
 }
 

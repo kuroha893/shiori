@@ -2,7 +2,7 @@ import { useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import type { ClaudeStatus, PaperMeta, Settings } from '../../../shared/types'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
-import { Menu, PetButton, ThemeButton, type MenuItem } from './Chrome'
+import { HeartButton, Menu, PetButton, ThemeButton, type MenuItem } from './Chrome'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
 import { VenueTags } from './VenueTags'
 import type { Toast } from './App'
@@ -43,7 +43,10 @@ export function Library(props: {
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
   const folders = useFolders()
-  const [place, setPlace] = useState<'all' | 'none' | string>('all')
+  const [chosenPlace, setPlace] = useState<'all' | 'none' | 'liked' | string>('all')
+  const likedCount = papers.filter((p) => p.likedAt).length
+  // The liked list disappears with its last heart.
+  const place = chosenPlace === 'liked' && !likedCount ? 'all' : chosenPlace
   const [creating, setCreating] = useState<{ paper?: string }>()
   const [renaming, setRenaming] = useState<string>()
   const [dropOn, setDropOn] = useState<string>()
@@ -79,7 +82,7 @@ export function Library(props: {
   }
 
   const inPlace = (p: PaperMeta) =>
-    place === 'all' || (place === 'none' ? !p.folders?.length : !!p.folders?.includes(place))
+    place === 'all' || (place === 'none' ? !p.folders?.length : place === 'liked' ? !!p.likedAt : !!p.folders?.includes(place))
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -229,6 +232,12 @@ export function Library(props: {
             <span>未分类</span>
             <i>{papers.filter((p) => !p.folders?.length).length}</i>
           </button>
+          {likedCount > 0 && (
+            <button className={`lib-side-item ${place === 'liked' ? 'on' : ''}`} onClick={() => setPlace('liked')}>
+              <span>我喜欢的论文</span>
+              <i>{likedCount}</i>
+            </button>
+          )}
           <div className="lib-side-head">
             <span>研究方向</span>
             <button className="icon-btn" title="新建方向" onClick={() => setCreating({})}>
@@ -440,6 +449,7 @@ function PaperCard({
               {p.status === 'error' ? '重试' : '处理'}
             </button>
           )}
+          <HeartButton paper={p} />
           <button
             className="icon-btn more"
             onClick={(e) => {

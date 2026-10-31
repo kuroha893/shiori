@@ -10,7 +10,8 @@ import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
-import { closePet, initPet, petFile } from './pet'
+import { closePet, initPet, petFile, syncPet } from './pet'
+import { endCall, initCall, placeCall, startCall, watchPaper } from './call'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -65,7 +66,10 @@ function createWindow(): void {
 }
 
 const send = (channel: string, payload: unknown) => main?.webContents.send(channel, payload)
-const paperChanged = (meta: PaperMeta) => send('paper:changed', meta)
+const paperChanged = (meta: PaperMeta) => {
+  send('paper:changed', meta)
+  watchPaper(meta)
+}
 const foldersChanged = () => send('folders:changed', loadFolders())
 
 async function addPdf(path: string): Promise<PaperMeta> {
@@ -79,6 +83,7 @@ function registerIpc(): void {
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     const s = saveSettings(patch)
+    if ('petShown' in patch) syncPet()
     if (patch.libraryPath) {
       lib.ensureLibrary()
       loadGlossary()
@@ -93,8 +98,6 @@ function registerIpc(): void {
     loadGlossary()
     return s
   })
-  ipcMain.handle('text:get', (_e, name: 'profile.md') => lib.readRootText(name))
-  ipcMain.handle('text:set', (_e, name: 'profile.md', text: string) => lib.writeRootText(name, text))
 
   ipcMain.handle('glossary:list', () => loadGlossary())
   ipcMain.handle('glossary:save', (_e, entry: Omit<GlossaryEntry, 'id'> & { id?: string }) => saveEntry(entry))
@@ -195,7 +198,15 @@ app.whenReady().then(() => {
   lib.ensureLibrary()
   loadGlossary()
   registerIpc()
-  initPet((state) => send('pet:changed', state))
+  initPet(
+    (state) => {
+      send('pet:changed', state)
+      if (state.visible) startCall()
+      else endCall()
+    },
+    () => placeCall()
+  )
+  initCall(closePet)
   createWindow()
   initJobs(paperChanged)
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))

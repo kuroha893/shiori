@@ -9,7 +9,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
-          pet: resolve(__dirname, 'src/preload/pet.ts')
+          pet: resolve(__dirname, 'src/preload/pet.ts'),
+          call: resolve(__dirname, 'src/preload/call.ts')
         }
       }
     }
@@ -20,7 +21,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          worker: resolve(__dirname, 'src/renderer/worker.html')
+          worker: resolve(__dirname, 'src/renderer/worker.html'),
+          call: resolve(__dirname, 'src/renderer/call.html')
         }
       }
     }

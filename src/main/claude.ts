@@ -148,6 +148,90 @@ export interface RunResult {
   usage?: any
 }
 
+export interface Conversation {
+  /** One turn; onText gets the reply as it is written. Turns must not overlap. */
+  send(text: string, onText: (text: string) => void): Promise<void>
+  alive(): boolean
+  close(): void
+}
+
+/**
+ * A single CLI process kept open across turns, with no tools. Replies start far sooner than
+ * resuming a session for each message, which is what makes a conversation feel spoken.
+ */
+export async function openConversation(opts: { cwd: string; model: string; systemPrompt: string }): Promise<Conversation> {
+  const path = await findClaude()
+  if (!path) throw new Error('没有找到 Claude Code，请先在设置里安装并登录')
+  const child = spawn(
+    path,
+    [
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--model',
+      opts.model,
+      '--restricted',
+      '--strict-mcp-config',
+      '--tools',
+      '',
+      '--system-prompt',
+      opts.systemPrompt,
+      '--no-session-persistence'
+    ],
+    { cwd: opts.cwd, env: claudeEnv(), stdio: ['pipe', 'pipe', 'pipe'] }
+  )
+  let open = true
+  let out = ''
+  let err = ''
+  let turn: { onText: (text: string) => void; done: () => void; fail: (e: Error) => void } | undefined
+  child.stdout.setEncoding('utf8')
+  child.stdout.on('data', (chunk: string) => {
+    out += chunk
+    let nl: number
+    while ((nl = out.indexOf('\n')) >= 0) {
+      const line = out.slice(0, nl).trim()
+      out = out.slice(nl + 1)
+      if (!line) continue
+      let event: any
+      try {
+        event = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (event.type === 'stream_event' && event.event?.delta?.type === 'text_delta') turn?.onText(event.event.delta.text)
+      if (event.type === 'result') {
+        const current = turn
+        turn = undefined
+        if (event.is_error) current?.fail(new Error(event.result || 'Claude 出错了'))
+        else current?.done()
+      }
+    }
+  })
+  child.stderr.setEncoding('utf8')
+  child.stderr.on('data', (c: string) => (err += c))
+  const closed = () => {
+    open = false
+    turn?.fail(new Error(err.trim().split('\n').slice(-2).join(' ') || 'Claude Code 退出了'))
+    turn = undefined
+  }
+  child.on('error', closed)
+  child.on('close', closed)
+  child.stdin.on('error', () => {})
+  return {
+    send: (text, onText) =>
+      new Promise((done, fail) => {
+        turn = { onText, done, fail }
+        child.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }) + '\n')
+      }),
+    alive: () => open,
+    close: () => child.kill('SIGTERM')
+  }
+}
+
 /** Run one headless Claude Code turn and stream its JSON events. */
 export async function runClaude(opts: RunOptions): Promise<RunResult> {
   const path = await findClaude()

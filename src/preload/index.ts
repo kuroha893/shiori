@@ -13,8 +13,6 @@ const api = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch: Partial<Settings>) => ipcRenderer.invoke('settings:set', patch),
   chooseLibrary: () => ipcRenderer.invoke('settings:chooseLibrary'),
-  getText: (name: 'profile.md') => ipcRenderer.invoke('text:get', name),
-  setText: (name: 'profile.md', text: string) => ipcRenderer.invoke('text:set', name, text),
   listTerms: (): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:list'),
   saveTerm: (entry: Omit<GlossaryEntry, 'id'> & { id?: string }): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:save', entry),
   deleteTerm: (id: string): Promise<GlossaryEntry[]> => ipcRenderer.invoke('glossary:delete', id),
@@ -52,6 +50,8 @@ const api = {
 
   petState: (): Promise<PetState> => ipcRenderer.invoke('pet:state'),
   togglePet: (): Promise<PetState> => ipcRenderer.invoke('pet:toggle'),
+  callReading: (id: string | null) => ipcRenderer.send('call:reading', id),
+  revealMemory: () => ipcRenderer.invoke('call:revealMemory'),
   onPetChanged: (fn: (s: PetState) => void) => on('pet:changed', fn),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),

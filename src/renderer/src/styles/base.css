@@ -238,6 +238,12 @@ button {
   height: 100%;
   pointer-events: none;
 }
+.icon-btn.heart.on {
+  color: hsl(var(--destructive));
+}
+.icon-btn.heart.on svg {
+  fill: currentColor;
+}
 .icon-btn.active {
   color: hsl(var(--foreground));
   background: hsl(var(--accent));

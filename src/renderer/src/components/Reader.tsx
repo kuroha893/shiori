@@ -6,7 +6,7 @@ import { Article } from './Article'
 import { COLORS, NotePopover, SelectionMenu, type Selected } from './Annotate'
 import { SidePanel, useChat, type Quote, type Tab } from './SidePanel'
 import { Lightbox, PdfPeek } from './Overlays'
-import { PetButton, ThemeButton, useDismiss } from './Chrome'
+import { HeartButton, PetButton, ThemeButton, useDismiss } from './Chrome'
 import { Icon } from './Icon'
 import type { Toast } from './App'
 
@@ -55,6 +55,12 @@ export function Reader(props: {
     }
     guideWriting.current = paper.guideWriting
   }, [paper.id, paper.guideWriting])
+
+  // On a call she can tell what you are reading.
+  useEffect(() => {
+    api.callReading(paper.id)
+    return () => api.callReading(null)
+  }, [paper.id])
 
   const blocks = doc?.blocks ?? []
   const headings = useMemo(() => blocks.filter((b) => b.type === 'h' && (b.attrs.level ?? '1') !== '3'), [blocks])
@@ -302,6 +308,7 @@ export function Reader(props: {
           >
             <Icon name="pdf" />
           </button>
+          <HeartButton paper={paper} bordered />
           <button className={`icon-btn bordered ${panel ? 'active' : ''}`} title="侧栏（⌘J）" onClick={() => setPanel((v) => !v)}>
             <Icon name="panel" />
           </button>

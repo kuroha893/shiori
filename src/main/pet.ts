@@ -16,10 +16,13 @@ let win: BrowserWindow | undefined
 /** The point that stays put during a resize, so she grows from where she stands. */
 let anchor: { x: number; y: number } | undefined
 let notify: (state: PetState) => void = () => {}
+let moved: () => void = () => {}
+/** The call is open; the character shows during it if the owner wants her to. */
+let on = false
 
 const folder = () => join(app.getAppPath(), 'resources', 'pet')
 
-export const petState = (): PetState => ({ available: existsSync(join(folder(), 'pet.html')), visible: !!win })
+export const petState = (): PetState => ({ available: existsSync(join(folder(), 'pet.html')), visible: on })
 
 /** Resolve a path inside the pack, refusing anything that escapes it. */
 export function petFile(rel: string): string {
@@ -78,25 +81,49 @@ function open(): void {
   win.once('ready-to-show', () => win?.showInactive())
   win.on('closed', () => {
     win = undefined
-    notify(petState())
   })
   win.loadURL('shiori://pet/pet.html')
+}
+
+/** Puts the character on the desktop or takes her off, to match the call and the setting. */
+export function syncPet(): void {
+  if (on && getSettings().petShown) {
+    if (!win) open()
+  } else {
+    win?.destroy()
+    win = undefined
+  }
+  moved()
+}
+
+export function closePet(): void {
+  if (!on) return
+  on = false
+  syncPet()
   notify(petState())
 }
 
-export const closePet = () => win?.destroy()
+export const petBounds = () => win?.getBounds()
 
-export function initPet(onChange: (state: PetState) => void): void {
+export function initPet(onChange: (state: PetState) => void, onMoved: () => void): void {
   notify = onChange
+  moved = onMoved
   ipcMain.handle('pet:state', () => petState())
   ipcMain.handle('pet:toggle', () => {
-    if (win) closePet()
-    else if (petState().available) open()
+    if (on) closePet()
+    else if (petState().available) {
+      on = true
+      syncPet()
+      notify(petState())
+    }
     return petState()
   })
   // Only her own pixels catch the mouse; the empty parts of the window let clicks through to whatever is behind.
   ipcMain.on('pet:interactive', (_e, on: boolean) => win?.setIgnoreMouseEvents(!on, { forward: true }))
-  ipcMain.on('pet:move', (_e, x: number, y: number) => win?.setBounds({ x: Math.round(x), y: Math.round(y), ...size() }))
+  ipcMain.on('pet:move', (_e, x: number, y: number) => {
+    win?.setBounds({ x: Math.round(x), y: Math.round(y), ...size() })
+    moved()
+  })
   // ax and ay say where in the window she stands, as fractions; that point stays where it is.
   ipcMain.on('pet:resize', (_e, scale: number, ax: number, ay: number) => {
     if (!win) return
@@ -105,6 +132,7 @@ export function initPet(onChange: (state: PetState) => void): void {
     saveSettings({ petScale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale)) })
     const { width, height } = size()
     win.setBounds({ x: Math.round(anchor.x - width * ax), y: Math.round(anchor.y - height * ay), width, height })
+    moved()
   })
   ipcMain.on('pet:moved', () => {
     anchor = undefined

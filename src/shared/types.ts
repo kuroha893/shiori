@@ -31,6 +31,8 @@ export interface PaperMeta {
   folders?: string[]
   /** Claude's suggestion for an unfiled paper; nothing is filed until the owner accepts it */
   suggestion?: { name: string; folderId?: string }
+  /** When the owner hearted this paper */
+  likedAt?: string
   /** Reading state */
   readPos?: { block: string; ratio: number }
   readAt?: string
@@ -40,6 +42,29 @@ export interface PaperMeta {
 export interface Folder {
   id: string
   name: string
+}
+
+export interface CallState {
+  active: boolean
+  startedAt?: number
+  /** Claude is working on a reply */
+  thinking: boolean
+  /** Why she can't speak or be heard right now */
+  notice?: string
+}
+
+export interface CallLine {
+  id: string
+  /** What she says, and its Chinese subtitle */
+  say: string
+  zh: string
+  audio?: Uint8Array
+  type?: string
+}
+
+export interface CallInit {
+  state: CallState
+  uiFont: string
 }
 
 export interface Block {
@@ -101,6 +126,17 @@ export interface Settings {
   /** Side panel: width and text size in px */
   panelWidth: number
   panelFontSize: number
+  /** The call with Yachiyo: the Claude model behind her and what she speaks */
+  callModel: string
+  callLanguage: 'ja' | 'zh'
+  /** Whether the chibi character stands on the desktop during a call */
+  petShown: boolean
+  /** Where the call was dragged to when she isn't there to stand beside */
+  callPosition?: { x: number; y: number }
+  /** Her voice: the owner's own Fish Audio key, voice id and model */
+  fishKey: string
+  fishVoice: string
+  fishModel: string
   /** Where the desktop character was last left */
   petPosition?: { x: number; y: number }
   petScale?: number
