@@ -49,9 +49,9 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
 
   petState: (): Promise<PetState> => ipcRenderer.invoke('pet:state'),
-  togglePet: (): Promise<PetState> => ipcRenderer.invoke('pet:toggle'),
+  togglePet: (contact: string): Promise<PetState> => ipcRenderer.invoke('pet:toggle', contact),
   callReading: (id: string | null) => ipcRenderer.send('call:reading', id),
-  revealMemory: () => ipcRenderer.invoke('call:revealMemory'),
+  revealMemory: (contact: string) => ipcRenderer.invoke('call:revealMemory', contact),
   onPetChanged: (fn: (s: PetState) => void) => on('pet:changed', fn),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),

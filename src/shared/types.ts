@@ -1,5 +1,7 @@
 // Types shared by the main process, the preload bridge and the renderer.
 
+import type { ContactSettings } from './contacts'
+
 export type PaperStatus = 'new' | 'queued' | 'processing' | 'ready' | 'error'
 
 export interface PaperMeta {
@@ -44,6 +46,9 @@ export interface Folder {
   name: string
 }
 
+/** How readily she speaks up on a call: wants to chat, normal, or do not disturb */
+export type CallMood = 'chat' | 'normal' | 'quiet'
+
 export interface CallState {
   active: boolean
   startedAt?: number
@@ -60,10 +65,13 @@ export interface CallLine {
   zh: string
   audio?: Uint8Array
   type?: string
+  /** She brought this up herself, rather than answering or announcing something */
+  unprompted?: boolean
 }
 
 export interface CallInit {
   state: CallState
+  mood: CallMood
   uiFont: string
 }
 
@@ -126,16 +134,16 @@ export interface Settings {
   /** Side panel: width and text size in px */
   panelWidth: number
   panelFontSize: number
-  /** The call with Yachiyo: the Claude model behind her and what she speaks */
+  /** Calls: the Claude model behind them, and each contact's voice and language */
   callModel: string
-  callLanguage: 'ja' | 'zh'
+  contacts: Record<string, ContactSettings>
+  callMood: CallMood
   /** Whether the chibi character stands on the desktop during a call */
   petShown: boolean
   /** Where the call was dragged to when she isn't there to stand beside */
   callPosition?: { x: number; y: number }
-  /** Her voice: the owner's own Fish Audio key, voice id and model */
+  /** The owner's own Fish Audio key and model */
   fishKey: string
-  fishVoice: string
   fishModel: string
   /** Where the desktop character was last left */
   petPosition?: { x: number; y: number }
@@ -144,9 +152,8 @@ export interface Settings {
 }
 
 export interface PetState {
-  /** Her files are present */
-  available: boolean
-  visible: boolean
+  /** Who is on the call, if anyone */
+  contact?: string
 }
 
 export interface ClaudeStatus {

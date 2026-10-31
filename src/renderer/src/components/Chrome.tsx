@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { PaperMeta, PetState, Settings } from '../../../shared/types'
 import { api } from '../api'
+import { CONTACTS } from '../../../shared/contacts'
 import { Icon } from './Icon'
 
 const THEMES: { id: Settings['theme']; icon: string; label: string }[] = [
@@ -22,18 +23,42 @@ export function ThemeButton({ theme, onChange }: { theme: Settings['theme']; onC
 
 export const themeOptions = THEMES
 
-/** The character's face: click to call her, click again to hang up. */
-export function PetButton() {
-  const [pet, setPet] = useState<PetState>()
+/** A green ring that opens the list of people to call; click someone to call them, click again to hang up. */
+export function CallLauncher() {
+  const [call, setCall] = useState<PetState>({})
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useDismiss(box, () => setOpen(false), open)
   useEffect(() => {
-    api.petState().then(setPet)
-    return api.onPetChanged(setPet)
+    api.petState().then(setCall)
+    return api.onPetChanged(setCall)
   }, [])
-  if (!pet?.available) return null
   return (
-    <button className={`pet-btn no-drag ${pet.visible ? 'on' : ''}`} title={pet.visible ? '挂断' : '和八千代通话'} onClick={() => api.togglePet().then(setPet)}>
-      <img src="shiori://pet/avatar.png" alt="" draggable={false} />
-    </button>
+    <div className={`call-launcher no-drag ${open ? 'open' : ''} ${call.contact ? 'live' : ''}`} ref={box}>
+      <div className="call-contacts">
+        {CONTACTS.map((c, i) => (
+          <button
+            key={c.id}
+            className={`call-contact ${call.contact === c.id ? 'on' : ''}`}
+            style={{ '--i': CONTACTS.length - 1 - i } as React.CSSProperties}
+            tabIndex={open ? 0 : -1}
+            aria-label={call.contact === c.id ? `挂断${c.name}` : `和${c.name}通话`}
+            onClick={() => {
+              setOpen(false)
+              api.togglePet(c.id).then(setCall)
+            }}
+          >
+            <span className="call-contact-name">{call.contact === c.id ? `挂断${c.name}` : c.name}</span>
+            <img src={c.avatar} alt="" draggable={false} />
+          </button>
+        ))}
+      </div>
+      <button className="call-launch" title="联系人" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <i />
+        <i />
+        <i />
+      </button>
+    </div>
   )
 }
 

@@ -201,7 +201,7 @@ app.whenReady().then(() => {
   initPet(
     (state) => {
       send('pet:changed', state)
-      if (state.visible) startCall()
+      if (state.contact) startCall(state.contact)
       else endCall()
     },
     () => placeCall()

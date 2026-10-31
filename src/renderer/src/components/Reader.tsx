@@ -6,7 +6,7 @@ import { Article } from './Article'
 import { COLORS, NotePopover, SelectionMenu, type Selected } from './Annotate'
 import { SidePanel, useChat, type Quote, type Tab } from './SidePanel'
 import { Lightbox, PdfPeek } from './Overlays'
-import { HeartButton, PetButton, ThemeButton, useDismiss } from './Chrome'
+import { CallLauncher, HeartButton, ThemeButton, useDismiss } from './Chrome'
 import { Icon } from './Icon'
 import type { Toast } from './App'
 
@@ -337,7 +337,7 @@ export function Reader(props: {
         )}
 
         <div className="reader-main">
-        <PetButton />
+        <CallLauncher />
         <div className="scroller" ref={scroller} onScroll={onScroll} onMouseUp={onMouseUp}>
           {!doc ? (
             <div className="doc-loading faint">正在打开…</div>

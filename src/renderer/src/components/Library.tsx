@@ -2,7 +2,7 @@ import { useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import type { ClaudeStatus, PaperMeta, Settings } from '../../../shared/types'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
-import { HeartButton, Menu, PetButton, ThemeButton, type MenuItem } from './Chrome'
+import { CallLauncher, HeartButton, Menu, ThemeButton, type MenuItem } from './Chrome'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
 import { VenueTags } from './VenueTags'
 import type { Toast } from './App'
@@ -202,7 +202,7 @@ export function Library(props: {
       onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
       onDrop={onDrop}
     >
-      <PetButton />
+      <CallLauncher />
       <header className="topbar drag">
         <div className="brand">
           <span className="brand-mark">栞</span>

@@ -50,7 +50,7 @@
   min-width: 0;
 }
 /* Stays clear of the side panel and its chat box, and of the scrollbar. */
-.reader-main .pet-btn {
+.reader-main .call-launcher {
   position: absolute;
   right: 12px;
 }

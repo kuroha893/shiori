@@ -17,10 +17,10 @@ const defaults: Settings = {
   panelWidth: 400,
   panelFontSize: 13.5,
   callModel: 'opus',
-  callLanguage: 'ja',
+  contacts: {},
+  callMood: 'normal',
   petShown: false,
   fishKey: '',
-  fishVoice: '',
   fishModel: 's2.1-pro',
   view: 'zh'
 }
@@ -32,7 +32,12 @@ let cache: Settings | undefined
 export function getSettings(): Settings {
   if (!cache) {
     try {
-      cache = { ...defaults, ...JSON.parse(readFileSync(file(), 'utf8')) }
+      const { fishVoice, callLanguage, ...saved } = JSON.parse(readFileSync(file(), 'utf8'))
+      cache = { ...defaults, ...saved }
+      // Voice and language used to be one setting, from before there could be several contacts.
+      if (fishVoice !== undefined && !cache!.contacts.yachiyo) {
+        cache!.contacts = { ...cache!.contacts, yachiyo: { voice: fishVoice, language: callLanguage ?? 'ja' } }
+      }
     } catch {
       cache = { ...defaults }
     }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ClaudeStatus, Settings } from '../../../shared/types'
+import { CONTACTS, contactSettings, type ContactSettings } from '../../../shared/contacts'
 import { api } from '../api'
 import { Icon } from './Icon'
 import { Modal, themeOptions } from './Chrome'
@@ -180,12 +181,70 @@ export function SettingsModal(props: {
 
       <section className="set-section">
         <h3>
-          通话
-          <small>点右下角的头像和八千代通话。你打字，她说话。没填声音时只有字幕。</small>
+          联系人
+          <small>点右下角的绿圈，选一个人通话。你打字，对方说话并配字幕。没填音色时只有字幕。</small>
+        </h3>
+        <div className="set-contacts">
+          {CONTACTS.map((c) => {
+            const contact = contactSettings(s, c.id)
+            const setContact = (patch: Partial<ContactSettings>) => props.onChange({ contacts: { ...s.contacts, [c.id]: { ...contact, ...patch } } })
+            return (
+              <div className="set-contact" key={c.id}>
+                <div className="set-contact-head">
+                  <img src={c.avatar} alt="" draggable={false} />
+                  <b>{c.name}</b>
+                </div>
+                <div className="set-rows">
+                  <div className="set-row">
+                    <label>音色 ID</label>
+                    <input className="input" spellCheck={false} value={contact.voice} onChange={(e) => setContact({ voice: e.target.value.trim() })} />
+                  </div>
+                  <div className="set-row">
+                    <label>说的语言</label>
+                    <div className="seg">
+                      {(['ja', 'zh'] as const).map((l) => (
+                        <button key={l} className={contact.language === l ? 'on' : ''} onClick={() => setContact({ language: l })}>
+                          {l === 'ja' ? '日语' : '中文'}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="faint" style={{ fontSize: 12 }}>都有中文字幕，下次通话生效</span>
+                  </div>
+                  {c.pet && (
+                    <div className="set-row">
+                      <label>桌宠形象</label>
+                      <div className="seg">
+                        {[false, true].map((v) => (
+                          <button key={String(v)} className={s.petShown === v ? 'on' : ''} onClick={() => props.onChange({ petShown: v })}>
+                            {v ? '显示' : '隐藏'}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="faint" style={{ fontSize: 12 }}>通话时站在桌面上</span>
+                    </div>
+                  )}
+                  <div className="set-row">
+                    <label>记忆</label>
+                    <button className="btn sm" onClick={() => api.revealMemory(c.id)}>
+                      在 Finder 中显示
+                    </button>
+                    <span className="faint" style={{ fontSize: 12 }}>每次通话后自己记，你可以直接改这个文件</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="set-section">
+        <h3>
+          通话服务
+          <small>所有联系人共用。声音用你自己的 Fish Audio 账号。</small>
         </h3>
         <div className="set-rows">
           <div className="set-row">
-            <label>模型</label>
+            <label>对话模型</label>
             <div className="seg">
               {['opus', 'sonnet', 'haiku'].map((m) => (
                 <button key={m} className={s.callModel === m ? 'on' : ''} onClick={() => props.onChange({ callModel: m })}>
@@ -196,34 +255,8 @@ export function SettingsModal(props: {
             <span className="faint" style={{ fontSize: 12 }}>下次通话生效</span>
           </div>
           <div className="set-row">
-            <label>她说</label>
-            <div className="seg">
-              {(['ja', 'zh'] as const).map((l) => (
-                <button key={l} className={s.callLanguage === l ? 'on' : ''} onClick={() => props.onChange({ callLanguage: l })}>
-                  {l === 'ja' ? '日语' : '中文'}
-                </button>
-              ))}
-            </div>
-            <span className="faint" style={{ fontSize: 12 }}>都有中文字幕</span>
-          </div>
-          <div className="set-row">
-            <label>桌宠形象</label>
-            <div className="seg">
-              {[false, true].map((v) => (
-                <button key={String(v)} className={s.petShown === v ? 'on' : ''} onClick={() => props.onChange({ petShown: v })}>
-                  {v ? '显示' : '隐藏'}
-                </button>
-              ))}
-            </div>
-            <span className="faint" style={{ fontSize: 12 }}>通话时站在桌面上</span>
-          </div>
-          <div className="set-row">
             <label>Fish Audio 密钥</label>
             <input className="input" type="password" spellCheck={false} value={s.fishKey} onChange={(e) => props.onChange({ fishKey: e.target.value.trim() })} />
-          </div>
-          <div className="set-row">
-            <label>音色 ID</label>
-            <input className="input" spellCheck={false} value={s.fishVoice} onChange={(e) => props.onChange({ fishVoice: e.target.value.trim() })} />
           </div>
           <div className="set-row">
             <label>声音模型</label>
@@ -234,13 +267,6 @@ export function SettingsModal(props: {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="set-row">
-            <label>她的记忆</label>
-            <button className="btn sm" onClick={() => api.revealMemory()}>
-              在 Finder 中显示
-            </button>
-            <span className="faint" style={{ fontSize: 12 }}>每次通话后她自己记，你可以直接改这个文件</span>
           </div>
         </div>
       </section>

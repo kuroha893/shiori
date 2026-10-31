@@ -1,13 +1,14 @@
-import { BrowserWindow, ipcMain, net, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, net, screen, shell } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { CallLine, CallState, PaperMeta } from '../shared/types'
+import type { CallLine, CallMood, CallState, PaperMeta } from '../shared/types'
 import { openConversation, runClaude, type Conversation } from './claude'
-import { readMeta, root } from './library'
+import { listPapers, readMeta, root } from './library'
 import { petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
 import { callPrompt, memoryPrompt } from './yachiyo'
+import { contactSettings } from '../shared/contacts'
 
 /* The call with Yachiyo: you type, she answers aloud with subtitles. It stays open for hours, mostly in silence. */
 
@@ -17,6 +18,18 @@ const GAP = 8
 // A nudge from her needs a long stretch without one, and without you talking.
 const NUDGE_EVERY = 45 * 60_000
 const QUIET_BEFORE_NUDGE = 10 * 60_000
+// When you feel like chatting she starts something herself, every so often, once you have gone quiet.
+const CHAT_EVERY = [8 * 60_000, 15 * 60_000]
+const QUIET_BEFORE_CHAT = 3 * 60_000
+// Remarks on something you just did stay spaced out, so a burst of clicks gets at most one.
+const REACT_GAP = { chat: 2 * 60_000, normal: 8 * 60_000 }
+const REACT_GAP_BIG = 60_000
+const QUIET_AFTER_TALK = 30_000
+const STUCK_AFTER = 20 * 60_000
+const AWAY_AFTER = 20 * 60_000
+// The mood button cycles, so a click only counts once it has been left alone for a moment.
+const MOOD_SETTLE = 5000
+const CHAT_NOW_GAP = 5 * 60_000
 
 type Record = { at: string; who: 'you' | 'her' | 'event'; text: string; zh?: string }
 
@@ -32,11 +45,21 @@ let pending = 0
 let timer: NodeJS.Timeout | undefined
 let lastSpoke = 0
 let lastNudge = 0
+let nextChat = 0
+let lastChatNow = 0
+/** Where the mood button has just been clicked to, until it settles */
+let settling: { mood: CallMood; timer: NodeJS.Timeout } | undefined
+/** Turns she started herself; "do not disturb" drops them. */
+const unprompted = new Set<{ dropped: boolean }>()
 let lateNoted = false
-let reading: { id: string; since: number } | undefined
-const statuses = new Map<string, PaperMeta['status']>()
+let reading: { id: string; since: number; moved: number } | undefined
+let awaySince: number | undefined
+let lastReaction = 0
+const reacted = new Set<string>()
+const known = new Map<string, PaperMeta>()
 
-const dir = () => join(root(), 'yachiyo')
+let contact = 'yachiyo'
+const dir = (id = contact) => join(root(), id)
 const memoryFile = () => join(dir(), 'memory.md')
 const readMemory = () => (existsSync(memoryFile()) ? readFileSync(memoryFile(), 'utf8') : '')
 
@@ -91,19 +114,20 @@ async function talk(): Promise<Conversation> {
   conversation = await openConversation({
     cwd: dir(),
     model: s.callModel,
-    systemPrompt: callPrompt({ language: s.callLanguage, memory: readMemory(), lastCall: lastCallTail() })
+    systemPrompt: callPrompt({ language: contactSettings(s, contact).language, memory: readMemory(), lastCall: lastCallTail() })
   })
   return conversation
 }
 
 async function synthesize(text: string): Promise<{ audio: Uint8Array; type: string } | undefined> {
   const s = getSettings()
-  if (!s.fishKey || !s.fishVoice) return undefined
+  const { voice, language } = contactSettings(s, contact)
+  if (!s.fishKey || !voice) return undefined
   try {
     const res = await net.fetch(`${process.env.FISH_AUDIO_URL ?? 'https://api.fish.audio'}/v1/tts`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${s.fishKey}`, 'Content-Type': 'application/json', model: s.fishModel },
-      body: JSON.stringify({ text, reference_id: s.fishVoice, format: 'mp3', latency: 'balanced', language: s.callLanguage })
+      body: JSON.stringify({ text, reference_id: voice, format: 'mp3', latency: 'balanced', language })
     })
     if (!res.ok) {
       const reason = { 401: 'API 密钥不对', 402: '额度不够了', 404: '找不到这个音色' }[res.status] ?? `服务返回 ${res.status}`
@@ -130,18 +154,20 @@ export function parseLine(raw: string): { tone?: string; say: string; zh: string
   return { tone: tag?.[1], say, zh: zh || say }
 }
 
-async function runTurn(content: string, turnGeneration: number): Promise<void> {
+async function runTurn(content: string, turnGeneration: number, turn: { dropped: boolean }, isUnprompted: boolean): Promise<void> {
   let delivered = Promise.resolve()
   let buffer = ''
+  const said = new Set<string>()
   const emit = (raw: string) => {
     const line = parseLine(raw)
-    if (!line || turnGeneration !== generation) return
+    if (!line || said.has(line.say) || turn.dropped || turnGeneration !== generation) return
+    said.add(line.say)
     record({ who: 'her', text: line.say, zh: line.zh })
     const voice = synthesize(line.tone ? `[${line.tone}] ${line.say}` : line.say)
-    const entry: CallLine = { id: randomUUID(), say: line.say, zh: line.zh }
+    const entry: CallLine = { id: randomUUID(), say: line.say, zh: line.zh, unprompted: isUnprompted }
     delivered = delivered.then(async () => {
       const sound = await voice
-      if (turnGeneration === generation) push('call:line', { ...entry, ...sound })
+      if (!turn.dropped && turnGeneration === generation) push('call:line', { ...entry, ...sound })
     })
   }
   try {
@@ -161,13 +187,46 @@ async function runTurn(content: string, turnGeneration: number): Promise<void> {
   }
 }
 
-function speak(content: string): void {
+function speak(content: string, isUnprompted = false): void {
   const turnGeneration = generation
+  const turn = { dropped: false }
+  if (isUnprompted) unprompted.add(turn)
   pending++
   update({ thinking: true })
-  turns = turns.then(() => runTurn(`${statusLine()} ${content}`, turnGeneration)).finally(() => {
-    if (--pending === 0) update({ thinking: false })
-  })
+  turns = turns
+    .then(() => (turn.dropped ? undefined : runTurn(`${statusLine()} ${content}`, turnGeneration, turn, isUnprompted)))
+    .finally(() => {
+      unprompted.delete(turn)
+      if (--pending === 0) update({ thinking: false })
+    })
+}
+
+function dropUnprompted(): void {
+  for (const turn of unprompted) turn.dropped = true
+  push('call:dropUnprompted')
+}
+
+/** While the button is being clicked through she doesn't speak up at all, whatever color it passes over. */
+const currentMood = (): CallMood => (settling ? 'quiet' : getSettings().callMood)
+
+function settleMood(): void {
+  if (!settling) return
+  const { mood, timer } = settling
+  clearTimeout(timer)
+  settling = undefined
+  if (mood === getSettings().callMood) return
+  saveSettings({ callMood: mood })
+  if (!state.active) return
+  // A new mood starts from now; whatever she held back while in another mood isn't due all at once.
+  const now = Date.now()
+  lastReaction = lastNudge = now
+  if (mood !== 'chat') return
+  scheduleChat()
+  // You just said you want to talk, so she doesn't wait for her next turn, unless she is already talking.
+  if (pending === 0 && now - lastChatNow >= CHAT_NOW_GAP) {
+    lastChatNow = now
+    speak('[chat] they just let you know they feel like chatting', true)
+  }
 }
 
 /** Something happened in the app; she says so if a call is open. */
@@ -177,18 +236,56 @@ export function callEvent(text: string): void {
   speak(`[event] ${text}`)
 }
 
-export function watchPaper(meta: PaperMeta): void {
-  const before = statuses.get(meta.id)
-  statuses.set(meta.id, meta.status)
-  if (before !== 'processing' || meta.status === before) return
-  const title = meta.titleZh || meta.title
-  if (meta.status === 'ready') callEvent(`《${title}》翻译好了`)
-  if (meta.status === 'error') callEvent(`《${title}》处理失败了`)
+/**
+ * She reacts to something you just did, unless you asked not to be disturbed. Wanting to chat she always
+ * speaks; otherwise she may stay silent. Each thing gets one remark per call.
+ */
+function react(key: string, what: string, big = false): void {
+  const mood = currentMood()
+  if (!state.active || mood === 'quiet' || reacted.has(key)) return
+  const now = Date.now()
+  if (now - lastSpoke < QUIET_AFTER_TALK || now - lastReaction < (big ? REACT_GAP_BIG : REACT_GAP[mood])) return
+  reacted.add(key)
+  lastReaction = lastNudge = now
+  scheduleChat()
+  speak(`[${mood === 'chat' ? 'chat' : 'note'}] ${what}`, true)
 }
 
-/** Her rare, unprompted remarks; she may still decide to stay silent. */
+export function watchPaper(meta: PaperMeta): void {
+  const before = known.get(meta.id)
+  known.set(meta.id, meta)
+  if (!state.active) return
+  const title = meta.titleZh || meta.title
+  if (!before) return react(`added:${meta.id}`, 'they just added a new paper to the shelf')
+  if (before.status === 'processing' && meta.status === 'ready') callEvent(`《${title}》翻译好了`)
+  if (before.status === 'processing' && meta.status === 'error') callEvent(`《${title}》处理失败了`)
+  if (!before.finished && meta.finished) react(`finished:${meta.id}`, `they just finished reading 《${title}》`, true)
+  if (!before.likedAt && meta.likedAt) react(`liked:${meta.id}`, `they just gave 《${title}》 a heart`)
+  if (reading?.id === meta.id && Math.abs((before.readPos?.ratio ?? 0) - (meta.readPos?.ratio ?? 0)) > 0.002) {
+    reading.moved = Date.now()
+    reacted.delete(`stuck:${meta.id}`)
+  }
+}
+
+const scheduleChat = () => {
+  nextChat = Date.now() + CHAT_EVERY[0] + Math.random() * (CHAT_EVERY[1] - CHAT_EVERY[0])
+}
+
+/** Her unprompted remarks: how often depends on the mood, and outside "chat" she may still decide to stay silent. */
 function checkNudges(): void {
   const now = Date.now()
+  const mood = currentMood()
+  if (mood === 'quiet') return
+  if (reading && !awaySince && now - reading.moved >= STUCK_AFTER && !known.get(reading.id)?.finished) {
+    react(`stuck:${reading.id}`, `they have been on the same spot of this paper for ${span(now - reading.moved)}`)
+  }
+  if (mood === 'chat') {
+    if (now >= nextChat && now - lastSpoke >= QUIET_BEFORE_CHAT) {
+      scheduleChat()
+      speak('[chat]', true)
+    }
+    return
+  }
   if (now - lastSpoke < QUIET_BEFORE_NUDGE || now - lastNudge < NUDGE_EVERY) return
   const hour = new Date().getHours()
   let note: string | undefined
@@ -200,7 +297,7 @@ function checkNudges(): void {
   }
   if (!note) return
   lastNudge = now
-  speak(`[note] ${note}`)
+  speak(`[note] ${note}`, true)
 }
 
 function place(): void {
@@ -224,8 +321,9 @@ function place(): void {
 
 export const placeCall = place
 
-export function startCall(): void {
+export function startCall(id: string): void {
   if (state.active) return
+  contact = id
   mkdirSync(join(dir(), 'calls'), { recursive: true })
   const now = new Date()
   logFile = join(dir(), 'calls', `${now.toISOString().replace(/[:.]/g, '-')}.jsonl`)
@@ -233,6 +331,12 @@ export function startCall(): void {
   generation++
   lastSpoke = lastNudge = now.getTime()
   lateNoted = false
+  scheduleChat()
+  reacted.clear()
+  lastReaction = lastChatNow = 0
+  awaySince = undefined
+  known.clear()
+  for (const p of listPapers()) known.set(p.id, p)
   state = { active: true, thinking: false, startedAt: now.getTime() }
 
   win = new BrowserWindow({
@@ -280,6 +384,7 @@ export function endCall(): void {
   clearInterval(timer)
   generation++
   state = { active: false, thinking: false }
+  settleMood()
   conversation?.close()
   conversation = undefined
   const closing = win
@@ -304,7 +409,13 @@ function rememberCall(call: Record[]): void {
 }
 
 export function initCall(hangUp: () => void): void {
-  ipcMain.handle('call:init', () => ({ state, uiFont: getSettings().uiFont }))
+  ipcMain.handle('call:init', () => ({ state, mood: getSettings().callMood, uiFont: getSettings().uiFont }))
+  ipcMain.on('call:mood', (_e, mood: CallMood) => {
+    if (settling) clearTimeout(settling.timer)
+    settling = { mood, timer: setTimeout(settleMood, MOOD_SETTLE) }
+    // Do not disturb means now, even if the button is only passing over it.
+    if (mood === 'quiet') dropUnprompted()
+  })
   ipcMain.on('call:send', (_e, text: string) => {
     const clean = text.trim()
     if (!clean || !state.active) return
@@ -315,14 +426,28 @@ export function initCall(hangUp: () => void): void {
     speak(clean)
   })
   ipcMain.on('call:hangUp', () => hangUp())
+  // Leaving Shiori and coming back; time away doesn't count as being stuck on a page.
+  app.on('did-resign-active', () => (awaySince = Date.now()))
+  app.on('did-become-active', () => {
+    const away = awaySince ? Date.now() - awaySince : 0
+    awaySince = undefined
+    if (reading) reading.moved = Date.now()
+    if (away >= AWAY_AFTER) {
+      reacted.delete('back')
+      react('back', `they just came back to Shiori after ${span(away)} away`)
+    }
+  })
   ipcMain.on('call:interactive', (_e, on: boolean) => win?.setIgnoreMouseEvents(!on, { forward: true }))
   ipcMain.on('call:reading', (_e, id: string | null) => {
     if (reading?.id === id) return
-    reading = id ? { id, since: Date.now() } : undefined
+    reading = id ? { id, since: Date.now(), moved: Date.now() } : undefined
+    const paper = id && readMeta(id)
+    if (paper) react(`opened:${paper.id}`, `they just opened 《${paper.titleZh || paper.title}》`)
   })
-  ipcMain.handle('call:revealMemory', () => {
-    mkdirSync(dir(), { recursive: true })
-    if (!existsSync(memoryFile())) writeFileSync(memoryFile(), '')
-    shell.showItemInFolder(memoryFile())
+  ipcMain.handle('call:revealMemory', (_e, id: string) => {
+    const file = join(dir(id), 'memory.md')
+    mkdirSync(dir(id), { recursive: true })
+    if (!existsSync(file)) writeFileSync(file, '')
+    shell.showItemInFolder(file)
   })
 }

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CallInit, CallLine, CallState } from '../shared/types'
+import type { CallInit, CallLine, CallMood, CallState } from '../shared/types'
 
 const on = <T>(channel: string, fn: (v: T) => void) => {
   const h = (_e: unknown, v: T) => fn(v)
@@ -14,10 +14,12 @@ const callBridge = {
   init: (): Promise<CallInit> => ipcRenderer.invoke('call:init'),
   send: (text: string) => ipcRenderer.send('call:send', text),
   hangUp: () => ipcRenderer.send('call:hangUp'),
+  setMood: (mood: CallMood) => ipcRenderer.send('call:mood', mood),
   setInteractive: (on: boolean) => ipcRenderer.send('call:interactive', on),
   onState: (fn: (s: CallState) => void) => on('call:state', fn),
   onLine: (fn: (l: CallLine) => void) => on('call:line', fn),
   onClear: (fn: () => void) => on('call:clear', fn),
+  onDropUnprompted: (fn: () => void) => on('call:dropUnprompted', fn),
   onEnded: (fn: () => void) => on('call:ended', fn)
 }
 

@@ -538,6 +538,30 @@ input.bare::placeholder {
   color: hsl(var(--muted-foreground));
   font-size: 13px;
 }
+.set-contacts {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.set-contact {
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.set-contact-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  font-size: 13.5px;
+}
+.set-contact-head img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
 .set-row .grow {
   flex: 1;
   min-width: 0;

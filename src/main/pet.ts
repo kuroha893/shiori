@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
+import { CONTACTS } from '../shared/contacts'
 import type { PetState } from '../shared/types'
 import { getSettings, saveSettings } from './settings'
 
@@ -17,12 +18,12 @@ let win: BrowserWindow | undefined
 let anchor: { x: number; y: number } | undefined
 let notify: (state: PetState) => void = () => {}
 let moved: () => void = () => {}
-/** The call is open; the character shows during it if the owner wants her to. */
-let on = false
+/** Who is on the call; a character shows during it if the owner wants her to. */
+let contact: string | undefined
 
 const folder = () => join(app.getAppPath(), 'resources', 'pet')
 
-export const petState = (): PetState => ({ available: existsSync(join(folder(), 'pet.html')), visible: on })
+export const petState = (): PetState => ({ contact })
 
 /** Resolve a path inside the pack, refusing anything that escapes it. */
 export function petFile(rel: string): string {
@@ -87,7 +88,8 @@ function open(): void {
 
 /** Puts the character on the desktop or takes her off, to match the call and the setting. */
 export function syncPet(): void {
-  if (on && getSettings().petShown) {
+  const hasPet = CONTACTS.find((c) => c.id === contact)?.pet && existsSync(join(folder(), 'pet.html'))
+  if (hasPet && getSettings().petShown) {
     if (!win) open()
   } else {
     win?.destroy()
@@ -97,8 +99,8 @@ export function syncPet(): void {
 }
 
 export function closePet(): void {
-  if (!on) return
-  on = false
+  if (!contact) return
+  contact = undefined
   syncPet()
   notify(petState())
 }
@@ -109,10 +111,12 @@ export function initPet(onChange: (state: PetState) => void, onMoved: () => void
   notify = onChange
   moved = onMoved
   ipcMain.handle('pet:state', () => petState())
-  ipcMain.handle('pet:toggle', () => {
-    if (on) closePet()
-    else if (petState().available) {
-      on = true
+  // Calling someone else hangs up first.
+  ipcMain.handle('pet:toggle', (_e, id: string) => {
+    const hangUpOnly = contact === id
+    closePet()
+    if (!hangUpOnly) {
+      contact = id
       syncPet()
       notify(petState())
     }

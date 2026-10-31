@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { CallLine, CallState } from '../../shared/types'
+import type { CallLine, CallMood, CallState } from '../../shared/types'
 import type { CallBridge } from '../../preload/call'
 import './styles/call.css'
 
@@ -13,6 +13,12 @@ declare global {
 const bridge = window.callBridge
 
 type Entry = { who: 'you' | 'her'; text: string; key: string }
+
+const MOODS: { id: CallMood; label: string }[] = [
+  { id: 'chat', label: '想聊天' },
+  { id: 'normal', label: '普通' },
+  { id: 'quiet', label: '请勿打扰' }
+]
 
 /** Without a voice, a subtitle stays up about as long as the line would take to say. */
 const readingTime = (zh: string) => Math.max(1600, zh.length * 220)
@@ -47,8 +53,12 @@ function Call() {
   const [history, setHistory] = useState<Entry[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [text, setText] = useState('')
+  const [mood, setMood] = useState<CallMood>('normal')
+  const [moodHint, setMoodHint] = useState(false)
+  const hintTimer = useRef<number>(undefined)
   const queue = useRef<CallLine[]>([])
   const playing = useRef(false)
+  const current = useRef<CallLine>(undefined)
   const audio = useRef<HTMLAudioElement>(null)
   const wait = useRef<number>(undefined)
   const listEnd = useRef<HTMLDivElement>(null)
@@ -62,6 +72,7 @@ function Call() {
       return
     }
     playing.current = true
+    current.current = line
     window.clearTimeout(wait.current)
     setSubtitle(line)
     setHistory((h) => [...h, { who: 'her', text: line.zh, key: line.id }])
@@ -85,12 +96,20 @@ function Call() {
   useEffect(() => {
     bridge.init().then((init) => {
       setState(init.state)
+      setMood(init.mood)
       document.documentElement.style.setProperty('--ui-font', `'${init.uiFont}'`)
     })
     tone([660, 880])
     const offs = [
       bridge.onState(setState),
       bridge.onClear(stop),
+      bridge.onDropUnprompted(() => {
+        queue.current = queue.current.filter((l) => !l.unprompted)
+        if (!playing.current || !current.current?.unprompted) return
+        audio.current?.pause()
+        setSubtitle(undefined)
+        playNext()
+      }),
       bridge.onEnded(() => {
         stop()
         tone([880, 660])
@@ -127,6 +146,16 @@ function Call() {
     setText('')
   }
 
+  const moodIndex = MOODS.findIndex((m) => m.id === mood)
+  const nextMood = () => {
+    const next = MOODS[(moodIndex + 1) % MOODS.length].id
+    setMood(next)
+    bridge.setMood(next)
+    setMoodHint(true)
+    window.clearTimeout(hintTimer.current)
+    hintTimer.current = window.setTimeout(() => setMoodHint(false), 1400)
+  }
+
   return (
     <div className="call">
       <audio ref={audio} onEnded={playNext} onError={playNext} />
@@ -148,6 +177,7 @@ function Call() {
         </div>
       )}
       {state.notice && <p className="call-notice hit">{state.notice}</p>}
+      {moodHint && <span className="call-mood-hint">{MOODS[moodIndex].label}</span>}
       <div className="call-bar hit">
         <span className={`call-dot ${state.thinking ? 'thinking' : ''}`} />
         <span className="call-time">{state.startedAt ? clock(now - state.startedAt) : '0:00:00'}</span>
@@ -157,6 +187,7 @@ function Call() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && send()}
         />
+        <button className={`call-mood ${mood}`} title={MOODS[moodIndex].label} aria-label={MOODS[moodIndex].label} onClick={nextMood} />
         <button className={showHistory ? 'on' : ''} title="这次通话的记录" onClick={() => setShowHistory((v) => !v)}>
           记录
         </button>
