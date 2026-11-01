@@ -73,6 +73,7 @@ function open(): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
+  keepOnTop(win)
   win.setIgnoreMouseEvents(true, { forward: true })
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
@@ -106,6 +107,12 @@ export function closePet(): void {
 }
 
 export const petBounds = () => win?.getBounds()
+
+/** Stays above every other app's windows, on every Space, and over full-screen apps too. */
+export function keepOnTop(w: BrowserWindow): void {
+  w.setAlwaysOnTop(true, 'floating')
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+}
 
 export function initPet(onChange: (state: PetState) => void, onMoved: () => void): void {
   notify = onChange

@@ -67,10 +67,13 @@ export interface CallLine {
   type?: string
   /** She brought this up herself, rather than answering or announcing something */
   unprompted?: boolean
+  /** The answer to what you just said */
+  reply?: boolean
 }
 
 export interface CallInit {
   state: CallState
+  contact: { name: string; avatar?: string }
   mood: CallMood
   uiFont: string
 }

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { CallLine, CallMood, CallState, PaperMeta } from '../shared/types'
 import { openConversation, runClaude, type Conversation } from './claude'
 import { listPapers, readMeta } from './library'
-import { petBounds } from './pet'
+import { keepOnTop, petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
 import { callPrompt, memoryPrompt } from './yachiyo'
 import { YACHIYO } from '../shared/contacts'
@@ -156,7 +156,7 @@ export function parseLine(raw: string): { tone?: string; say: string; zh: string
   return { tone: tag?.[1], say, zh: zh || say }
 }
 
-async function runTurn(content: string, turnGeneration: number, turn: { dropped: boolean }, isUnprompted: boolean): Promise<void> {
+async function runTurn(content: string, turnGeneration: number, turn: { dropped: boolean }, isUnprompted: boolean, isReply: boolean): Promise<void> {
   let delivered = Promise.resolve()
   let buffer = ''
   const said = new Set<string>()
@@ -166,7 +166,7 @@ async function runTurn(content: string, turnGeneration: number, turn: { dropped:
     said.add(line.say)
     record({ who: 'her', text: line.say, zh: line.zh })
     const voice = synthesize(line.tone ? `[${line.tone}] ${line.say}` : line.say)
-    const entry: CallLine = { id: randomUUID(), say: line.say, zh: line.zh, unprompted: isUnprompted }
+    const entry: CallLine = { id: randomUUID(), say: line.say, zh: line.zh, unprompted: isUnprompted, reply: isReply }
     delivered = delivered.then(async () => {
       const sound = await voice
       if (!turn.dropped && turnGeneration === generation) push('call:line', { ...entry, ...sound })
@@ -189,14 +189,14 @@ async function runTurn(content: string, turnGeneration: number, turn: { dropped:
   }
 }
 
-function speak(content: string, isUnprompted = false): void {
+function speak(content: string, isUnprompted = false, isReply = false): void {
   const turnGeneration = generation
   const turn = { dropped: false }
   if (isUnprompted) unprompted.add(turn)
   pending++
   update({ thinking: true })
   turns = turns
-    .then(() => (turn.dropped ? undefined : runTurn(`${statusLine()} ${content}`, turnGeneration, turn, isUnprompted)))
+    .then(() => (turn.dropped ? undefined : runTurn(`${statusLine()} ${content}`, turnGeneration, turn, isUnprompted, isReply)))
     .finally(() => {
       unprompted.delete(turn)
       if (--pending === 0) update({ thinking: false })
@@ -362,6 +362,7 @@ export function startCall(id: string): void {
       autoplayPolicy: 'no-user-gesture-required'
     }
   })
+  keepOnTop(win)
   win.setIgnoreMouseEvents(true, { forward: true })
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', (e) => e.preventDefault())
@@ -370,12 +371,6 @@ export function startCall(id: string): void {
   const opened = win
   win.on('closed', () => {
     if (win === opened) win = undefined
-  })
-  win.on('moved', () => {
-    if (win && !petBounds()) {
-      const [x, y] = win.getPosition()
-      saveSettings({ callPosition: { x, y } })
-    }
   })
   place()
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/call.html`)
@@ -415,7 +410,20 @@ function rememberCall(call: Record[]): void {
 }
 
 export function initCall(hangUp: () => void): void {
-  ipcMain.handle('call:init', () => ({ state, mood: getSettings().callMood, uiFont: getSettings().uiFont }))
+  ipcMain.handle('call:init', () => {
+    const { name, avatar } = person()
+    return { state, contact: { name, avatar }, mood: getSettings().callMood, uiFont: getSettings().uiFont }
+  })
+  ipcMain.on('call:focus', () => win?.focus())
+  // With the character on the desktop the call stands beside her, so it is only moved on its own.
+  ipcMain.on('call:move', (_e, x: number, y: number) => {
+    if (!petBounds()) win?.setPosition(Math.round(x), Math.round(y))
+  })
+  ipcMain.on('call:moved', () => {
+    if (!win || petBounds()) return
+    const [x, y] = win.getPosition()
+    saveSettings({ callPosition: { x, y } })
+  })
   ipcMain.on('call:mood', (_e, mood: CallMood) => {
     if (settling) clearTimeout(settling.timer)
     settling = { mood, timer: setTimeout(settleMood, MOOD_SETTLE) }
@@ -429,7 +437,7 @@ export function initCall(hangUp: () => void): void {
     lastSpoke = Date.now()
     push('call:clear')
     record({ who: 'you', text: clean })
-    speak(clean)
+    speak(clean, false, true)
   })
   ipcMain.on('call:hangUp', () => hangUp())
   // Leaving Shiori and coming back; time away doesn't count as being stuck on a page.
