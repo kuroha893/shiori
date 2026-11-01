@@ -599,6 +599,30 @@ input.bare::placeholder {
   flex: 1;
   min-width: 0;
 }
+.set-contact-persona {
+  flex: 1;
+  min-width: 0;
+}
+.set-contact-persona .textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.set-contact-persona p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 0;
+  font-size: 12px;
+}
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: hsl(var(--primary));
+  font: inherit;
+  cursor: default;
+}
 .set-contact-picture {
   display: flex;
   align-items: center;

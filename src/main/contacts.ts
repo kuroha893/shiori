@@ -4,17 +4,31 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { YACHIYO, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
+import { YACHIYO_PERSONA } from './yachiyo'
 import { closePet, petState } from './pet'
 import { getSettings } from './settings'
 
-/* Contacts live in <library>/contacts.json; each has a folder <library>/<id> for her picture, notes and call records. */
+/* Contacts live in <library>/contacts.json; each has a folder <library>/<id> for her persona.md, picture, notes and call records. */
 
-type Stored = Omit<Contact, 'avatar' | 'builtin'>
+type Stored = Pick<Contact, 'id' | 'name' | 'voice' | 'language'> & { persona?: string }
 
 const AVATAR_SIZE = 256
 const file = () => join(root(), 'contacts.json')
 export const contactDir = (id: string) => join(root(), id)
 const avatarFile = (id: string) => join(contactDir(id), 'avatar.png')
+const personaFile = (id: string) => join(contactDir(id), 'persona.md')
+
+function readPersona(c: Stored): string {
+  const builtin = c.id === YACHIYO
+  if (existsSync(personaFile(c.id))) return readFileSync(personaFile(c.id), 'utf8')
+  // Personas used to be kept in contacts.json.
+  if (c.persona && !builtin) {
+    mkdirSync(contactDir(c.id), { recursive: true })
+    writeFileSync(personaFile(c.id), c.persona)
+    return c.persona
+  }
+  return builtin ? YACHIYO_PERSONA : ''
+}
 
 function readStored(): Stored[] {
   try {
@@ -34,21 +48,21 @@ export function loadContacts(): Contact[] {
     language: legacy?.language ?? 'ja',
     ...stored.find((c) => c.id === YACHIYO),
     id: YACHIYO,
-    name: '八千代',
-    persona: ''
+    name: '八千代'
   }
   return [yachiyo, ...stored.filter((c) => c.id !== YACHIYO)].map((c) => {
     const picture = existsSync(avatarFile(c.id))
     const builtin = c.id === YACHIYO
     const avatar = picture ? `shiori://contact/${c.id}/avatar.png?v=${statSync(avatarFile(c.id)).mtimeMs}` : builtin ? 'shiori://pet/avatar.png' : undefined
-    return { ...c, avatar, ...(builtin ? { builtin } : {}) }
+    const { persona: _old, ...rest } = c
+    return { ...rest, persona: readPersona(c), avatar, ...(builtin ? { builtin, defaultPersona: YACHIYO_PERSONA } : {}) }
   })
 }
 
 export const getContact = (id: string) => loadContacts().find((c) => c.id === id)
 
 const save = (list: Contact[]) =>
-  writeFileSync(file(), JSON.stringify(list.map(({ id, name, persona, voice, language }) => ({ id, name, persona, voice, language })), null, 2))
+  writeFileSync(file(), JSON.stringify(list.map(({ id, name, voice, language }) => ({ id, name, voice, language })), null, 2))
 
 export function saveContact(draft: ContactDraft): Contact[] {
   const list = loadContacts()
@@ -66,7 +80,11 @@ export function saveContact(draft: ContactDraft): Contact[] {
     if (!png) throw new Error('头像格式不对')
     writeFileSync(avatarFile(id), Buffer.from(png[1], 'base64'))
   }
-  const next: Contact = { id, name, persona: before?.builtin ? '' : draft.persona.trim(), voice: draft.voice.trim(), language: draft.language }
+  // Yachiyo's unchanged persona isn't written out, so she keeps following what ships with the app.
+  const persona = draft.persona.trim()
+  if (before?.builtin && (!persona || persona === YACHIYO_PERSONA.trim())) rmSync(personaFile(id), { force: true })
+  else writeFileSync(personaFile(id), persona)
+  const next: Contact = { id, name, persona, voice: draft.voice.trim(), language: draft.language }
   save(before ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
   return loadContacts()
 }

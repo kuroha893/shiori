@@ -15,6 +15,8 @@ const NEW: Form = { name: '', persona: '', voice: '', language: 'zh' }
 
 const toForm = (c: Contact): Form => ({ id: c.id, name: c.name, persona: c.persona, voice: c.voice, language: c.language, avatarShown: c.avatar, builtin: c.builtin })
 
+const sameText = (a: string, b?: string) => a.trim() === b?.trim()
+
 /** The contacts in Settings: click one to edit it, a row at the bottom to add someone. */
 export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolean; onPetShown: (on: boolean) => void; toast: (text: string) => void }) {
   const contacts = useContacts()
@@ -90,18 +92,27 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
             )}
           </div>
         </div>
-        {!form.builtin && (
-          <div className="set-row">
-            <label>人设</label>
+        <div className="set-row">
+          <label>人设</label>
+          <div className="set-contact-persona">
             <textarea
               className="textarea"
-              rows={7}
+              rows={form.builtin ? 16 : 7}
+              spellCheck={false}
               placeholder="TA 是谁、性格怎样、和你是什么关系、怎么说话。写得越具体越像，也可以直接贴一段说话的例子。"
               value={form.persona}
               onChange={(e) => patch({ persona: e.target.value })}
             />
+            <p className="faint">
+              存在 persona.md，下次通话生效。
+              {original?.defaultPersona && !sameText(form.persona, original.defaultPersona) && (
+                <button className="link-btn" onClick={() => patch({ persona: original.defaultPersona })}>
+                  恢复默认
+                </button>
+              )}
+            </p>
           </div>
-        )}
+        </div>
         <div className="set-row">
           <label>音色 ID</label>
           <input className="input" spellCheck={false} placeholder="不填就只有字幕" value={form.voice} onChange={(e) => patch({ voice: e.target.value })} />
@@ -127,7 +138,7 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
           <span className="spacer" />
           {original && (
             <button className="btn ghost sm" onClick={() => api.revealMemory(original.id)}>
-              查看记忆
+              打开文件夹
             </button>
           )}
           {original && !original.builtin && (

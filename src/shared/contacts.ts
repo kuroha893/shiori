@@ -9,8 +9,10 @@ export interface Contact {
   name: string
   /** Image URL; without one the first letter of the name stands in */
   avatar?: string
-  /** Who they are and how they talk, in the owner's words. Yachiyo's own lives in the app. */
+  /** Who they are and how they talk: the text of <library>/<id>/persona.md */
   persona: string
+  /** What the persona goes back to on restoring it; only Yachiyo's ships with the app */
+  defaultPersona?: string
   /** Fish Audio voice id */
   voice: string
   language: CallLanguage
