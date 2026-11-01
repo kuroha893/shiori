@@ -1,3 +1,4 @@
+import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { Annotation, ChatEvent, Folder, GlossaryEntry, PaperMeta, PetState, Settings } from '../shared/types'
 
@@ -52,6 +53,11 @@ const api = {
   togglePet: (contact: string): Promise<PetState> => ipcRenderer.invoke('pet:toggle', contact),
   callReading: (id: string | null) => ipcRenderer.send('call:reading', id),
   revealMemory: (contact: string) => ipcRenderer.invoke('call:revealMemory', contact),
+  listContacts: (): Promise<Contact[]> => ipcRenderer.invoke('contacts:list'),
+  saveContact: (draft: ContactDraft): Promise<Contact[]> => ipcRenderer.invoke('contacts:save', draft),
+  deleteContact: (id: string): Promise<Contact[]> => ipcRenderer.invoke('contacts:delete', id),
+  pickAvatar: (): Promise<string | undefined> => ipcRenderer.invoke('contacts:pickAvatar'),
+  onContactsChanged: (fn: (list: Contact[]) => void) => on('contacts:changed', fn),
   onPetChanged: (fn: (s: PetState) => void) => on('pet:changed', fn),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),

@@ -102,6 +102,7 @@ export function App() {
           }}
           refreshClaude={refreshClaude}
           onClose={() => setShowSettings(false)}
+          toast={showToast}
         />
       )}
       {toast && <div className="toast">{toast}</div>}

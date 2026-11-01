@@ -12,6 +12,7 @@ import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
 import { closePet, initPet, petFile, syncPet } from './pet'
 import { endCall, initCall, placeCall, startCall, watchPaper } from './call'
+import { contactAvatar, initContacts } from './contacts'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -187,6 +188,10 @@ app.whenReady().then(() => {
         return new Response('forbidden', { status: 403 })
       }
     }
+    if (u.host === 'contact') {
+      const file = u.pathname === `/${u.pathname.split('/')[1]}/avatar.png` && contactAvatar(u.pathname.split('/')[1])
+      return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
+    }
     if (u.host !== 'paper') return new Response('not found', { status: 404 })
     const [id, ...rest] = u.pathname.slice(1).split('/').map(decodeURIComponent)
     try {
@@ -207,6 +212,7 @@ app.whenReady().then(() => {
     () => placeCall()
   )
   initCall(closePet)
+  initContacts((list) => send('contacts:changed', list))
   createWindow()
   initJobs(paperChanged)
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))

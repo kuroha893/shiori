@@ -1,23 +1,28 @@
-// The people you can call. Each has a folder of her own in the library, named by id, for her notes and call records.
+// The people you can call. Yachiyo ships with the app; the rest are added by the owner.
+
+export const YACHIYO = 'yachiyo'
+
+export type CallLanguage = 'ja' | 'zh'
 
 export interface Contact {
   id: string
   name: string
-  avatar: string
-  /** Has a character that can stand on the desktop during a call */
-  pet?: boolean
-}
-
-export interface ContactSettings {
+  /** Image URL; without one the first letter of the name stands in */
+  avatar?: string
+  /** Who they are and how they talk, in the owner's words. Yachiyo's own lives in the app. */
+  persona: string
   /** Fish Audio voice id */
   voice: string
-  language: 'ja' | 'zh'
+  language: CallLanguage
+  builtin?: boolean
 }
 
-export const CONTACTS: Contact[] = [{ id: 'yachiyo', name: '八千代', avatar: 'shiori://pet/avatar.png', pet: true }]
-
-export const contactSettings = (s: { contacts: Record<string, ContactSettings | undefined> }, id: string): ContactSettings => ({
-  voice: '',
-  language: 'ja',
-  ...s.contacts[id]
-})
+export interface ContactDraft {
+  id?: string
+  name: string
+  persona: string
+  voice: string
+  language: CallLanguage
+  /** A new picture as a data URL, or null to remove the one there is; left out to keep it */
+  avatar?: string | null
+}

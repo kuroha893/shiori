@@ -1,6 +1,6 @@
 // Types shared by the main process, the preload bridge and the renderer.
 
-import type { ContactSettings } from './contacts'
+import type { CallLanguage } from './contacts'
 
 export type PaperStatus = 'new' | 'queued' | 'processing' | 'ready' | 'error'
 
@@ -134,9 +134,10 @@ export interface Settings {
   /** Side panel: width and text size in px */
   panelWidth: number
   panelFontSize: number
-  /** Calls: the Claude model behind them, and each contact's voice and language */
+  /** The Claude model behind calls */
   callModel: string
-  contacts: Record<string, ContactSettings>
+  /** Yachiyo's voice from before contacts moved into the library */
+  contacts?: Record<string, { voice: string; language: CallLanguage }>
   callMood: CallMood
   /** Whether the chibi character stands on the desktop during a call */
   petShown: boolean

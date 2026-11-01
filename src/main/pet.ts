@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
-import { CONTACTS } from '../shared/contacts'
+import { YACHIYO } from '../shared/contacts'
 import type { PetState } from '../shared/types'
 import { getSettings, saveSettings } from './settings'
 
@@ -88,7 +88,7 @@ function open(): void {
 
 /** Puts the character on the desktop or takes her off, to match the call and the setting. */
 export function syncPet(): void {
-  const hasPet = CONTACTS.find((c) => c.id === contact)?.pet && existsSync(join(folder(), 'pet.html'))
+  const hasPet = contact === YACHIYO && existsSync(join(folder(), 'pet.html'))
   if (hasPet && getSettings().petShown) {
     if (!win) open()
   } else {

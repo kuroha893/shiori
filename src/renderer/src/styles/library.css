@@ -539,28 +539,85 @@ input.bare::placeholder {
   font-size: 13px;
 }
 .set-contacts {
-  display: flex;
   flex: 1;
   min-width: 0;
-  flex-direction: column;
-  gap: 12px;
-}
-.set-contact {
-  padding: 12px;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
+  overflow: hidden;
 }
-.set-contact-head {
+.set-contact + .set-contact,
+.set-contact-add {
+  border-top: 1px solid hsl(var(--border));
+}
+.set-contact-row,
+.set-contact-add {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 12px;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: 13.5px;
+  text-align: left;
+  cursor: default;
 }
-.set-contact-head img {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+.set-contact-row:hover,
+.set-contact-add:hover {
+  background: hsl(var(--accent));
+}
+.set-contact-add {
+  color: hsl(var(--muted-foreground));
+  border-radius: 0;
+}
+.set-contact-pic {
+  flex: none;
+  width: 30px;
+  height: 30px;
+}
+.set-contact-sub {
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+.set-contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 14px 14px;
+}
+.set-contact-form .set-row {
+  align-items: flex-start;
+}
+.set-contact-form .set-row > label {
+  padding-top: 7px;
+}
+.set-contact-form .set-row > .input,
+.set-contact-form .set-row > .textarea {
+  flex: 1;
+  min-width: 0;
+}
+.set-contact-picture {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.set-contact-picture .set-contact-pic {
+  width: 44px;
+  height: 44px;
+}
+.set-contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+.set-contact-error {
+  margin: 0;
+  color: hsl(var(--destructive));
+  font-size: 12px;
 }
 .set-row .grow {
   flex: 1;

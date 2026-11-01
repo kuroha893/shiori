@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { PaperMeta, PetState, Settings } from '../../../shared/types'
 import { api } from '../api'
-import { CONTACTS } from '../../../shared/contacts'
+import type { Contact } from '../../../shared/contacts'
 import { Icon } from './Icon'
 
 const THEMES: { id: Settings['theme']; icon: string; label: string }[] = [
@@ -23,8 +23,24 @@ export function ThemeButton({ theme, onChange }: { theme: Settings['theme']; onC
 
 export const themeOptions = THEMES
 
+export function useContacts(): Contact[] {
+  const [contacts, setContacts] = useState<Contact[]>([])
+  useEffect(() => {
+    api.listContacts().then(setContacts)
+    return api.onContactsChanged(setContacts)
+  }, [])
+  return contacts
+}
+
+/** A contact's picture, or the first letter of the name without one. */
+export function ContactAvatar({ contact, src }: { contact: Pick<Contact, 'name' | 'avatar'>; src?: string | null }) {
+  const image = src === null ? undefined : src ?? contact.avatar
+  return image ? <img className="contact-avatar" src={image} alt="" draggable={false} /> : <span className="contact-avatar letter">{contact.name.trim().slice(0, 1).toUpperCase() || '?'}</span>
+}
+
 /** A green ring that opens the list of people to call; click someone to call them, click again to hang up. */
 export function CallLauncher() {
+  const contacts = useContacts()
   const [call, setCall] = useState<PetState>({})
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -36,11 +52,11 @@ export function CallLauncher() {
   return (
     <div className={`call-launcher no-drag ${open ? 'open' : ''} ${call.contact ? 'live' : ''}`} ref={box}>
       <div className="call-contacts">
-        {CONTACTS.map((c, i) => (
+        {contacts.map((c, i) => (
           <button
             key={c.id}
             className={`call-contact ${call.contact === c.id ? 'on' : ''}`}
-            style={{ '--i': CONTACTS.length - 1 - i } as React.CSSProperties}
+            style={{ '--i': Math.min(contacts.length - 1 - i, 8) } as React.CSSProperties}
             tabIndex={open ? 0 : -1}
             aria-label={call.contact === c.id ? `挂断${c.name}` : `和${c.name}通话`}
             onClick={() => {
@@ -49,7 +65,7 @@ export function CallLauncher() {
             }}
           >
             <span className="call-contact-name">{call.contact === c.id ? `挂断${c.name}` : c.name}</span>
-            <img src={c.avatar} alt="" draggable={false} />
+            <ContactAvatar contact={c} />
           </button>
         ))}
       </div>

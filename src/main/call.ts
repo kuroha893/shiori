@@ -4,13 +4,14 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CallLine, CallMood, CallState, PaperMeta } from '../shared/types'
 import { openConversation, runClaude, type Conversation } from './claude'
-import { listPapers, readMeta, root } from './library'
+import { listPapers, readMeta } from './library'
 import { petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
 import { callPrompt, memoryPrompt } from './yachiyo'
-import { contactSettings } from '../shared/contacts'
+import { YACHIYO } from '../shared/contacts'
+import { contactDir, getContact } from './contacts'
 
-/* The call with Yachiyo: you type, she answers aloud with subtitles. It stays open for hours, mostly in silence. */
+/* A call with a contact: you type, they answer aloud with subtitles. It stays open for hours, mostly in silence. */
 
 const WIDTH = 340
 const HEIGHT = 340
@@ -58,8 +59,9 @@ let lastReaction = 0
 const reacted = new Set<string>()
 const known = new Map<string, PaperMeta>()
 
-let contact = 'yachiyo'
-const dir = (id = contact) => join(root(), id)
+let contact = YACHIYO
+const dir = (id = contact) => contactDir(id)
+const person = () => getContact(contact) ?? getContact(YACHIYO)!
 const memoryFile = () => join(dir(), 'memory.md')
 const readMemory = () => (existsSync(memoryFile()) ? readFileSync(memoryFile(), 'utf8') : '')
 
@@ -114,14 +116,14 @@ async function talk(): Promise<Conversation> {
   conversation = await openConversation({
     cwd: dir(),
     model: s.callModel,
-    systemPrompt: callPrompt({ language: contactSettings(s, contact).language, memory: readMemory(), lastCall: lastCallTail() })
+    systemPrompt: callPrompt({ contact: person(), memory: readMemory(), lastCall: lastCallTail() })
   })
   return conversation
 }
 
 async function synthesize(text: string): Promise<{ audio: Uint8Array; type: string } | undefined> {
   const s = getSettings()
-  const { voice, language } = contactSettings(s, contact)
+  const { voice, language } = person()
   if (!s.fishKey || !voice) return undefined
   try {
     const res = await net.fetch(`${process.env.FISH_AUDIO_URL ?? 'https://api.fish.audio'}/v1/tts`, {
@@ -364,7 +366,11 @@ export function startCall(id: string): void {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', (e) => e.preventDefault())
   win.once('ready-to-show', () => win?.showInactive())
-  win.on('closed', () => (win = undefined))
+  // The window of the call before this one closes late, and must not take this one with it.
+  const opened = win
+  win.on('closed', () => {
+    if (win === opened) win = undefined
+  })
   win.on('moved', () => {
     if (win && !petBounds()) {
       const [x, y] = win.getPosition()
@@ -400,7 +406,7 @@ function rememberCall(call: Record[]): void {
   const s = getSettings()
   runClaude({
     cwd: dir(),
-    prompt: memoryPrompt(readMemory(), call.map(transcriptLine).join('\n')),
+    prompt: memoryPrompt(person().name, readMemory(), call.map(transcriptLine).join('\n')),
     model: s.callModel,
     tools: ['Write'],
     sessionId: randomUUID(),

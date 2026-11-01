@@ -18,7 +18,8 @@ questions about.
   keeps its own conversation.
 - **Reading guide** – a short summary of the problem, method, results and what to read first.
 - **Yachiyo** – someone to keep on a long call while you read: you type, she answers aloud with Chinese subtitles,
-  and tells you when a paper is ready. She can also stand on the desktop as a chibi character. Non-commercial fan art of Yachiyo Runami from *Cosmic
+  and tells you when a paper is ready. You can add your own contacts, each with their own personality and voice.
+  Non-commercial fan art of Yachiyo Runami from *Cosmic
   Princess Kaguya!*; the character belongs to its rights holders. Her voice needs your own Fish Audio key.
 - **Library** – arXiv import, reading progress, and venue tags with their CCF rank.
 - **Glossary** – your preferred translations of terms, used for every paper.
