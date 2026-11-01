@@ -23,15 +23,32 @@ questions about.
   keeps its own conversation.
 - **Library** – arXiv import, reading progress, hearts for the papers you like, research directions to file them
   under with a suggestion from Claude, and venue tags with their CCF rank.
-- **Contacts** – someone to keep on a long call while you read: you type, they answer aloud with subtitles, and tell
-  you when a paper is ready. The call opens into a phone-style screen with the record of past calls. Yachiyo comes
-  with the app, and you can add your own, each with a personality, voice and picture. Voices need your own
-  Fish Audio key.
+- **Contacts** – keep a favourite character on the line while you read. They chat with you by voice, with Chinese
+  subtitles, and tell you when a paper is ready. Personality, picture and voice are all yours to set. Voices need
+  your own Fish Audio key.
 - **Glossary** – your preferred translations of terms, used for every paper.
 - **Themes and fonts** – light, dark and sepia; any installed font for the interface.
 
-Yachiyo's pictures are non-commercial fan art of Yachiyo Runami from *Cosmic Princess Kaguya!*; the character belongs
-to its rights holders.
+One contact comes built in: Yachiyo Runami from *Cosmic Princess Kaguya!*. Her pictures are non-commercial fan art;
+the character belongs to its rights holders.
+
+## Screenshots
+
+Your library, with research directions, hearts and venue tags:
+
+![The library](docs/library.png)
+
+Chinese and the original English, side by side:
+
+![A paper in side-by-side view](docs/side-by-side.png)
+
+A call while you read, with subtitles on the desktop:
+
+![A call in its capsule, with subtitles, over a paper](docs/call-capsule.png)
+
+The call opened up, with the record of past calls:
+
+<img src="docs/call-screen.png" alt="The call screen" width="380">
 
 ## Requirements
 
