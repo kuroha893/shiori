@@ -73,7 +73,7 @@ export interface CallLine {
 
 export interface CallInit {
   state: CallState
-  contact: { name: string; avatar?: string }
+  contact: { name: string; avatar?: string; accent: string }
   mood: CallMood
   uiFont: string
 }

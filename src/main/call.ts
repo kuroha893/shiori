@@ -9,7 +9,7 @@ import { keepOnTop, petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
 import { callPrompt, memoryPrompt } from './yachiyo'
 import { YACHIYO } from '../shared/contacts'
-import { contactDir, getContact } from './contacts'
+import { contactAccent, contactDir, getContact } from './contacts'
 
 /* A call with a contact: you type, they answer aloud with subtitles. It stays open for hours, mostly in silence. */
 
@@ -411,8 +411,8 @@ function rememberCall(call: Record[]): void {
 
 export function initCall(hangUp: () => void): void {
   ipcMain.handle('call:init', () => {
-    const { name, avatar } = person()
-    return { state, contact: { name, avatar }, mood: getSettings().callMood, uiFont: getSettings().uiFont }
+    const contact = person()
+    return { state, contact: { name: contact.name, avatar: contact.avatar, accent: contactAccent(contact) }, mood: getSettings().callMood, uiFont: getSettings().uiFont }
   })
   ipcMain.on('call:focus', () => win?.focus())
   // With the character on the desktop the call stands beside her, so it is only moved on its own.

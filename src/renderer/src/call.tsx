@@ -50,7 +50,7 @@ function tone(notes: number[]): void {
 const clock = (ms: number) => {
   const s = Math.floor(ms / 1000)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`
+  return { minutes: `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}`, seconds: `:${pad(s % 60)}` }
 }
 
 function Call() {
@@ -120,6 +120,7 @@ function Call() {
     bridge.init().then((init) => {
       setState(init.state)
       setContact(init.contact)
+      document.documentElement.style.setProperty('--accent', init.contact.accent)
       setMood(init.mood)
       document.documentElement.style.setProperty('--ui-font', `'${init.uiFont}'`)
     })
@@ -216,6 +217,7 @@ function Call() {
   }
 
   const showing = !showHistory && (yourLine || subtitle)
+  const time = clock(state.startedAt ? now - state.startedAt : 0)
   return (
     <div className="call">
       <audio ref={audio} onEnded={playNext} onError={playNext} />
@@ -271,7 +273,22 @@ function Call() {
             <i />
           </span>
         ) : (
-          <span className="call-time">{state.startedAt ? clock(now - state.startedAt) : '0:00:00'}</span>
+          <span className="call-time">
+            {time.minutes}
+            <s>{time.seconds}</s>
+          </span>
+        )}
+        {/* Its place is kept whether she is speaking or not, so the text you are typing doesn't jump. */}
+        {open && (
+          <span className="call-wave mini">
+            {speaking && (
+              <>
+                <i />
+                <i />
+                <i />
+              </>
+            )}
+          </span>
         )}
         <button className="call-mood" title={MOODS[moodIndex].label} aria-label={MOODS[moodIndex].label} onClick={nextMood}>
           <i className={mood} />

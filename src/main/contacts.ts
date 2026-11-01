@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { YACHIYO, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
 import { YACHIYO_PERSONA } from './yachiyo'
-import { closePet, petState } from './pet'
+import { closePet, petFile, petState } from './pet'
 import { getSettings } from './settings'
 
 /* Contacts live in <library>/contacts.json; each has a folder <library>/<id> for her persona.md, picture, notes and call records. */
@@ -110,6 +110,40 @@ async function pickAvatar(): Promise<string | undefined> {
   const side = Math.min(width, height)
   const square = image.crop({ x: Math.floor((width - side) / 2), y: Math.floor((height - side) / 2), width: side, height: side })
   return square.resize({ width: AVATAR_SIZE, height: AVATAR_SIZE, quality: 'best' }).toDataURL()
+}
+
+const hsl = (h: number, s: number, l: number) => `hsl(${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`
+
+/**
+ * The color of a contact's call: the hue most of their picture leans to, at a lightness that reads on the
+ * black capsule. Near-grey and near-black pixels have no say, and a picture with no color falls back on the name.
+ */
+export function contactAccent(contact: Contact): string {
+  const custom = avatarFile(contact.id)
+  const path = existsSync(custom) ? custom : contact.builtin ? petFile('avatar.png') : undefined
+  const image = path ? nativeImage.createFromPath(path).resize({ width: 48, height: 48 }) : undefined
+  const bins = new Array(36).fill(0)
+  if (image && !image.isEmpty()) {
+    const px = image.toBitmap()
+    for (let i = 0; i + 3 < px.length; i += 4) {
+      const [b, g, r, a] = [px[i] / 255, px[i + 1] / 255, px[i + 2] / 255, px[i + 3] / 255]
+      const max = Math.max(r, g, b)
+      const chroma = max - Math.min(r, g, b)
+      if (a < 0.5 || chroma < 0.08 || max < 0.2) continue
+      const hue = max === r ? ((g - b) / chroma + 6) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4
+      bins[Math.floor(hue * 6) % 36] += chroma
+    }
+  }
+  const total = bins.reduce((a, b) => a + b, 0)
+  if (total > 0) {
+    // Three bins wide, so a color split across a bin edge still counts as one.
+    const spread = (i: number) => bins[(i + 35) % 36] + bins[i] + bins[(i + 1) % 36]
+    let best = 0
+    for (let i = 1; i < 36; i++) if (spread(i) > spread(best)) best = i
+    return hsl(best * 10 + 5, 0.62, 0.8)
+  }
+  const hash = [...contact.name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)
+  return hsl(hash, 0.5, 0.8)
 }
 
 /** The one file of a contact's folder the app serves. */
