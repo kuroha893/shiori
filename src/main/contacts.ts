@@ -1,8 +1,8 @@
 import { dialog, ipcMain, nativeImage, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { YACHIYO, type Contact, type ContactDraft } from '../shared/contacts'
+import { YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
 import { shippedFile } from './shippedContacts'
 import { closePet, petState } from './pet'
@@ -16,11 +16,27 @@ import { getSettings } from './settings'
 
 type Stored = Pick<Contact, 'id' | 'name' | 'voice' | 'language'> & { persona?: string }
 
-const AVATAR_SIZE = 256
 const file = () => join(root(), 'contacts.json')
 export const contactDir = (id: string) => join(root(), id)
 const avatarFile = (id: string) => join(contactDir(id), 'avatar.png')
+const portraitFile = (id: string) => join(contactDir(id), 'portrait.jpg')
+const cropFile = (id: string) => join(contactDir(id), 'avatar-crop.json')
 const personaFile = (id: string) => join(contactDir(id), 'persona.md')
+
+/** A file's address: the library's copy, marked by when it changed so a new one shows at once, or the shipped one. */
+function assetUrl(id: string, name: string, own: string): string | undefined {
+  const url = `shiori://contact/${id}/${name}`
+  if (existsSync(own)) return `${url}?v=${statSync(own).mtimeMs}`
+  return existsSync(shippedFile(id, name)) ? url : undefined
+}
+
+function readCrop(id: string): AvatarCrop | undefined {
+  try {
+    return JSON.parse(readFileSync(existsSync(cropFile(id)) ? cropFile(id) : shippedFile(id, 'avatar-crop.json'), 'utf8'))
+  } catch {
+    return undefined
+  }
+}
 
 /** persona.md is the only copy of a persona. Yachiyo's first one comes with the app; older ones were kept in contacts.json. */
 function readPersona(c: Stored): string {
@@ -58,11 +74,10 @@ export function loadContacts(): Contact[] {
   }
   return [yachiyo, ...stored.filter((c) => c.id !== YACHIYO)].map((c) => {
     const builtin = c.id === YACHIYO
-    const picture = existsSync(avatarFile(c.id))
-    const url = `shiori://contact/${c.id}/avatar.png`
-    const avatar = picture ? `${url}?v=${statSync(avatarFile(c.id)).mtimeMs}` : existsSync(shippedFile(c.id, 'avatar.png')) ? url : undefined
+    const avatar = assetUrl(c.id, 'avatar.png', avatarFile(c.id))
+    const portrait = assetUrl(c.id, 'portrait.jpg', portraitFile(c.id))
     const { persona: _old, ...rest } = c
-    return { ...rest, persona: readPersona(c), avatar, ...(builtin ? { builtin } : {}) }
+    return { ...rest, persona: readPersona(c), avatar, portrait, crop: readCrop(c.id), ...(builtin ? { builtin } : {}) }
   })
 }
 
@@ -87,6 +102,15 @@ export function saveContact(draft: ContactDraft): Contact[] {
     if (!png) throw new Error('头像格式不对')
     writeFileSync(avatarFile(id), Buffer.from(png[1], 'base64'))
   }
+  if (draft.portrait === null) {
+    rmSync(portraitFile(id), { force: true })
+    rmSync(cropFile(id), { force: true })
+  } else if (draft.portrait) {
+    const jpeg = draft.portrait.match(/^data:image\/jpeg;base64,(.+)$/)
+    if (!jpeg) throw new Error('图片格式不对')
+    writeFileSync(portraitFile(id), Buffer.from(jpeg[1], 'base64'))
+  }
+  if (draft.crop && draft.portrait !== null) writeFileSync(cropFile(id), JSON.stringify(draft.crop))
   const persona = draft.persona.trim()
   if (before?.builtin && !persona) throw new Error('八千代的人设不能为空')
   writeFileSync(personaFile(id), persona)
@@ -106,16 +130,14 @@ async function deleteContact(id: string): Promise<Contact[]> {
   return loadContacts()
 }
 
-/** A square from the middle of the chosen picture, small enough to sit in the settings as a preview. */
-async function pickAvatar(): Promise<string | undefined> {
+const jpegUrl = (bytes: Buffer) => `data:image/jpeg;base64,${bytes.toString('base64')}`
+
+/** The chosen file as it is; the page decodes it, since the system's image reader can't open every format, webp among them. */
+async function pickPortrait(): Promise<string | undefined> {
   const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] })
   if (r.canceled || !r.filePaths[0]) return undefined
-  const image = nativeImage.createFromPath(r.filePaths[0])
-  if (image.isEmpty()) throw new Error('这张图片读不出来')
-  const { width, height } = image.getSize()
-  const side = Math.min(width, height)
-  const square = image.crop({ x: Math.floor((width - side) / 2), y: Math.floor((height - side) / 2), width: side, height: side })
-  return square.resize({ width: AVATAR_SIZE, height: AVATAR_SIZE, quality: 'best' }).toDataURL()
+  const type = extname(r.filePaths[0]).slice(1).toLowerCase().replace('jpg', 'jpeg')
+  return `data:image/${type};base64,${readFileSync(r.filePaths[0]).toString('base64')}`
 }
 
 const hsl = (h: number, s: number, l: number) => `hsl(${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`
@@ -157,8 +179,9 @@ export function contactAccent(contact: Contact): string {
  */
 export function contactAsset(id: string, rel: string): string | undefined {
   if (!getContact(id)) return undefined
-  if (rel !== 'avatar.png' && !rel.startsWith('pet/')) return undefined
+  if (rel !== 'avatar.png' && rel !== 'portrait.jpg' && !rel.startsWith('pet/')) return undefined
   if (rel === 'avatar.png' && existsSync(avatarFile(id))) return avatarFile(id)
+  if (rel === 'portrait.jpg' && existsSync(portraitFile(id))) return portraitFile(id)
   try {
     const file = shippedFile(id, rel)
     return existsSync(file) ? file : undefined
@@ -179,5 +202,10 @@ export function initContacts(onChange: (list: Contact[]) => void): void {
     onChange(list)
     return list
   })
-  ipcMain.handle('contacts:pickAvatar', () => pickAvatar())
+  ipcMain.handle('contacts:pickPortrait', () => pickPortrait())
+  // Settings cuts the avatar on a canvas, which only reads pictures it is handed directly.
+  ipcMain.handle('contacts:portrait', (_e, id: string) => {
+    const path = contactAsset(id, 'portrait.jpg')
+    return path ? jpegUrl(readFileSync(path)) : undefined
+  })
 }

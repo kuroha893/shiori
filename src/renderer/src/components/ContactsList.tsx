@@ -1,19 +1,20 @@
 import { useRef, useState } from 'react'
-import { YACHIYO, type Contact, type ContactDraft } from '../../../shared/contacts'
+import { YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../../../shared/contacts'
 import { api } from '../api'
 import { ContactAvatar, useContacts } from './Chrome'
 import { errorText } from './Folders'
 import { Icon } from './Icon'
+import { fitPortrait, PortraitCrop } from './PortraitCrop'
 
 // Eight clicks, for eight thousand years.
 const EGG_CLICKS = 8
 const EGG_WINDOW = 4000
 
-type Form = ContactDraft & { avatarShown?: string; builtin?: boolean }
+type Form = ContactDraft & { avatarShown?: string; portraitShown?: string; builtin?: boolean }
 
 const NEW: Form = { name: '', persona: '', voice: '', language: 'zh' }
 
-const toForm = (c: Contact): Form => ({ id: c.id, name: c.name, persona: c.persona, voice: c.voice, language: c.language, avatarShown: c.avatar, builtin: c.builtin })
+const toForm = (c: Contact): Form => ({ id: c.id, name: c.name, persona: c.persona, voice: c.voice, language: c.language, avatarShown: c.avatar, crop: c.crop, builtin: c.builtin })
 
 /** The contacts in Settings: click one to edit it, a row at the bottom to add someone. */
 export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolean; onPetShown: (on: boolean) => void; toast: (text: string) => void }) {
@@ -25,13 +26,20 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
   const edit = (next?: Form) => {
     setForm(next)
     setError(undefined)
+    if (next?.id && contacts.find((c) => c.id === next.id)?.portrait) {
+      api.contactPortrait(next.id).then((portraitShown) => setForm((f) => (f && f.id === next.id ? { ...f, portraitShown } : f)))
+    }
   }
   const patch = (p: Partial<Form>) => setForm((f) => f && { ...f, ...p })
 
   const pick = async () => {
     try {
-      const avatar = await api.pickAvatar()
-      if (avatar) patch({ avatar, avatarShown: avatar })
+      const file = await api.pickPortrait()
+      if (!file) return
+      const portrait = await fitPortrait(file)
+      setError(undefined)
+      // No crop yet: the picture opens with a default one, which also makes the avatar.
+      patch({ portrait, portraitShown: portrait, crop: undefined })
     } catch (e) {
       setError(errorText(e))
     }
@@ -39,7 +47,7 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
 
   const save = async () => {
     if (!form) return
-    const { avatarShown: _shown, builtin: _builtin, ...draft } = form
+    const { avatarShown: _shown, portraitShown: _portrait, builtin: _builtin, ...draft } = form
     try {
       await api.saveContact(draft)
       edit(undefined)
@@ -47,6 +55,8 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
       setError(errorText(e))
     }
   }
+
+  const cropped = (crop: AvatarCrop, avatar: string) => patch({ crop, avatar, avatarShown: avatar })
 
   const remove = async (c: Contact) => {
     if (!confirm(`删除「${c.name}」？TA 的记忆和通话记录会移到废纸篓。`)) return
@@ -74,6 +84,12 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
             <input className="input" autoFocus={!form.id} value={form.name} onChange={(e) => patch({ name: e.target.value })} />
           </div>
         )}
+        {form.portraitShown && (
+          <div className="set-row">
+            <label>立绘</label>
+            <PortraitCrop src={form.portraitShown} crop={form.crop} onChange={cropped} />
+          </div>
+        )}
         <div className="set-row">
           <label>头像</label>
           <div className="set-contact-picture">
@@ -83,8 +99,8 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
             <button className="btn sm" onClick={pick}>
               选择图片
             </button>
-            {form.avatar !== null && (form.avatar || (form.avatarShown && (!form.builtin || form.avatarShown.includes('?v=')))) && (
-              <button className="btn ghost sm" onClick={() => patch({ avatar: null, avatarShown: undefined })}>
+            {form.avatar !== null && (form.avatar || form.portrait || (form.avatarShown && (!form.builtin || form.avatarShown.includes('?v=')))) && (
+              <button className="btn ghost sm" onClick={() => patch({ avatar: null, portrait: null, avatarShown: undefined, portraitShown: undefined, crop: undefined })}>
                 {form.builtin ? '恢复默认' : '移除'}
               </button>
             )}

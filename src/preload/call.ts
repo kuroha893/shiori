@@ -17,6 +17,7 @@ const callBridge = {
   setMood: (mood: CallMood) => ipcRenderer.send('call:mood', mood),
   setInteractive: (on: boolean) => ipcRenderer.send('call:interactive', on),
   focus: () => ipcRenderer.send('call:focus'),
+  setScreen: (open: boolean) => ipcRenderer.send('call:screen', open),
   moveTo: (x: number, y: number) => ipcRenderer.send('call:move', x, y),
   moved: () => ipcRenderer.send('call:moved'),
   onState: (fn: (s: CallState) => void) => on('call:state', fn),

@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, net, screen, shell } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { CallLine, CallMood, CallState, PaperMeta } from '../shared/types'
+import type { CallLine, CallMood, CallState, PaperMeta, PastCall } from '../shared/types'
 import { openConversation, runClaude, type Conversation } from './claude'
 import { listPapers, readMeta } from './library'
 import { keepOnTop, petBounds } from './pet'
@@ -15,6 +15,12 @@ import { contactAccent, contactDir, getContact } from './contacts'
 
 const WIDTH = 340
 const HEIGHT = 340
+// The call screen, with room for its shadow. It grows out of the capsule's corner.
+const SCREEN_WIDTH = 408
+const SCREEN_HEIGHT = 702
+const SCREEN_MARGIN = 16
+// How many lines the call screen goes back, however many calls they span.
+const PAST_LINES = 200
 const GAP = 8
 // A nudge from her needs a long stretch without one, and without you talking.
 const NUDGE_EVERY = 45 * 60_000
@@ -32,13 +38,14 @@ const AWAY_AFTER = 20 * 60_000
 const MOOD_SETTLE = 5000
 const CHAT_NOW_GAP = 5 * 60_000
 
-type Record = { at: string; who: 'you' | 'her' | 'event'; text: string; zh?: string }
+type Record = { at: string; who: 'you' | 'her' | 'event' | 'end'; text: string; zh?: string }
 
 let win: BrowserWindow | undefined
 let conversation: Conversation | undefined
 let state: CallState = { active: false, thinking: false }
 let log: Record[] = []
 let logFile = ''
+let screenOpen = false
 /** Changes when you speak, so that lines still on their way are dropped. */
 let generation = 0
 let turns: Promise<void> = Promise.resolve()
@@ -101,11 +108,38 @@ function lastCallTail(): string {
     const files = readdirSync(join(dir(), 'calls')).filter((f) => f.endsWith('.jsonl')).sort()
     const previous = files.filter((f) => join(dir(), 'calls', f) !== logFile).pop()
     if (!previous) return ''
-    const lines = readFileSync(join(dir(), 'calls', previous), 'utf8').trim().split('\n').slice(-6)
-    return lines.map((l) => transcriptLine(JSON.parse(l))).join('\n')
+    const lines = (readFileSync(join(dir(), 'calls', previous), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) as Record[]).filter((r) => r.who !== 'end').slice(-6)
+    return lines.map(transcriptLine).join('\n')
   } catch {
     return ''
   }
+}
+
+/** The latest lines before this call, grouped by call, oldest first. A call cut off by a crash ends at its last line. */
+function pastCalls(): PastCall[] {
+  const folder = join(dir(), 'calls')
+  if (!existsSync(folder)) return []
+  const calls: PastCall[] = []
+  let left = PAST_LINES
+  for (const name of readdirSync(folder).filter((f) => f.endsWith('.jsonl')).sort().reverse()) {
+    if (join(folder, name) === logFile) continue
+    const rows: Record[] = []
+    for (const line of readFileSync(join(folder, name), 'utf8').split('\n')) {
+      try {
+        if (line.trim()) rows.push(JSON.parse(line))
+      } catch {
+        /* a line cut short by a crash */
+      }
+    }
+    const lines = rows.flatMap((r) => (r.who === 'you' || r.who === 'her' ? [{ who: r.who, text: r.text, zh: r.zh, at: Date.parse(r.at) }] : []))
+    if (!lines.length) continue
+    const kept = lines.slice(-left)
+    const startedAt = Date.parse(name.replace(/T(\d+)-(\d+)-(\d+)-(\d+)Z.*/, 'T$1:$2:$3.$4Z'))
+    calls.unshift({ startedAt, endedAt: Date.parse(rows[rows.length - 1].at), lines: kept, ...(kept.length < lines.length ? { cut: true } : {}) })
+    left -= kept.length
+    if (!left) break
+  }
+  return calls
 }
 
 const transcriptLine = (r: Record) => `${new Date(r.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })} ${r.who === 'you' ? 'They' : r.who === 'her' ? 'You' : 'App'}: ${r.zh ?? r.text}`
@@ -302,8 +336,8 @@ function checkNudges(): void {
   speak(`[note] ${note}`, true)
 }
 
-function place(): void {
-  if (!win) return
+/** Where the capsule's window belongs, and the screen it is on. */
+function capsuleBounds(): { x: number; y: number; area: Electron.Rectangle } {
   const pet = petBounds()
   if (!pet) {
     // On her own the call sits at the bottom right, clear of the avatar button, unless it was dragged elsewhere.
@@ -311,14 +345,28 @@ function place(): void {
     const area = (saved ? screen.getDisplayNearestPoint(saved) : screen.getPrimaryDisplay()).workArea
     const x = Math.min(saved?.x ?? area.x + area.width - WIDTH - 96, area.x + area.width - WIDTH)
     const y = Math.min(saved?.y ?? area.y + area.height - HEIGHT - 16, area.y + area.height - HEIGHT)
-    win.setBounds({ x: Math.max(area.x, x), y: Math.max(area.y, y), width: WIDTH, height: HEIGHT })
-    return
+    return { x: Math.max(area.x, x), y: Math.max(area.y, y), area }
   }
   const area = screen.getDisplayMatching(pet).workArea
   const left = pet.x - WIDTH - GAP
   const x = left >= area.x ? left : pet.x + pet.width + GAP
   const y = Math.max(area.y, Math.min(pet.y + pet.height - HEIGHT, area.y + area.height - HEIGHT))
-  win.setBounds({ x: Math.round(x), y: Math.round(y), width: WIDTH, height: HEIGHT })
+  return { x, y, area }
+}
+
+/** The call screen shares the capsule's bottom right corner, and stays on the display. */
+function place(): void {
+  if (!win) return
+  const { x, y, area } = capsuleBounds()
+  if (!screenOpen) return win.setBounds({ x: Math.round(x), y: Math.round(y), width: WIDTH, height: HEIGHT })
+  const width = SCREEN_WIDTH
+  const height = Math.min(SCREEN_HEIGHT, area.height - SCREEN_MARGIN)
+  win.setBounds({
+    x: Math.round(Math.max(area.x, Math.min(x + WIDTH - width, area.x + area.width - width))),
+    y: Math.round(Math.max(area.y, Math.min(y + HEIGHT - height, area.y + area.height - height))),
+    width,
+    height
+  })
 }
 
 export const placeCall = place
@@ -330,6 +378,7 @@ export function startCall(id: string): void {
   const now = new Date()
   logFile = join(dir(), 'calls', `${now.toISOString().replace(/[:.]/g, '-')}.jsonl`)
   log = []
+  screenOpen = false
   generation++
   lastSpoke = lastNudge = now.getTime()
   lateNoted = false
@@ -384,6 +433,7 @@ export function endCall(): void {
   if (!state.active) return
   clearInterval(timer)
   generation++
+  if (log.length) appendFileSync(logFile, JSON.stringify({ at: new Date().toISOString(), who: 'end', text: '' }) + '\n')
   state = { active: false, thinking: false }
   settleMood()
   conversation?.close()
@@ -412,17 +462,28 @@ function rememberCall(call: Record[]): void {
 export function initCall(hangUp: () => void): void {
   ipcMain.handle('call:init', () => {
     const contact = person()
-    return { state, contact: { name: contact.name, avatar: contact.avatar, accent: contactAccent(contact) }, mood: getSettings().callMood, uiFont: getSettings().uiFont }
+    return {
+      state,
+      contact: { name: contact.name, avatar: contact.avatar, portrait: contact.portrait, accent: contactAccent(contact) },
+      past: pastCalls(),
+      mood: getSettings().callMood,
+      uiFont: getSettings().uiFont
+    }
   })
   ipcMain.on('call:focus', () => win?.focus())
+  ipcMain.on('call:screen', (_e, open: boolean) => {
+    if (screenOpen === open) return
+    screenOpen = open
+    place()
+  })
   // With the character on the desktop the call stands beside her, so it is only moved on its own.
   ipcMain.on('call:move', (_e, x: number, y: number) => {
     if (!petBounds()) win?.setPosition(Math.round(x), Math.round(y))
   })
   ipcMain.on('call:moved', () => {
     if (!win || petBounds()) return
-    const [x, y] = win.getPosition()
-    saveSettings({ callPosition: { x, y } })
+    const { x, y, width, height } = win.getBounds()
+    saveSettings({ callPosition: { x: x + width - WIDTH, y: y + height - HEIGHT } })
   })
   ipcMain.on('call:mood', (_e, mood: CallMood) => {
     if (settling) clearTimeout(settling.timer)

@@ -56,32 +56,9 @@ body,
   color: rgba(255, 255, 255, 0.86);
 }
 
-.call-history,
 .call-notice {
   background: rgba(13, 13, 15, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.12);
-}
-.call-history {
-  align-self: stretch;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 12px;
-  border-radius: 14px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.call-history p {
-  margin: 0 0 6px;
-}
-.call-history p.you {
-  color: #a9d3ff;
-  text-align: right;
-}
-.call-empty {
-  color: rgba(255, 255, 255, 0.4);
-}
-.call-notice {
   margin: 0;
   padding: 5px 11px;
   border-radius: 12px;
@@ -260,8 +237,7 @@ body,
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.75);
 }
-.call-icon:hover,
-.call-icon.on {
+.call-icon:hover {
   background: rgba(255, 255, 255, 0.18);
 }
 .call-hang {
@@ -281,6 +257,372 @@ body,
   color: rgba(255, 255, 255, 0.85);
   pointer-events: none;
   animation: call-in 0.15s ease-out;
+}
+/* The call screen: a phone call over their picture, with the record of past calls. */
+@property --call-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 142px;
+}
+.call-screen {
+  --move: 420ms cubic-bezier(0.3, 1.28, 0.55, 1);
+  position: relative;
+  flex: 1;
+  align-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 26px;
+  background: #141228;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+  animation: call-screen-in 0.24s ease-out;
+}
+.call-close {
+  position: absolute;
+  z-index: 1;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(36, 30, 48, 0.56);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.85);
+}
+.call-close:hover {
+  background: rgba(60, 52, 78, 0.8);
+  color: #fff;
+}
+.call-backdrop {
+  position: absolute;
+  inset: -12px;
+  background-position: 40% 30%;
+  background-size: cover;
+  filter: blur(4px) saturate(1.1);
+}
+.call-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(18, 16, 34, 0.26) 0, rgba(18, 16, 34, 0.24) 40%, rgba(18, 16, 34, 0.58) 62%, rgba(14, 13, 30, 0.84) 100%);
+}
+.call-veil::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 13, 30, 0.34);
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+.raised .call-veil::after {
+  opacity: 1;
+}
+/* The scrolling area never changes size, or moving the header would change how far it has scrolled.
+   Only what is visible of it does: the fade slides up as the header makes room. */
+.call-talk {
+  --call-fade: 142px;
+  position: absolute;
+  inset: 196px 0 67px;
+  overflow-y: auto;
+  padding: 0 13px 14px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent calc(var(--call-fade) - 20px), #000 var(--call-fade), #000 calc(100% - 12px), transparent 100%);
+  transition: --call-fade 420ms ease;
+}
+.call-talk::-webkit-scrollbar {
+  display: none;
+}
+.raised .call-talk {
+  --call-fade: 20px;
+}
+.call-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 7px;
+  min-height: 100%;
+  padding-top: 20px;
+  box-sizing: border-box;
+}
+.call-lines > * {
+  flex: none;
+}
+.call-line {
+  width: fit-content;
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: 15px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(14px);
+}
+.call-line small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.66);
+}
+.call-line.you {
+  align-self: flex-end;
+  background: rgba(169, 211, 255, 0.24);
+  color: #e8f3ff;
+}
+.call-status .call-time {
+  min-width: 0;
+  font-size: inherit;
+  transition: font-size var(--move);
+}
+.call-lines .call-time {
+  align-self: center;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+.call-end {
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+.call-end::before,
+.call-end::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.24);
+}
+.call-unread {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent, #d9c2ee);
+  color: #231a33;
+  font: inherit;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  animation: call-in 0.18s ease-out;
+}
+.call-portrait {
+  position: absolute;
+  left: 115px;
+  top: 44px;
+  box-sizing: border-box;
+  width: 150px;
+  height: 150px;
+  padding: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 10px rgba(255, 255, 255, 0.16), 0 0 0 22px rgba(255, 255, 255, 0.07);
+  transition: top var(--move);
+}
+.raised .call-portrait {
+  top: 24px;
+}
+.call-portrait img,
+.call-portrait b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2740;
+  font-size: 54px;
+  font-weight: 600;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.call-name {
+  position: absolute;
+  left: 0;
+  top: 222px;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 31px;
+  line-height: 44px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  transition: top var(--move), left var(--move), width var(--move), font-size var(--move), line-height var(--move), background 260ms ease, color 260ms ease;
+}
+/* Scrolled up, the name becomes a plate on the avatar's lower edge. */
+.raised .call-name {
+  left: 150px;
+  top: 158px;
+  width: 80px;
+  border-radius: 12px;
+  background: var(--accent, #d9c2ee);
+  color: #231a33;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: 0.04em;
+  text-shadow: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.call-status {
+  position: absolute;
+  right: 50%;
+  top: 270px;
+  transform: translateX(50%);
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 15px;
+  border-radius: 17px;
+  background: rgba(36, 30, 48, 0.56);
+  backdrop-filter: blur(10px);
+  font-size: 18px;
+  white-space: nowrap;
+  user-select: none;
+  transition: top var(--move), right var(--move), transform var(--move), font-size var(--move), height var(--move), padding var(--move);
+}
+.raised .call-status {
+  right: 14px;
+  top: 18px;
+  transform: translateX(0);
+  height: 30px;
+  padding: 0 11px;
+  font-size: 14px;
+}
+.call-status-wave,
+.call-status-dots {
+  display: inline-flex;
+  align-items: center;
+  width: 0;
+  height: 16px;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 220ms ease, margin 220ms ease, opacity 180ms ease;
+}
+.call-status-wave.on {
+  width: 27px;
+  margin-right: 8px;
+  opacity: 1;
+}
+.call-status-dots.on {
+  width: 24px;
+  margin-right: 8px;
+  opacity: 1;
+}
+.call-status-wave {
+  gap: 3px;
+}
+.call-status-wave i {
+  flex: none;
+  width: 3px;
+  height: 40%;
+  border-radius: 2px;
+  background: var(--accent, #d9c2ee);
+  animation: call-wave 1s ease-in-out infinite;
+}
+.call-status-wave i:nth-child(2) {
+  height: 90%;
+  animation-delay: 0.15s;
+}
+.call-status-wave i:nth-child(3) {
+  height: 60%;
+  animation-delay: 0.3s;
+}
+.call-status-wave i:nth-child(4) {
+  height: 100%;
+  animation-delay: 0.45s;
+}
+.call-status-wave i:nth-child(5) {
+  height: 50%;
+  animation-delay: 0.6s;
+}
+.call-status-dots {
+  gap: 4px;
+}
+.call-status-dots i {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent, #d9c2ee);
+  animation: call-dot 1.1s ease-in-out infinite;
+}
+.call-status-dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.call-status-dots i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+.call-screen .call-notice {
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  bottom: 70px;
+}
+.call-screen .call-mood-hint {
+  position: absolute;
+  right: 54px;
+  bottom: 70px;
+}
+.call-screen .call-capsule {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: 13px;
+  height: 50px;
+  padding: 0 7px 0 16px;
+  background: rgba(10, 10, 18, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+.call-screen .call-capsule input {
+  flex: 1;
+  width: auto;
+  font-size: 13.5px;
+  animation: none;
+  user-select: text;
+}
+.call-screen .call-hang {
+  width: 36px;
+  height: 36px;
+}
+@keyframes call-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+@keyframes call-screen-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
 }
 @keyframes call-breathe {
   50% {
@@ -308,7 +650,13 @@ body,
   .call-avatar.thinking img,
   .call-avatar.thinking b,
   .call-wave i,
-  .call-capsule input {
+  .call-capsule input,
+  .call-screen,
+  .call-status-wave i,
+  .call-status-dots i {
     animation: none;
+  }
+  .call-screen {
+    --move: 0ms linear;
   }
 }

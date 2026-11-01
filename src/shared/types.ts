@@ -71,9 +71,19 @@ export interface CallLine {
   reply?: boolean
 }
 
+/** A finished call, for the record on the call screen. */
+export interface PastCall {
+  startedAt: number
+  endedAt: number
+  lines: { who: 'you' | 'her'; text: string; zh?: string; at: number }[]
+  /** Its opening lines fell outside the limit of what is shown */
+  cut?: boolean
+}
+
 export interface CallInit {
   state: CallState
-  contact: { name: string; avatar?: string; accent: string }
+  contact: { name: string; avatar?: string; portrait?: string; accent: string }
+  past: PastCall[]
   mood: CallMood
   uiFont: string
 }
