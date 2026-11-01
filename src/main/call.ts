@@ -7,7 +7,7 @@ import { openConversation, runClaude, type Conversation } from './claude'
 import { listPapers, readMeta } from './library'
 import { keepOnTop, petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
-import { callPrompt, memoryPrompt } from './yachiyo'
+import { callPrompt, memoryPrompt } from './callPrompt'
 import { YACHIYO } from '../shared/contacts'
 import { contactAccent, contactDir, getContact } from './contacts'
 

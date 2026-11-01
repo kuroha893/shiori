@@ -11,8 +11,6 @@ export interface Contact {
   avatar?: string
   /** Who they are and how they talk: the text of <library>/<id>/persona.md */
   persona: string
-  /** What the persona goes back to on restoring it; only Yachiyo's ships with the app */
-  defaultPersona?: string
   /** Fish Audio voice id */
   voice: string
   language: CallLanguage

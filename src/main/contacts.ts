@@ -1,10 +1,9 @@
 import { dialog, ipcMain, nativeImage, shell } from 'electron'
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { YACHIYO, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
-import { YACHIYO_PERSONA } from './yachiyo'
 import { closePet, petFile, petState } from './pet'
 import { getSettings } from './settings'
 
@@ -18,16 +17,17 @@ export const contactDir = (id: string) => join(root(), id)
 const avatarFile = (id: string) => join(contactDir(id), 'avatar.png')
 const personaFile = (id: string) => join(contactDir(id), 'persona.md')
 
+/** persona.md is the only copy of a persona. Yachiyo's first one comes with the app; older ones were kept in contacts.json. */
 function readPersona(c: Stored): string {
-  const builtin = c.id === YACHIYO
-  if (existsSync(personaFile(c.id))) return readFileSync(personaFile(c.id), 'utf8')
-  // Personas used to be kept in contacts.json.
-  if (c.persona && !builtin) {
+  const file = personaFile(c.id)
+  if (!existsSync(file)) {
+    const first = c.id === YACHIYO ? petFile('persona.md') : undefined
+    if (!c.persona && !first) return ''
     mkdirSync(contactDir(c.id), { recursive: true })
-    writeFileSync(personaFile(c.id), c.persona)
-    return c.persona
+    if (first) copyFileSync(first, file)
+    else writeFileSync(file, c.persona!)
   }
-  return builtin ? YACHIYO_PERSONA : ''
+  return readFileSync(file, 'utf8')
 }
 
 function readStored(): Stored[] {
@@ -55,7 +55,7 @@ export function loadContacts(): Contact[] {
     const builtin = c.id === YACHIYO
     const avatar = picture ? `shiori://contact/${c.id}/avatar.png?v=${statSync(avatarFile(c.id)).mtimeMs}` : builtin ? 'shiori://pet/avatar.png' : undefined
     const { persona: _old, ...rest } = c
-    return { ...rest, persona: readPersona(c), avatar, ...(builtin ? { builtin, defaultPersona: YACHIYO_PERSONA } : {}) }
+    return { ...rest, persona: readPersona(c), avatar, ...(builtin ? { builtin } : {}) }
   })
 }
 
@@ -80,10 +80,9 @@ export function saveContact(draft: ContactDraft): Contact[] {
     if (!png) throw new Error('头像格式不对')
     writeFileSync(avatarFile(id), Buffer.from(png[1], 'base64'))
   }
-  // Yachiyo's unchanged persona isn't written out, so she keeps following what ships with the app.
   const persona = draft.persona.trim()
-  if (before?.builtin && (!persona || persona === YACHIYO_PERSONA.trim())) rmSync(personaFile(id), { force: true })
-  else writeFileSync(personaFile(id), persona)
+  if (before?.builtin && !persona) throw new Error('八千代的人设不能为空')
+  writeFileSync(personaFile(id), persona)
   const next: Contact = { id, name, persona, voice: draft.voice.trim(), language: draft.language }
   save(before ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
   return loadContacts()

@@ -15,8 +15,6 @@ const NEW: Form = { name: '', persona: '', voice: '', language: 'zh' }
 
 const toForm = (c: Contact): Form => ({ id: c.id, name: c.name, persona: c.persona, voice: c.voice, language: c.language, avatarShown: c.avatar, builtin: c.builtin })
 
-const sameText = (a: string, b?: string) => a.trim() === b?.trim()
-
 /** The contacts in Settings: click one to edit it, a row at the bottom to add someone. */
 export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolean; onPetShown: (on: boolean) => void; toast: (text: string) => void }) {
   const contacts = useContacts()
@@ -103,14 +101,7 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
               value={form.persona}
               onChange={(e) => patch({ persona: e.target.value })}
             />
-            <p className="faint">
-              存在 persona.md，下次通话生效。
-              {original?.defaultPersona && !sameText(form.persona, original.defaultPersona) && (
-                <button className="link-btn" onClick={() => patch({ persona: original.defaultPersona })}>
-                  恢复默认
-                </button>
-              )}
-            </p>
+            <p className="faint">存在 persona.md，下次通话生效。</p>
           </div>
         </div>
         <div className="set-row">

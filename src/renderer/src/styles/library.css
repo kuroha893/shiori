@@ -615,14 +615,6 @@ input.bare::placeholder {
   margin: 5px 0 0;
   font-size: 12px;
 }
-.link-btn {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: hsl(var(--primary));
-  font: inherit;
-  cursor: default;
-}
 .set-contact-picture {
   display: flex;
   align-items: center;
