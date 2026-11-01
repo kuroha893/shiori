@@ -10,9 +10,9 @@ import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
-import { closePet, initPet, petFile, syncPet } from './pet'
+import { closePet, initPet, syncPet } from './pet'
 import { endCall, initCall, placeCall, startCall, watchPaper } from './call'
-import { contactAvatar, initContacts } from './contacts'
+import { contactAsset, initContacts } from './contacts'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -178,18 +178,12 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   app.setName('Shiori')
-  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://pet/<path> the character's files.
+  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://contact/<id>/<path> a contact's picture and character.
   protocol.handle('shiori', (req) => {
     const u = new URL(req.url)
-    if (u.host === 'pet') {
-      try {
-        return net.fetch(pathToFileURL(petFile(decodeURIComponent(u.pathname.slice(1)))).toString())
-      } catch {
-        return new Response('forbidden', { status: 403 })
-      }
-    }
     if (u.host === 'contact') {
-      const file = u.pathname === `/${u.pathname.split('/')[1]}/avatar.png` && contactAvatar(u.pathname.split('/')[1])
+      const [id, ...rest] = u.pathname.slice(1).split('/').map(decodeURIComponent)
+      const file = contactAsset(id, rest.join('/'))
       return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
     }
     if (u.host !== 'paper') return new Response('not found', { status: 404 })

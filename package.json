@@ -70,7 +70,7 @@
     },
     "files": [
       "out/**",
-      "resources/pet/**",
+      "resources/contacts/**",
       "package.json"
     ],
     "mac": {

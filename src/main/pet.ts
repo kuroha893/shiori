@@ -1,11 +1,11 @@
-import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
+import { BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
-import { YACHIYO } from '../shared/contacts'
+import { join } from 'node:path'
 import type { PetState } from '../shared/types'
+import { shippedFile } from './shippedContacts'
 import { getSettings, saveSettings } from './settings'
 
-/* The desktop character. Her page and art ship with the app in resources/pet. */
+/* The desktop character. A contact has one if their shipped folder has a pet/ page. */
 
 const WIDTH = 336
 const HEIGHT = 420
@@ -21,17 +21,7 @@ let moved: () => void = () => {}
 /** Who is on the call; a character shows during it if the owner wants her to. */
 let contact: string | undefined
 
-const folder = () => join(app.getAppPath(), 'resources', 'pet')
-
 export const petState = (): PetState => ({ contact })
-
-/** Resolve a path inside the pack, refusing anything that escapes it. */
-export function petFile(rel: string): string {
-  const dir = resolve(folder())
-  const full = resolve(dir, rel)
-  if (!full.startsWith(dir + sep)) throw new Error('path outside pet folder')
-  return full
-}
 
 const size = () => {
   const scale = getSettings().petScale ?? DEFAULT_SCALE
@@ -84,12 +74,12 @@ function open(): void {
   win.on('closed', () => {
     win = undefined
   })
-  win.loadURL('shiori://pet/pet.html')
+  win.loadURL(`shiori://contact/${contact}/pet/pet.html`)
 }
 
 /** Puts the character on the desktop or takes her off, to match the call and the setting. */
 export function syncPet(): void {
-  const hasPet = contact === YACHIYO && existsSync(join(folder(), 'pet.html'))
+  const hasPet = !!contact && existsSync(shippedFile(contact, 'pet/pet.html'))
   if (hasPet && getSettings().petShown) {
     if (!win) open()
   } else {

@@ -4,10 +4,15 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { YACHIYO, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
-import { closePet, petFile, petState } from './pet'
+import { shippedFile } from './shippedContacts'
+import { closePet, petState } from './pet'
 import { getSettings } from './settings'
 
-/* Contacts live in <library>/contacts.json; each has a folder <library>/<id> for her persona.md, picture, notes and call records. */
+/*
+ * Contacts live in <library>/contacts.json. Each has a folder <library>/<id> with who they are now: persona.md,
+ * picture, notes and call records. A contact that ships with the app also has resources/contacts/<id>, how they
+ * started; anything the library doesn't have yet is looked up there.
+ */
 
 type Stored = Pick<Contact, 'id' | 'name' | 'voice' | 'language'> & { persona?: string }
 
@@ -21,10 +26,11 @@ const personaFile = (id: string) => join(contactDir(id), 'persona.md')
 function readPersona(c: Stored): string {
   const file = personaFile(c.id)
   if (!existsSync(file)) {
-    const first = c.id === YACHIYO ? petFile('persona.md') : undefined
-    if (!c.persona && !first) return ''
+    const first = shippedFile(c.id, 'persona.md')
+    const shipped = existsSync(first)
+    if (!c.persona && !shipped) return ''
     mkdirSync(contactDir(c.id), { recursive: true })
-    if (first) copyFileSync(first, file)
+    if (shipped) copyFileSync(first, file)
     else writeFileSync(file, c.persona!)
   }
   return readFileSync(file, 'utf8')
@@ -51,9 +57,10 @@ export function loadContacts(): Contact[] {
     name: '八千代'
   }
   return [yachiyo, ...stored.filter((c) => c.id !== YACHIYO)].map((c) => {
-    const picture = existsSync(avatarFile(c.id))
     const builtin = c.id === YACHIYO
-    const avatar = picture ? `shiori://contact/${c.id}/avatar.png?v=${statSync(avatarFile(c.id)).mtimeMs}` : builtin ? 'shiori://pet/avatar.png' : undefined
+    const picture = existsSync(avatarFile(c.id))
+    const url = `shiori://contact/${c.id}/avatar.png`
+    const avatar = picture ? `${url}?v=${statSync(avatarFile(c.id)).mtimeMs}` : existsSync(shippedFile(c.id, 'avatar.png')) ? url : undefined
     const { persona: _old, ...rest } = c
     return { ...rest, persona: readPersona(c), avatar, ...(builtin ? { builtin } : {}) }
   })
@@ -118,8 +125,7 @@ const hsl = (h: number, s: number, l: number) => `hsl(${Math.round(h)} ${Math.ro
  * black capsule. Near-grey and near-black pixels have no say, and a picture with no color falls back on the name.
  */
 export function contactAccent(contact: Contact): string {
-  const custom = avatarFile(contact.id)
-  const path = existsSync(custom) ? custom : contact.builtin ? petFile('avatar.png') : undefined
+  const path = contactAsset(contact.id, 'avatar.png')
   const image = path ? nativeImage.createFromPath(path).resize({ width: 48, height: 48 }) : undefined
   const bins = new Array(36).fill(0)
   if (image && !image.isEmpty()) {
@@ -145,8 +151,21 @@ export function contactAccent(contact: Contact): string {
   return hsl(hash, 0.5, 0.8)
 }
 
-/** The one file of a contact's folder the app serves. */
-export const contactAvatar = (id: string) => (getContact(id) ? avatarFile(id) : undefined)
+/**
+ * What shiori://contact/<id>/<path> may serve: the picture, library first, and the shipped pet/ files.
+ * Notes and call records are never served.
+ */
+export function contactAsset(id: string, rel: string): string | undefined {
+  if (!getContact(id)) return undefined
+  if (rel !== 'avatar.png' && !rel.startsWith('pet/')) return undefined
+  if (rel === 'avatar.png' && existsSync(avatarFile(id))) return avatarFile(id)
+  try {
+    const file = shippedFile(id, rel)
+    return existsSync(file) ? file : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export function initContacts(onChange: (list: Contact[]) => void): void {
   ipcMain.handle('contacts:list', () => loadContacts())

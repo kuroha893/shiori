@@ -78,12 +78,12 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
           <label>头像</label>
           <div className="set-contact-picture">
             <span className="set-contact-pic">
-              <ContactAvatar contact={{ name: form.name, avatar: form.builtin ? 'shiori://pet/avatar.png' : undefined }} src={form.avatar === null ? null : form.avatarShown} />
+              <ContactAvatar contact={{ name: form.name, avatar: form.builtin ? `shiori://contact/${form.id}/avatar.png` : undefined }} src={form.avatar === null ? null : form.avatarShown} />
             </span>
             <button className="btn sm" onClick={pick}>
               选择图片
             </button>
-            {form.avatar !== null && (form.avatar || (form.avatarShown && !form.avatarShown.startsWith('shiori://pet/'))) && (
+            {form.avatar !== null && (form.avatar || (form.avatarShown && (!form.builtin || form.avatarShown.includes('?v=')))) && (
               <button className="btn ghost sm" onClick={() => patch({ avatar: null, avatarShown: undefined })}>
                 {form.builtin ? '恢复默认' : '移除'}
               </button>
