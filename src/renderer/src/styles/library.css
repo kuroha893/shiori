@@ -26,16 +26,9 @@
   letter-spacing: 0.01em;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
-  font-family: 'Songti SC', serif;
-  font-size: 15px;
-  font-weight: 900;
 }
 
 /* ---------- library ---------- */

@@ -6,6 +6,7 @@ import { Icon } from './Icon'
 import { CallLauncher, HeartButton, Menu, ThemeButton, type MenuItem } from './Chrome'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
 import { VenueTags } from './VenueTags'
+import brand from '../assets/brand.png'
 import type { Toast } from './App'
 
 type Filter = 'all' | 'todo' | 'busy' | 'ready' | 'done'
@@ -207,7 +208,7 @@ export function Library(props: {
       <CallLauncher />
       <header className="topbar drag">
         <div className="brand">
-          <span className="brand-mark">栞</span>
+          <img className="brand-mark" src={brand} alt="" draggable={false} />
           <span>Shiori</span>
         </div>
         <div className="topbar-actions">
