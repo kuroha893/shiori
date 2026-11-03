@@ -5,8 +5,8 @@ export const YACHIYO = 'yachiyo'
 
 /** The contacts that ship with the app, in the order they are listed, ahead of the owner's own. */
 export const BUILTIN = [
-  { id: SHIORI, name: '詩織' },
-  { id: YACHIYO, name: '八千代' }
+  { id: SHIORI, name: '叶山 诗织', romaji: 'Hayama Shiori' },
+  { id: YACHIYO, name: '月见 八千代', romaji: 'Runami Yachiyo' }
 ]
 
 export type CallLanguage = 'ja' | 'zh'
@@ -33,6 +33,9 @@ export interface Contact {
   voice: string
   language: CallLanguage
   builtin?: boolean
+  /** Built-in contacts only: the reading of their name, and the hue of their picture for the ring around it */
+  romaji?: string
+  hue?: number
 }
 
 export interface ContactDraft {

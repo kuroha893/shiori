@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../../../shared/contacts'
 import { api } from '../api'
-import { ContactAvatar, useContacts } from './Chrome'
+import { ContactAvatar, ringStyle, useContacts } from './Chrome'
 import { errorText } from './Folders'
 import { Icon } from './Icon'
 import { fitPortrait, PortraitCrop } from './PortraitCrop'
@@ -162,10 +162,16 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
       {contacts.map((c) => (
         <div className="set-contact" key={c.id}>
           <button className="set-contact-row" onClick={() => edit(form?.id === c.id ? undefined : toForm(c))}>
-            <span className="set-contact-pic" onClick={(e) => eggClick(e, c)}>
+            <span className={`set-contact-pic ${ringStyle(c) ? 'ringed' : ''}`} style={ringStyle(c)} onClick={(e) => eggClick(e, c)}>
               <ContactAvatar contact={c} />
             </span>
-            <b>{c.name}</b>
+            <span className="set-contact-who">
+              <span className="set-contact-name">
+                <b>{c.name}</b>
+                {c.builtin && <span className="set-contact-tag">常驻</span>}
+              </span>
+              {c.romaji && <span className="set-contact-romaji">{c.romaji}</span>}
+            </span>
             <span className="set-contact-sub">
               {c.language === 'ja' ? '日语' : '中文'} · {c.voice ? '已设音色' : '只有字幕'}
             </span>

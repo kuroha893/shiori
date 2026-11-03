@@ -304,6 +304,18 @@ button {
   border-color: var(--call-green);
   box-shadow: 0 0 0 2px var(--call-green), 0 2px 10px rgb(0 0 0 / 0.22);
 }
+/* Built-in contacts: a thin ring in their picture's hue, a hairline apart from it */
+.ringed {
+  --ring: hsl(var(--hue) 60% 58%);
+}
+:root[data-theme='dark'] .ringed {
+  --ring: hsl(var(--hue) 60% 72%);
+}
+.call-contact.ringed:not(.on) {
+  border-color: transparent;
+  outline: 1.5px solid var(--ring);
+  outline-offset: 2px;
+}
 .call-contact-name {
   position: absolute;
   right: calc(100% + 8px);

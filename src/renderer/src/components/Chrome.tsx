@@ -32,6 +32,9 @@ export function useContacts(): Contact[] {
   return contacts
 }
 
+/** A built-in contact's picture wears a thin ring in its own hue. */
+export const ringStyle = (c: Pick<Contact, 'builtin' | 'hue'>) => (c.builtin && c.hue !== undefined ? ({ '--hue': c.hue } as React.CSSProperties) : undefined)
+
 /** A contact's picture, or the first letter of the name without one. */
 export function ContactAvatar({ contact, src }: { contact: Pick<Contact, 'name' | 'avatar'>; src?: string | null }) {
   const image = src === null ? undefined : src ?? contact.avatar
@@ -55,8 +58,8 @@ export function CallLauncher() {
         {contacts.map((c, i) => (
           <button
             key={c.id}
-            className={`call-contact ${call.contact === c.id ? 'on' : ''}`}
-            style={{ '--i': Math.min(contacts.length - 1 - i, 8) } as React.CSSProperties}
+            className={`call-contact ${call.contact === c.id ? 'on' : ''} ${ringStyle(c) ? 'ringed' : ''}`}
+            style={{ '--i': Math.min(contacts.length - 1 - i, 8), ...ringStyle(c) } as React.CSSProperties}
             tabIndex={open ? 0 : -1}
             aria-label={call.contact === c.id ? `挂断${c.name}` : `和${c.name}通话`}
             onClick={() => {

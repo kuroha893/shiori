@@ -71,11 +71,12 @@ export function loadContacts(): Contact[] {
   })
   const own = stored.filter((c) => !BUILTIN.some((b) => b.id === c.id))
   return [...builtins, ...own].map((c) => {
-    const builtin = BUILTIN.some((b) => b.id === c.id)
+    const shipped = BUILTIN.find((b) => b.id === c.id)
     const avatar = assetUrl(c.id, 'avatar.png', avatarFile(c.id))
     const portrait = assetUrl(c.id, 'portrait.jpg', portraitFile(c.id))
     const { persona: _old, ...rest } = c
-    return { ...rest, persona: readPersona(c), avatar, portrait, crop: readCrop(c.id), ...(builtin ? { builtin } : {}) }
+    const marks = shipped ? { builtin: true, romaji: shipped.romaji, hue: pictureHue(c.id) } : {}
+    return { ...rest, persona: readPersona(c), avatar, portrait, crop: readCrop(c.id), ...marks }
   })
 }
 
@@ -140,13 +141,26 @@ async function pickPortrait(): Promise<string | undefined> {
 
 const hsl = (h: number, s: number, l: number) => `hsl(${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`
 
-/**
- * The color of a contact's call: the hue most of their picture leans to, at a lightness that reads on the
- * black capsule. Near-grey and near-black pixels have no say, and a picture with no color falls back on the name.
- */
-export function contactAccent(contact: Contact): string {
-  const path = contactAsset(contact.id, 'avatar.png')
-  const image = path ? nativeImage.createFromPath(path).resize({ width: 48, height: 48 }) : undefined
+/** The avatar file in use, the library's or the shipped one. */
+function avatarPath(id: string): string | undefined {
+  if (existsSync(avatarFile(id))) return avatarFile(id)
+  const shipped = shippedFile(id, 'avatar.png')
+  return existsSync(shipped) ? shipped : undefined
+}
+
+const hues = new Map<string, number | undefined>()
+
+/** The hue most of a contact's picture leans to; near-grey and near-black pixels have no say. Kept until the picture changes. */
+function pictureHue(id: string): number | undefined {
+  const path = avatarPath(id)
+  if (!path) return undefined
+  const key = `${path}:${statSync(path).mtimeMs}`
+  if (!hues.has(key)) hues.set(key, hueOf(path))
+  return hues.get(key)
+}
+
+function hueOf(path: string): number | undefined {
+  const image = nativeImage.createFromPath(path).resize({ width: 48, height: 48 })
   const bins = new Array(36).fill(0)
   if (image && !image.isEmpty()) {
     const px = image.toBitmap()
@@ -159,14 +173,18 @@ export function contactAccent(contact: Contact): string {
       bins[Math.floor(hue * 6) % 36] += chroma
     }
   }
-  const total = bins.reduce((a, b) => a + b, 0)
-  if (total > 0) {
-    // Three bins wide, so a color split across a bin edge still counts as one.
-    const spread = (i: number) => bins[(i + 35) % 36] + bins[i] + bins[(i + 1) % 36]
-    let best = 0
-    for (let i = 1; i < 36; i++) if (spread(i) > spread(best)) best = i
-    return hsl(best * 10 + 5, 0.62, 0.8)
-  }
+  if (!bins.some((b) => b > 0)) return undefined
+  // Three bins wide, so a color split across a bin edge still counts as one.
+  const spread = (i: number) => bins[(i + 35) % 36] + bins[i] + bins[(i + 1) % 36]
+  let best = 0
+  for (let i = 1; i < 36; i++) if (spread(i) > spread(best)) best = i
+  return best * 10 + 5
+}
+
+/** The color of a contact's call: their picture's hue at a lightness that reads on the black capsule; with no color, the name decides. */
+export function contactAccent(contact: Contact): string {
+  const hue = pictureHue(contact.id)
+  if (hue !== undefined) return hsl(hue, 0.62, 0.8)
   const hash = [...contact.name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)
   return hsl(hash, 0.5, 0.8)
 }
