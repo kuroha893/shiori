@@ -68,7 +68,7 @@ export function SelectionMenu({
           <span>翻译</span>
         </button>
       )}
-      <button title="问 Claude（A）" onClick={onAsk}>
+      <button title="提问（A）" onClick={onAsk}>
         <Icon name="chat" size={15} />
         <span>提问</span>
       </button>

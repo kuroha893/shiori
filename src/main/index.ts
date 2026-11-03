@@ -4,7 +4,9 @@ import { pathToFileURL } from 'node:url'
 import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
 import * as lib from './library'
 import { getSettings, saveSettings } from './settings'
-import { claudeStatus, openLogin } from './claude'
+import { inTerminal, openLogin } from './claude'
+import { closeCodex, openCodexLogin } from './codex'
+import { checkDeepseekKey, serviceStatus } from './ai'
 import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
 import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
@@ -124,8 +126,15 @@ function registerIpc(): void {
     foldersChanged()
   })
 
-  ipcMain.handle('claude:status', () => claudeStatus())
-  ipcMain.handle('claude:login', () => openLogin())
+  ipcMain.handle('services:status', (_e, fresh?: boolean) => serviceStatus(fresh))
+  ipcMain.handle('services:login', (_e, provider: 'claude' | 'openai') => (provider === 'openai' ? openCodexLogin() : openLogin()))
+  ipcMain.handle('services:terminal', () => inTerminal())
+  ipcMain.handle('services:deepseekKey', async (_e, key: string) => {
+    const clean = key.trim()
+    const error = clean ? await checkDeepseekKey(clean) : undefined
+    if (!error) saveSettings({ deepseekKey: clean })
+    return { error, status: await serviceStatus(true) }
+  })
 
   ipcMain.handle('papers:list', () => lib.listPapers())
   ipcMain.handle('papers:importDialog', async () => {
@@ -219,4 +228,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => destroyWorker())
+app.on('before-quit', () => {
+  destroyWorker()
+  closeCodex()
+})

@@ -1,4 +1,10 @@
-// Prompts for the headless Claude Code runs. Instructions are in English; output is for a Chinese reader.
+// Prompts for the headless agent runs. Instructions are in English; output is for a Chinese reader.
+
+/*
+ * Claude reads paper.pdf itself. The other services can't take a PDF, so they get its text layer (paper.txt)
+ * and look at the page images for what the text layer garbles.
+ */
+export type Source = 'pdf' | 'pages'
 
 const FORMAT = `
 ## Output format of doc/NN.md
@@ -49,19 +55,30 @@ Table 1: Results on ImageNet.
 表 1：ImageNet 上的结果。
 `
 
-export function processPrompt(o: { pages: number; glossary: string }): string {
+export function processPrompt(o: { pages: number; glossary: string; source: Source }): string {
+  const pdf = o.source === 'pdf'
   return `You are preparing an academic paper so a Chinese reader can read it as a beautifully typeset Chinese article.
 
 Files in the current folder:
-- paper.pdf: the paper, ${o.pages} pages.
+${
+  pdf
+    ? `- paper.pdf: the paper, ${o.pages} pages.`
+    : `- paper.txt: the text layer of the paper's PDF, ${o.pages} pages, each starting with a line "=== Page N ===". Its
+  words are reliable; math, tables and the order of columns often come out garbled.`
+}
 - pages/p01.png ... : the pages rendered with a coordinate grid. x runs from 0 (left edge) to 1000 (right
   edge), y from 0 (top edge) to 1000 (bottom edge); gridlines every 50 units, labelled every 100.
 
 Do this:
-1. Read paper.pdf completely with the Read tool (at most 20 pages per call, use the pages parameter).
+${
+  pdf
+    ? `1. Read paper.pdf completely with the Read tool (at most 20 pages per call, use the pages parameter).`
+    : `1. Read paper.txt completely, and look at every page image in pages/, in order, for the layout, math, tables and
+   figures the text layer garbles. Where the two disagree, the image is right.`
+}
 2. Transcribe and translate the whole paper into doc/01.md, doc/02.md, ... in reading order, one file per
    top-level section or roughly every 3000 words, so no single write is huge. Format below.
-3. For every figure, algorithm box and table, Read the page image in pages/ and give a tight bbox in grid units
+3. For every figure, algorithm box and table, look at the page image in pages/ and give a tight bbox in grid units
    around the graphic itself, including sub-figure labels but excluding the caption. Look closely at the
    gridlines; a box that cuts off part of the graphic is worse than one a little too loose.
 4. Write info.json: {"title": "...", "title_zh": "...", "authors": ["..."], "venue": "...", "year": "..."}
@@ -123,14 +140,14 @@ const GUIDE_SAMPLE = `## 要解决的问题
 
 这个想法成立了：Transformer 的翻译质量超过了当时最好的模型，训练成本却低得多。论文之外还有一点值得知道：后来的 BERT 和 GPT 都建立在这个架构上，这也是它今天仍然值得读的主要原因。`
 
-export function guidePrompt(o: { glossary: string; folders: string[] }): string {
+export function guidePrompt(o: { glossary: string; folders: string[]; source: Source }): string {
   return `You are writing the reading guide (导读) of an academic paper for a Chinese reader who has not read it yet.
 The guide is the underdrawing a painter lays down before any detail: it gives a rough but intuitive sense of the
 whole paper and of the line of research it belongs to, so the reader knows what they are looking at when they
 start reading. It does not summarize the paper section by section and does not replace reading it.
 
 Files in the current folder: doc/*.md (the full paper in order, bilingual, as blocks with ids; lines starting with
-@@ open a block) and paper.pdf (the original). Read all of doc/ before writing.
+@@ open a block) and ${o.source === 'pdf' ? 'paper.pdf (the original)' : "paper.txt (the original PDF's text layer)"}. Read all of doc/ before writing.
 
 What a reader usually wants to know first. These are examples of the questions to answer, not a template and not a
 complete list; decide what this particular paper needs and leave out what does not apply:
@@ -145,7 +162,7 @@ complete list; decide what this particular paper needs and leave out what does n
   different kind of example: a small instance for a theorem, one study followed through for a survey.
 
 Background beyond the paper: a paper's related-work section is written from its authors' standpoint and may leave
-out what a newcomer needs. Use WebSearch when the paper does not give enough to explain the problem, the earlier
+out what a newcomer needs. Search the web when the paper does not give enough to explain the problem, the earlier
 work or what came after, and check facts you would otherwise state from memory. Make clear in the sentence what comes
 from outside the paper and what is the authors' own claim. Never invent facts, citations or later impact; for a recent
 paper, later impact usually has nothing to say and should be left out.
@@ -214,10 +231,12 @@ Read each crop. If one cuts off part of the graphic, or includes the caption or 
 that block's bbox in the doc files with Edit (compare against the page image in pages/ again). Reply with the ids
 you changed separated by commas, or NONE.`
 
-export function chatSystemPrompt(o: { glossary: string; title: string }): string {
+export function chatSystemPrompt(o: { glossary: string; title: string; source: Source }): string {
   return `You are a reading companion inside Shiori, the reader's personal paper reader. The reader is reading
 "${o.title}". Its files are in the current folder: doc/*.md (the full paper, bilingual, as blocks with ids;
-lines starting with @@ open a block), summary.md (a reading guide), paper.pdf (the original), pages/*.png.
+lines starting with @@ open a block), summary.md (a reading guide), ${
+    o.source === 'pdf' ? 'paper.pdf (the original)' : "paper.txt (the original PDF's text layer)"
+  }, pages/*.png (the pages as images).
 Read what you need to answer well; don't guess about the paper's content.
 
 Answer in Chinese, clearly and to the point. Give the intuition before the formula, and say what each symbol means. Use Markdown, and LaTeX for math

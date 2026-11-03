@@ -129,12 +129,18 @@ export interface ChatMessage {
 
 export interface ChatState {
   sessionId?: string
+  /** The service the session belongs to; another service starts afresh from the messages */
+  sessionProvider?: string
   messages: ChatMessage[]
 }
 
 export interface Settings {
   libraryPath: string
   claudePath?: string
+  codexPath?: string
+  /** The owner's own DeepSeek API key */
+  deepseekKey: string
+  /** "<provider>:<model>", see shared/models.ts */
   processModel: string
   chatModel: string
   theme: 'system' | 'light' | 'dark' | 'sepia'
@@ -147,7 +153,7 @@ export interface Settings {
   /** Side panel: width and text size in px */
   panelWidth: number
   panelFontSize: number
-  /** The Claude model behind calls */
+  /** The model behind calls */
   callModel: string
   /** Yachiyo's voice from before contacts moved into the library */
   contacts?: Record<string, { voice: string; language: CallLanguage }>
@@ -168,14 +174,6 @@ export interface Settings {
 export interface PetState {
   /** Who is on the call, if anyone */
   contact?: string
-}
-
-export interface ClaudeStatus {
-  path?: string
-  version?: string
-  loggedIn: boolean
-  account?: string
-  error?: string
 }
 
 export interface GlossaryEntry {

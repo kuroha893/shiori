@@ -3,11 +3,13 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { Settings } from '../shared/types'
+import { normalizeModel } from '../shared/models'
 
 const defaults: Settings = {
   libraryPath: join(homedir(), 'Documents', 'Shiori'),
-  processModel: 'opus',
-  chatModel: 'opus',
+  deepseekKey: '',
+  processModel: 'claude:opus',
+  chatModel: 'claude:opus',
   theme: 'system',
   readingFont: 'serif',
   uiFont: 'Geist Variable',
@@ -16,7 +18,7 @@ const defaults: Settings = {
   lineHeight: 1.85,
   panelWidth: 400,
   panelFontSize: 13.5,
-  callModel: 'opus',
+  callModel: 'claude:opus',
   callMood: 'normal',
   petShown: false,
   fishKey: '',
@@ -33,6 +35,7 @@ export function getSettings(): Settings {
     try {
       const { fishVoice, callLanguage, ...saved } = JSON.parse(readFileSync(file(), 'utf8'))
       cache = { ...defaults, ...saved }
+      for (const k of ['processModel', 'chatModel', 'callModel'] as const) cache![k] = normalizeModel(cache![k])
       // Voice and language used to be one setting, from before there could be several contacts.
       if (fishVoice !== undefined && !cache!.contacts?.yachiyo) {
         cache!.contacts = { ...cache!.contacts, yachiyo: { voice: fishVoice, language: callLanguage ?? 'ja' } }

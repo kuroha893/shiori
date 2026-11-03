@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ClaudeStatus, PaperMeta, Settings } from '../../../shared/types'
+import type { PaperMeta, Settings } from '../../../shared/types'
+import type { ServiceStatus } from '../../../shared/models'
 import { api } from '../api'
 import { Library } from './Library'
 import { Reader } from './Reader'
@@ -18,27 +19,28 @@ export function App() {
   const [papers, setPapers] = useState<PaperMeta[]>([])
   const [open, setOpen] = useState<string>()
   const [showSettings, setShowSettings] = useState(false)
-  const [claude, setClaude] = useState<ClaudeStatus>()
+  const [services, setServices] = useState<ServiceStatus>()
   const [toast, setToast] = useState<string>()
 
-  const refreshClaude = useCallback(() => api.claudeStatus().then(setClaude), [])
+  const refreshServices = useCallback((fresh?: boolean) => api.serviceStatus(fresh).then(setServices), [])
 
   useEffect(() => {
     api.getSettings().then(setSettings)
     api.listPapers().then(setPapers)
-    refreshClaude()
+    refreshServices()
     const offChanged = api.onPaperChanged((m) =>
       setPapers((list) => (list.some((p) => p.id === m.id) ? list.map((p) => (p.id === m.id ? m : p)) : [m, ...list]))
     )
     const offRemoved = api.onPaperRemoved((id) => setPapers((list) => list.filter((p) => p.id !== id)))
-    // Coming back to the app after signing in in Terminal.
-    window.addEventListener('focus', refreshClaude)
+    // Coming back to the app after installing or signing in elsewhere.
+    const refocus = () => refreshServices(true)
+    window.addEventListener('focus', refocus)
     return () => {
       offChanged()
       offRemoved()
-      window.removeEventListener('focus', refreshClaude)
+      window.removeEventListener('focus', refocus)
     }
-  }, [refreshClaude])
+  }, [refreshServices])
 
   useEffect(() => {
     if (!settings) return
@@ -74,7 +76,7 @@ export function App() {
           key={paper.id}
           paper={paper}
           settings={settings}
-          claude={claude}
+          services={services}
           onSettings={updateSettings}
           onClose={() => setOpen(undefined)}
           onOpenSettings={() => setShowSettings(true)}
@@ -84,7 +86,7 @@ export function App() {
         <Library
           papers={papers}
           settings={settings}
-          claude={claude}
+          services={services}
           onOpen={setOpen}
           onSettings={updateSettings}
           onOpenSettings={() => setShowSettings(true)}
@@ -94,13 +96,14 @@ export function App() {
       {showSettings && (
         <SettingsModal
           settings={settings}
-          claude={claude}
+          services={services}
           onChange={updateSettings}
           onLibraryChosen={(s) => {
             setSettings(s)
             api.listPapers().then(setPapers)
           }}
-          refreshClaude={refreshClaude}
+          refreshServices={refreshServices}
+          onServices={setServices}
           onClose={() => setShowSettings(false)}
           toast={showToast}
         />

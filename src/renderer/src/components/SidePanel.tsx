@@ -3,7 +3,8 @@ import type { Annotation, Block, ChatMessage, PaperMeta } from '../../../shared/
 import { api } from '../api'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
-import { modelName } from './Library'
+import { modelLabel, pickModel, type ModelOption } from '../../../shared/models'
+import { ModelPicker } from './ModelPicker'
 import { NoteEditor } from './NoteEditor'
 
 // 'notes' are the annotations (批注), 'memo' is the free-form note (笔记).
@@ -89,7 +90,8 @@ interface Props {
   draftQuote?: Quote
   clearDraftQuote: () => void
   chatModel: string
-  claudeReady: boolean
+  /** Models of the connected services */
+  models: ModelOption[]
   onOpenSettings: () => void
   onJump: (id: string) => void
   onJumpAnnotation: (a: Annotation) => void
@@ -159,7 +161,7 @@ export function SidePanel(p: Props) {
           </button>
         </div>
         {p.tab === 'guide' && p.summary && (
-          <button className="btn ghost sm" disabled={p.paper.guideWriting || !p.claudeReady} title="根据全文重新写一版导读" onClick={() => api.writeGuide(p.paper.id)}>
+          <button className="btn ghost sm" disabled={p.paper.guideWriting || !p.models.some((m) => m.process)} title="根据全文重新写一版导读" onClick={() => api.writeGuide(p.paper.id)}>
             {p.paper.guideWriting ? '正在重写…' : '重写'}
           </button>
         )}
@@ -169,7 +171,7 @@ export function SidePanel(p: Props) {
           </button>
         )}
       </div>
-      {p.tab === 'guide' && <Guide summary={p.summary} paper={p.paper} claudeReady={p.claudeReady} onJump={p.onJump} />}
+      {p.tab === 'guide' && <Guide summary={p.summary} paper={p.paper} ready={p.models.some((m) => m.process)} onJump={p.onJump} />}
       {p.tab === 'chat' && <Chat {...p} />}
       {p.tab === 'notes' && <Notes {...p} />}
       {memoOpened && <NoteEditor paperId={p.paper.id} active={p.tab === 'memo'} toast={p.toast} />}
@@ -187,7 +189,7 @@ function useRefLinks(onJump: (id: string) => void) {
   }
 }
 
-function Guide({ summary, paper, claudeReady, onJump }: { summary?: string; paper: PaperMeta; claudeReady: boolean; onJump: (id: string) => void }) {
+function Guide({ summary, paper, ready, onJump }: { summary?: string; paper: PaperMeta; ready: boolean; onJump: (id: string) => void }) {
   const click = useRefLinks(onJump)
   if (!summary) {
     if (paper.guideWriting) return <div className="side-empty faint">正在写导读，写好后会显示在这里。</div>
@@ -195,7 +197,7 @@ function Guide({ summary, paper, claudeReady, onJump }: { summary?: string; pape
       <div className="side-empty faint">
         <p>{paper.guideError ? `导读没有写成：${paper.guideError}` : '这篇论文还没有导读。'}</p>
         {paper.status === 'ready' && (
-          <button className="btn sm" disabled={!claudeReady} onClick={() => api.writeGuide(paper.id)}>
+          <button className="btn sm" disabled={!ready} onClick={() => api.writeGuide(paper.id)}>
             写导读
           </button>
         )}
@@ -215,7 +217,8 @@ const SUGGESTIONS = ['这篇论文最核心的贡献是什么？', '用直觉讲
 function Chat(p: Props) {
   const { chat } = p
   const [text, setText] = useState('')
-  const [model, setModel] = useState(p.chatModel)
+  const [chosen, setChosen] = useState(p.chatModel)
+  const model = pickModel(chosen, p.models, 'chat')
   const list = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const click = useRefLinks(p.onJump)
@@ -235,10 +238,10 @@ function Chat(p: Props) {
     p.clearDraftQuote()
   }
 
-  if (!p.claudeReady)
+  if (!model)
     return (
       <div className="side-empty">
-        <p className="faint">问答需要先连接 Claude Code。</p>
+        <p className="faint">问答需要先接入模型服务。</p>
         <button className="btn" onClick={p.onOpenSettings}>
           去设置
         </button>
@@ -317,13 +320,7 @@ function Chat(p: Props) {
           }}
         />
         <div className="composer-foot">
-          <div className="seg mini">
-            {['opus', 'sonnet', 'haiku'].map((m) => (
-              <button key={m} className={model === m ? 'on' : ''} onClick={() => setModel(m)}>
-                {modelName(m)}
-              </button>
-            ))}
-          </div>
+          <ModelPicker mini value={model} options={p.models} onChange={setChosen} />
           <span className="faint hint">↩ 发送 · ⇧↩ 换行</span>
           {chat.busy ? (
             <button className="icon-btn bordered" title="停止" onClick={chat.stop}>
@@ -356,7 +353,7 @@ function Message({ m, onJump, onSave, toast }: { m: ChatMessage; onJump: (id: st
     <div className={`msg assistant ${m.error ? 'error' : ''}`}>
       <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
       <div className="msg-actions">
-        <span className="faint mono">{m.model && modelName(m.model)}</span>
+        <span className="faint mono">{m.model && modelLabel(m.model)}</span>
         <button
           className="btn ghost sm"
           onClick={() => {

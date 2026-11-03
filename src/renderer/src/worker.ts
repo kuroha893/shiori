@@ -95,7 +95,23 @@ const methods: Record<string, (a: any) => Promise<unknown>> = {
     if (grid) drawGrid(canvas)
     return toPng(canvas)
   },
-  crop: ({ url, page, bbox }) => crop(url, page, bbox)
+  crop: ({ url, page, bbox }) => crop(url, page, bbox),
+  /** The text layer, page by page, for models that can't read a PDF. */
+  async text({ url }) {
+    const doc = await openPdf(url)
+    const out: string[] = []
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p)
+      const { items } = await page.getTextContent()
+      let text = ''
+      for (const it of items as { str?: string; hasEOL?: boolean }[]) {
+        text += it.str ?? ''
+        if (it.hasEOL) text += '\n'
+      }
+      out.push(`=== Page ${p} ===\n${text.trim()}`)
+    }
+    return out.join('\n\n') + '\n'
+  }
 }
 
 window.workerBridge.onCall(async (id, method, args) => {

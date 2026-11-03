@@ -1,5 +1,6 @@
 import { useMemo, useState, type DragEvent, type ReactNode } from 'react'
-import type { ClaudeStatus, PaperMeta, Settings } from '../../../shared/types'
+import type { PaperMeta, Settings } from '../../../shared/types'
+import { modelLabel, pickModel, type ServiceStatus } from '../../../shared/models'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
 import { CallLauncher, HeartButton, Menu, ThemeButton, type MenuItem } from './Chrome'
@@ -29,13 +30,13 @@ const matches = (p: PaperMeta, f: Filter) =>
 export function Library(props: {
   papers: PaperMeta[]
   settings: Settings
-  claude?: ClaudeStatus
+  services?: ServiceStatus
   onOpen: (id: string) => void
   onSettings: (patch: Partial<Settings>) => void
   onOpenSettings: () => void
   toast: Toast
 }) {
-  const { papers, settings, claude, toast } = props
+  const { papers, settings, services, toast } = props
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [arxiv, setArxiv] = useState('')
@@ -51,12 +52,13 @@ export function Library(props: {
   const [renaming, setRenaming] = useState<string>()
   const [dropOn, setDropOn] = useState<string>()
 
-  const ready = !!claude?.loggedIn
+  const processWith = services && pickModel(settings.processModel, services.models, 'process')
+  const ready = !!processWith
 
   const afterImport = (list: PaperMeta[]) => {
     if (!list.length) return
     if (ready) list.filter((m) => m.status === 'new').forEach((m) => api.processPaper(m.id))
-    toast(ready ? `已导入 ${list.length} 篇，开始在后台处理` : `已导入 ${list.length} 篇。连接 Claude 后即可处理`)
+    toast(ready ? `已导入 ${list.length} 篇，开始在后台处理` : `已导入 ${list.length} 篇。接入模型服务后即可处理`)
   }
 
   const importArxiv = async () => {
@@ -277,17 +279,17 @@ export function Library(props: {
                   共 <b>{stats.total}</b> 篇 · 已读完 <b>{stats.done}</b> 篇 · 本月读过 <b>{stats.month}</b> 篇
                 </>
               ) : (
-                '把论文放进来，Claude 会在后台把它整理成一篇排好版的中文文章。'
+                '把论文放进来，Shiori 会在后台把它整理成一篇排好版的中文文章。'
               )}
             </p>
           </section>
 
-          {claude && !ready && (
-            <button className="claude-banner card fade-in" onClick={props.onOpenSettings}>
+          {services && !ready && (
+            <button className="ai-banner card fade-in" onClick={props.onOpenSettings}>
               <Icon name="sparkles" size={18} />
               <div>
-                <b>{claude.error === 'not-installed' ? '还没有安装 Claude Code' : '还没有登录 Claude Code'}</b>
-                <span className="muted">转写、翻译和问答都通过你的 Claude 订阅完成。点这里完成设置。</span>
+                <b>还没有接入模型服务</b>
+                <span className="muted">转写、翻译和问答需要 Claude、ChatGPT 或 DeepSeek 中的一个。点这里完成设置。</span>
               </div>
               <Icon name="next" />
             </button>
@@ -314,7 +316,7 @@ export function Library(props: {
                 选择 PDF
               </button>
             </div>
-            <p className="import-hint faint">也可以直接把 PDF 拖进窗口。导入后自动用 {modelName(settings.processModel)} 转写全文并翻译成中文。</p>
+            <p className="import-hint faint">也可以直接把 PDF 拖进窗口。导入后{processWith ? `自动用 ${modelLabel(processWith)} ` : ''}转写全文并翻译成中文。</p>
           </section>
 
           {papers.length > 0 && (
@@ -361,8 +363,6 @@ export function Library(props: {
     </div>
   )
 }
-
-export const modelName = (m: string) => ({ opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' })[m] ?? m
 
 function PaperCard({
   paper: p,

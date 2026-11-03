@@ -1,13 +1,16 @@
-import { useState } from 'react'
-import type { ClaudeStatus, Settings } from '../../../shared/types'
+import { useEffect, useState } from 'react'
+import type { Settings } from '../../../shared/types'
+import { pickModel, type ModelOption, type ModelUse, type ServiceStatus } from '../../../shared/models'
 import { api } from '../api'
 import { Icon } from './Icon'
 import { Modal, themeOptions } from './Chrome'
 import { ContactsList } from './ContactsList'
 import { GlossaryList } from './GlossaryList'
 import { FontPicker } from './FontPicker'
+import { ModelPicker } from './ModelPicker'
 
 const INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash'
+const CHATGPT_DOWNLOAD = 'https://chatgpt.com/download'
 
 function Copyable({ text }: { text: string }) {
   const [done, setDone] = useState(false)
@@ -29,97 +32,203 @@ function Copyable({ text }: { text: string }) {
   )
 }
 
+const Pill = ({ ok, children }: { ok?: boolean; children: React.ReactNode }) => (
+  <span className={`pill ${ok ? 'ok' : 'need'}`}>
+    <span className="dot" />
+    {children}
+  </span>
+)
+
+/** Claude and DeepSeek both run in Claude Code, so it unfolds under the Claude row until it is installed. */
+function InstallClaudeCode() {
+  return (
+    <div className="svc-more">
+      <p className="svc-lead">Claude 和 DeepSeek 都通过 Claude Code 运行，装一次就好。</p>
+      <ol className="steps">
+        <li className="step">
+          <span className="step-num">1</span>
+          <div className="step-body">
+            <div className="step-title">
+              打开「终端」
+              <span className="spacer" />
+              <button className="btn sm" onClick={() => api.openTerminal()}>
+                <Icon name="terminal" size={13} />
+                打开终端
+              </button>
+            </div>
+          </div>
+        </li>
+        <li className="step">
+          <span className="step-num">2</span>
+          <div className="step-body">
+            <div className="step-title">粘贴这行命令，回车</div>
+            <Copyable text={INSTALL} />
+          </div>
+        </li>
+        <li className="step">
+          <span className="step-num">3</span>
+          <div className="step-body">
+            <div className="step-title">
+              <span className="waiting">
+                <span className="dot" />
+                装好后这里会自动检测到
+              </span>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  )
+}
+
+function DeepseekKey({ onDone }: { onDone: (status?: ServiceStatus) => void }) {
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+  const save = async () => {
+    setBusy(true)
+    setError(undefined)
+    const r = await api.setDeepseekKey(key)
+    setBusy(false)
+    if (r.error) setError(r.error)
+    else onDone(r.status)
+  }
+  return (
+    <div className="svc-more">
+      <div className="svc-key">
+        <input
+          className="input"
+          type="password"
+          spellCheck={false}
+          autoFocus
+          placeholder="sk-…"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && !busy && save()}
+        />
+        <button className="btn primary" disabled={busy} onClick={save}>
+          {busy ? '检查中' : '保存'}
+        </button>
+        <button className="btn ghost" onClick={() => onDone()}>
+          取消
+        </button>
+      </div>
+      {error && <p className="svc-error">{error}</p>}
+    </div>
+  )
+}
+
+function Services({ services, onStatus }: { services?: ServiceStatus; onStatus: (s: ServiceStatus) => void }) {
+  const [editingKey, setEditingKey] = useState(false)
+  if (!services) return <div className="svc"><div className="svc-row faint">检查中…</div></div>
+  const { claude, openai, deepseek } = services
+  return (
+    <div className="svc">
+      <div className="svc-row">
+        <span className="svc-name">Claude</span>
+        <span className="svc-kind faint">订阅</span>
+        <span className="spacer" />
+        {claude.state === 'ready' ? (
+          <Pill ok>已连接</Pill>
+        ) : claude.state === 'signedOut' ? (
+          <>
+            <Pill>未登录</Pill>
+            <button className="btn sm" onClick={() => api.serviceLogin('claude')}>
+              登录
+            </button>
+          </>
+        ) : (
+          <Pill>未安装 Claude Code</Pill>
+        )}
+      </div>
+      {claude.state === 'missing' && <InstallClaudeCode />}
+      <div className="svc-row">
+        <span className="svc-name">ChatGPT</span>
+        <span className="svc-kind faint">订阅</span>
+        <span className="spacer" />
+        {openai.state === 'ready' ? (
+          <Pill ok>已连接{openai.via === 'desktop' ? ' · ChatGPT 桌面版' : ''}</Pill>
+        ) : openai.state === 'signedOut' ? (
+          <>
+            <Pill>未登录</Pill>
+            <button className="btn sm" onClick={() => api.serviceLogin('openai')}>
+              登录
+            </button>
+          </>
+        ) : (
+          <>
+            <Pill>未安装</Pill>
+            <button className="btn sm" onClick={() => api.openExternal(CHATGPT_DOWNLOAD)}>
+              下载 ChatGPT 桌面版
+            </button>
+          </>
+        )}
+      </div>
+      <div className="svc-row">
+        <span className="svc-name">DeepSeek</span>
+        <span className="svc-kind faint">API</span>
+        <span className="spacer" />
+        {deepseek.state === 'ready' ? <Pill ok>已连接</Pill> : deepseek.state === 'needsClaudeCode' ? <Pill>需要 Claude Code</Pill> : null}
+        {!editingKey && (
+          <button className="btn sm" onClick={() => setEditingKey(true)}>
+            {deepseek.state === 'noKey' ? '填写 key' : '更换 key'}
+          </button>
+        )}
+      </div>
+      {editingKey && (
+        <DeepseekKey
+          onDone={(status) => {
+            setEditingKey(false)
+            if (status) onStatus(status)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 export function SettingsModal(props: {
   settings: Settings
-  claude?: ClaudeStatus
+  services?: ServiceStatus
   onChange: (patch: Partial<Settings>) => void
   onLibraryChosen: (s: Settings) => void
-  refreshClaude: () => void
+  refreshServices: (fresh?: boolean) => void
+  onServices: (s: ServiceStatus) => void
   onClose: () => void
   toast: (text: string) => void
 }) {
-  const { settings: s, claude } = props
-  const [checking, setChecking] = useState(false)
+  const { settings: s, services, refreshServices } = props
+  const models: ModelOption[] = services?.models ?? []
 
-  const recheck = async () => {
-    setChecking(true)
-    await props.refreshClaude()
-    setChecking(false)
-  }
+  // While something is being installed or signed into elsewhere, keep looking so the row updates by itself.
+  const waiting = !!services && (services.claude.state !== 'ready' || services.openai.state === 'signedOut')
+  useEffect(() => {
+    if (!waiting) return
+    const t = setInterval(() => refreshServices(true), 3000)
+    return () => clearInterval(t)
+  }, [waiting, refreshServices])
+
+  const picker = (label: string, key: 'processModel' | 'chatModel' | 'callModel', use: ModelUse, hint?: string) => (
+    <div className="set-row">
+      <label>{label}</label>
+      <ModelPicker value={pickModel(s[key], models, use)} options={models.filter((m) => use !== 'process' || m.process)} onChange={(v) => props.onChange({ [key]: v })} />
+      {hint && (
+        <span className="faint" style={{ fontSize: 12 }}>
+          {hint}
+        </span>
+      )}
+    </div>
+  )
 
   return (
     <Modal title="设置" onClose={props.onClose}>
       <section className="set-section">
-        <h3>
-          Claude
-          <small>转写、翻译、问答都通过你自己的 Claude Code（Claude 订阅）完成，不需要 API key。</small>
-        </h3>
+        <h3>模型选择</h3>
         <div className="set-rows">
-          <div className="status-line">
-            {!claude ? (
-              <span className="pill">检查中…</span>
-            ) : claude.loggedIn ? (
-              <span className="pill ok">
-                <span className="dot" />
-                已连接{claude.account ? ` · ${claude.account}` : ''}
-              </span>
-            ) : (
-              <span className="pill err">
-                <span className="dot" />
-                {claude.error === 'not-installed' ? '未安装' : '未登录'}
-              </span>
-            )}
-            {claude?.version && <span className="mono faint">Claude Code {claude.version}</span>}
-            <span className="spacer" />
-            <button className="btn sm" onClick={recheck} disabled={checking}>
-              <Icon name="refresh" size={12} />
-              {checking ? '检查中' : '重新检查'}
-            </button>
-          </div>
-          {claude && !claude.path && (
-            <div className="help">
-              <ol>
-                <li>打开「终端」，运行官方安装命令：</li>
-              </ol>
-              <Copyable text={INSTALL} />
-              <ol start={2}>
-                <li>装好后回到这里点「重新检查」，再登录。</li>
-              </ol>
-            </div>
-          )}
-          {claude?.path && !claude.loggedIn && (
-            <div className="help">
-              点下面的按钮会打开「终端」运行 <code>claude auth login</code>，在弹出的浏览器里用你的 Claude 账号（Pro / Max）登录，完成后回到这里。
-              <div style={{ marginTop: 10 }}>
-                <button className="btn primary" onClick={() => api.claudeLogin()}>
-                  <Icon name="external" />
-                  在终端中登录
-                </button>
-              </div>
-            </div>
-          )}
-          {claude?.path && <div className="path" title={claude.path}>{claude.path}</div>}
-          <div className="set-row">
-            <label>处理论文</label>
-            <div className="seg">
-              {['opus', 'sonnet'].map((m) => (
-                <button key={m} className={s.processModel === m ? 'on' : ''} onClick={() => props.onChange({ processModel: m })}>
-                  {m === 'opus' ? 'Opus' : 'Sonnet'}
-                </button>
-              ))}
-            </div>
-            <span className="faint" style={{ fontSize: 12 }}>转写 + 全文翻译，最耗额度</span>
-          </div>
-          <div className="set-row">
-            <label>问答默认</label>
-            <div className="seg">
-              {['opus', 'sonnet', 'haiku'].map((m) => (
-                <button key={m} className={s.chatModel === m ? 'on' : ''} onClick={() => props.onChange({ chatModel: m })}>
-                  {m[0].toUpperCase() + m.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Services services={services} onStatus={props.onServices} />
+          {picker('处理论文', 'processModel', 'process', '转写、翻译和导读，最耗额度')}
+          {picker('问答默认', 'chatModel', 'chat')}
+          {picker('通话模型', 'callModel', 'call')}
         </div>
       </section>
 
@@ -189,22 +298,8 @@ export function SettingsModal(props: {
       </section>
 
       <section className="set-section">
-        <h3>
-          通话服务
-          <small>所有联系人共用。声音用你自己的 Fish Audio 账号。</small>
-        </h3>
+        <h3>声音</h3>
         <div className="set-rows">
-          <div className="set-row">
-            <label>对话模型</label>
-            <div className="seg">
-              {['opus', 'sonnet', 'haiku'].map((m) => (
-                <button key={m} className={s.callModel === m ? 'on' : ''} onClick={() => props.onChange({ callModel: m })}>
-                  {m[0].toUpperCase() + m.slice(1)}
-                </button>
-              ))}
-            </div>
-            <span className="faint" style={{ fontSize: 12 }}>下次通话生效</span>
-          </div>
           <div className="set-row">
             <label>Fish Audio 密钥</label>
             <input className="input" type="password" spellCheck={false} value={s.fishKey} onChange={(e) => props.onChange({ fishKey: e.target.value.trim() })} />

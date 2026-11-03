@@ -3,7 +3,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, write
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CallLine, CallMood, CallState, PaperMeta, PastCall } from '../shared/types'
-import { openConversation, runClaude, type Conversation } from './claude'
+import type { Conversation } from './claude'
+import { modelFor, runAgent, talkTo } from './ai'
 import { listPapers, readMeta } from './library'
 import { keepOnTop, petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
@@ -146,10 +147,9 @@ const transcriptLine = (r: Record) => `${new Date(r.at).toLocaleString('en-GB', 
 
 async function talk(): Promise<Conversation> {
   if (conversation?.alive()) return conversation
-  const s = getSettings()
-  conversation = await openConversation({
+  conversation = await talkTo({
     cwd: dir(),
-    model: s.callModel,
+    model: await modelFor(getSettings().callModel, 'call'),
     systemPrompt: callPrompt({ contact: person(), memory: readMemory(), lastCall: lastCallTail() })
   })
   return conversation
@@ -219,7 +219,7 @@ async function runTurn(content: string, turnGeneration: number, turn: { dropped:
     emit(buffer)
     await delivered
   } catch (e) {
-    update({ notice: `连不上 Claude：${(e as Error).message}` })
+    update({ notice: `连不上模型：${(e as Error).message}` })
   }
 }
 
@@ -448,15 +448,11 @@ export function endCall(): void {
 /** After the call she updates her notes, in the background; a failure only costs this one memory. */
 function rememberCall(call: Record[]): void {
   if (!call.some((r) => r.who === 'you')) return
-  const s = getSettings()
-  runClaude({
-    cwd: dir(),
-    prompt: memoryPrompt(person().name, readMemory(), call.map(transcriptLine).join('\n')),
-    model: s.callModel,
-    tools: ['Write'],
-    sessionId: randomUUID(),
-    writable: true
-  }).catch(() => {})
+  const folder = dir()
+  const prompt = memoryPrompt(person().name, readMemory(), call.map(transcriptLine).join('\n'))
+  modelFor(getSettings().callModel, 'call')
+    .then((model) => runAgent({ cwd: folder, prompt, model, write: true }))
+    .catch(() => {})
 }
 
 export function initCall(hangUp: () => void): void {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Annotation, Block, ClaudeStatus, HighlightColor, PaperDoc, PaperMeta, Settings } from '../../../shared/types'
+import type { Annotation, Block, HighlightColor, PaperDoc, PaperMeta, Settings } from '../../../shared/types'
+import type { ServiceStatus } from '../../../shared/models'
 import { api } from '../api'
 import { caretOffset, rangeToOffsets, selectionText } from '../lib/anchors'
 import { Article } from './Article'
@@ -16,7 +17,7 @@ const TRANSLATE = '把这段翻译成中文，并解释其中不好懂的术语�
 export function Reader(props: {
   paper: PaperMeta
   settings: Settings
-  claude?: ClaudeStatus
+  services?: ServiceStatus
   onSettings: (patch: Partial<Settings>) => void
   onClose: () => void
   onOpenSettings: () => void
@@ -377,7 +378,7 @@ export function Reader(props: {
             draftQuote={draftQuote}
             clearDraftQuote={() => setDraftQuote(undefined)}
             chatModel={settings.chatModel}
-            claudeReady={!!props.claude?.loggedIn}
+            models={props.services?.models ?? []}
             onOpenSettings={props.onOpenSettings}
             onJump={jump}
             onJumpAnnotation={(a) => jump(a.block)}

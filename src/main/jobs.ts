@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PaperMeta } from '../shared/types'
@@ -6,8 +5,9 @@ import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, updateMeta } from './library'
 import { findFolder, loadFolders } from './folders'
 import { glossaryPrompt } from './glossary'
-import { runClaude } from './claude'
-import { guidePrompt, processPrompt, verifyPrompt } from './prompts'
+import { modelFor, runAgent, type Activity } from './ai'
+import { parseModel } from '../shared/models'
+import { guidePrompt, processPrompt, verifyPrompt, type Source } from './prompts'
 import { getSettings } from './settings'
 import { workerCall } from './worker'
 
@@ -39,6 +39,15 @@ function set(id: string, patch: Partial<PaperMeta>): void {
 }
 
 export const pdfUrl = (id: string) => `shiori://paper/${encodeURIComponent(id)}/paper.pdf`
+
+/** Only Claude reads the PDF itself; the others work from its text layer and the page images. */
+export const sourceFor = (model: string): Source => (parseModel(model).provider === 'claude' ? 'pdf' : 'pages')
+
+/** paper.txt, the PDF's text layer; papers processed before it existed get it when first needed. */
+export async function ensurePaperText(id: string): Promise<void> {
+  const file = join(paperDir(id), 'paper.txt')
+  if (!existsSync(file)) writeFileSync(file, await workerCall<string>('text', { url: pdfUrl(id) }))
+}
 
 /** Page count and first-page thumbnail; cheap, done on import. */
 export async function prepare(id: string): Promise<void> {
@@ -94,12 +103,13 @@ async function cropAll(id: string): Promise<string[]> {
 
 async function runJob(id: string, signal: AbortSignal): Promise<void> {
   const dir = paperDir(id)
-  const settings = getSettings()
+  const model = await modelFor(getSettings().processModel, 'process')
+  const source = sourceFor(model)
   set(id, { status: 'processing', stage: '渲染页面', progress: 0.02, error: undefined })
 
   // Start clean: a previous run may have left partial output.
   for (const d of ['doc', 'figures', 'pages']) rmSync(join(dir, d), { recursive: true, force: true })
-  for (const f of ['info.json', 'summary.md']) rmSync(join(dir, f), { force: true })
+  for (const f of ['info.json', 'summary.md', 'paper.txt']) rmSync(join(dir, f), { force: true })
 
   const url = pdfUrl(id)
   const { pages } = await workerCall<{ pages: number }>('info', { url })
@@ -110,33 +120,35 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     const png = await workerCall<Uint8Array>('render', { url, page: p, width: 1100, grid: true })
     writeFileSync(join(dir, 'pages', `p${String(p).padStart(2, '0')}.png`), png)
   }
+  writeFileSync(join(dir, 'paper.txt'), await workerCall<string>('text', { url }))
 
-  const sessionId = randomUUID()
-  set(id, { pages, stage: 'Claude 正在读论文', progress: 0.05, processSession: sessionId, processModel: settings.processModel })
+  set(id, { pages, stage: '正在读论文', progress: 0.05, processSession: undefined, processModel: model })
 
   // Progress: pages read count for the first ~30%, written doc parts for the rest.
   let pagesRead = 0
   let partsWritten = 0
+  const written = new Set<string>()
   const expectedParts = Math.max(3, Math.round(pages / 2.5))
-  const onEvent = (event: any) => {
-    if (event.type !== 'assistant') return
-    for (const c of event.message?.content ?? []) {
-      if (c.type !== 'tool_use') continue
-      const input = c.input ?? {}
-      const file = String(input.file_path ?? '')
-      if (c.name === 'Read' && file.endsWith('paper.pdf')) {
-        const m = String(input.pages ?? '').match(/(\d+)\s*-\s*(\d+)/)
-        pagesRead = Math.min(pages, m ? Math.max(pagesRead, +m[2]) : pages)
-        set(id, { stage: `Claude 正在读论文（${pagesRead}/${pages} 页）`, progress: 0.05 + 0.25 * (pagesRead / pages) })
-      } else if (c.name === 'Read' && /pages\/p\d+\.png$/.test(file)) {
-        set(id, { stage: `正在定位图表（第 ${parseInt(file.match(/p(\d+)\.png$/)![1], 10)} 页）` })
-      } else if (c.name === 'Write' && /doc\/\d+\.md$/.test(file)) {
-        partsWritten++
-        set(id, {
-          stage: `正在转写和翻译（第 ${partsWritten} 部分）`,
-          progress: Math.min(0.85, 0.3 + 0.55 * (partsWritten / expectedParts))
-        })
-      }
+  const readUpTo = (n: number) => {
+    pagesRead = Math.min(pages, Math.max(pagesRead, n))
+    set(id, { stage: `正在读论文（${pagesRead}/${pages} 页）`, progress: 0.05 + 0.25 * (pagesRead / pages) })
+  }
+  const onActivity = (a: Activity) => {
+    if (a.kind === 'read' && /paper\.pdf(#|$)/.test(a.path)) {
+      const m = a.path.match(/#(\d+)\s*-\s*(\d+)/)
+      readUpTo(m ? +m[2] : pages)
+    } else if (a.kind === 'read' && /pages\/p\d+\.png$/.test(a.path)) {
+      const page = parseInt(a.path.match(/p(\d+)\.png$/)![1], 10)
+      // Working from images, the pages are the reading; with the PDF read, they are for the figure boxes.
+      if (source === 'pages' && !partsWritten) readUpTo(page)
+      else set(id, { stage: `正在定位图表（第 ${page} 页）` })
+    } else if (a.kind === 'write' && /doc\/\d+\.md$/.test(a.path) && !written.has(a.path)) {
+      written.add(a.path)
+      partsWritten++
+      set(id, {
+        stage: `正在转写和翻译（第 ${partsWritten} 部分）`,
+        progress: Math.min(0.85, 0.3 + 0.55 * (partsWritten / expectedParts))
+      })
     }
   }
 
@@ -148,30 +160,28 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     set(id, { stage: '（开发模式）使用预置转写稿', progress: 0.85 })
     return finish(id, dir, [])
   }
-  const first = await runClaude({
+  const first = await runAgent({
     cwd: dir,
-    prompt: processPrompt({ pages, glossary }),
-    model: settings.processModel,
-    tools: ['Read', 'Write', 'Edit', 'Glob'],
-    sessionId,
-    writable: true,
-    onEvent,
+    prompt: processPrompt({ pages, glossary, source }),
+    model,
+    write: true,
+    keep: true,
+    onActivity,
     signal
   })
-  if (first.isError) throw new Error(first.text || 'Claude 处理失败')
-  if (!parseDoc(readDocSource(id)).length) throw new Error('Claude 没有写出正文，可以重新处理试试')
+  set(id, { processSession: first.session })
+  if (first.isError) throw new Error(first.text || '处理失败')
+  if (!parseDoc(readDocSource(id)).length) throw new Error('没有写出正文，可以重新处理试试')
 
   set(id, { stage: '正在裁剪图表', progress: 0.9 })
   const figs = await cropAll(id)
   await finish(id, dir, figs, async () => {
-    const check = await runClaude({
+    const check = await runAgent({
       cwd: dir,
       prompt: verifyPrompt(figs),
-      model: settings.processModel,
-      tools: ['Read', 'Edit', 'Glob'],
-      sessionId,
-      resume: true,
-      writable: true,
+      model,
+      write: true,
+      session: first.session,
       signal
     })
     if (!check.isError && !/^\s*NONE\s*$/i.test(check.text)) await cropAll(id)
@@ -182,7 +192,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
 async function finish(id: string, dir: string, figs: string[], verify?: () => Promise<void>): Promise<void> {
   if (!figs.length) figs = await cropAll(id)
   else if (verify) {
-    set(id, { stage: 'Claude 正在检查图表裁剪', progress: 0.93 })
+    set(id, { stage: '正在检查图表裁剪', progress: 0.93 })
     await verify()
   }
   const patch: Partial<PaperMeta> = {}
@@ -220,18 +230,19 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   const suggestion = join(dir, 'suggestion.json')
   rmSync(next, { force: true })
   rmSync(suggestion, { force: true })
-  const result = await runClaude({
+  const model = await modelFor(getSettings().processModel, 'process')
+  const source = sourceFor(model)
+  if (source === 'pages') await ensurePaperText(id)
+  const result = await runAgent({
     cwd: dir,
-    prompt: guidePrompt({ glossary: glossaryPrompt(), folders: loadFolders().map((f) => f.name) }),
-    model: getSettings().processModel,
-    tools: ['Read', 'Glob', 'Write', 'WebSearch'],
-    allowedTools: ['WebSearch'],
-    sessionId: randomUUID(),
-    writable: true,
+    prompt: guidePrompt({ glossary: glossaryPrompt(), folders: loadFolders().map((f) => f.name), source }),
+    model,
+    write: true,
+    search: true,
     signal
   })
-  if (result.isError) throw new Error(result.text || 'Claude 处理失败')
-  if (!existsSync(next)) throw new Error('Claude 没有写出导读')
+  if (result.isError) throw new Error(result.text || '处理失败')
+  if (!existsSync(next)) throw new Error('没有写出导读')
   renameSync(next, join(dir, 'summary.md'))
   applySuggestion(id, suggestion)
 }

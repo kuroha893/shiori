@@ -175,7 +175,7 @@
   font-weight: 600;
 }
 
-.claude-banner {
+.ai-banner {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -189,16 +189,16 @@
   color: hsl(var(--primary));
   transition: background 0.15s;
 }
-.claude-banner:hover {
+.ai-banner:hover {
   background: hsl(var(--primary) / 0.1);
 }
-.claude-banner div {
+.ai-banner div {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: 1;
 }
-.claude-banner b {
+.ai-banner b {
   color: hsl(var(--foreground));
   font-weight: 600;
 }
@@ -938,6 +938,175 @@ input.gloss-en {
   padding: 8px;
   font-size: 12.5px;
 }
+/* model picker (components/ModelPicker.tsx), built on the font picker */
+.mp .fp-current {
+  min-width: 220px;
+}
+.mp .fp-current .who {
+  margin-right: 4px;
+  color: hsl(var(--faint-foreground));
+}
+.mp .fp-current:disabled {
+  color: hsl(var(--faint-foreground));
+}
+.mp-pop {
+  z-index: 70;
+  width: 220px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 6px;
+}
+.mp-pop > div:first-child .fp-head {
+  padding-top: 4px;
+}
+.mp-pop .fp-item {
+  align-items: center;
+}
+.mp-pop .fp-name {
+  font-size: 13.5px;
+}
+.mp.mini .fp-current {
+  min-width: 0;
+  height: 24px;
+  gap: 4px;
+  padding: 0 6px 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 11.5px;
+}
+.mp.mini .fp-current:hover:not(:disabled) {
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+/* services in settings: one row each, with what is missing unfolding underneath */
+.svc {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.svc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+.svc > * + * {
+  border-top: 1px solid hsl(var(--border));
+}
+.svc-name {
+  font-size: 13.5px;
+}
+.svc-kind {
+  font-size: 11.5px;
+}
+.svc-row .spacer {
+  flex: 1;
+}
+.pill.need {
+  color: hsl(var(--faint-foreground));
+}
+.svc-more {
+  padding: 14px 16px 16px 14px;
+  background: hsl(var(--muted) / 0.45);
+}
+.svc-lead {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+.svc-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: hsl(var(--destructive));
+}
+.svc-key {
+  display: flex;
+  gap: 8px;
+}
+.steps {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.steps::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 20px;
+  bottom: 20px;
+  width: 1px;
+  background: hsl(var(--border));
+}
+.step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.step-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  margin-top: 4px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  background: hsl(var(--background));
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--muted-foreground));
+}
+.step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.step-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 27px;
+  font-size: 13px;
+}
+.step-title .spacer {
+  flex: 1;
+}
+.svc-more .cmd {
+  padding: 6px 6px 6px 12px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+.svc-more .cmd .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+}
+.waiting .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
 .fp-foot {
   margin-top: 6px;
   padding: 8px 6px 2px;

@@ -1,6 +1,7 @@
 import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { Annotation, ChatEvent, Folder, GlossaryEntry, PaperMeta, PetState, Settings } from '../shared/types'
+import type { ServiceStatus } from '../shared/models'
 
 const on = <T>(channel: string, fn: (v: T) => void) => {
   const h = (_e: unknown, v: T) => fn(v)
@@ -22,8 +23,10 @@ const api = {
   renameFolder: (id: string, name: string) => ipcRenderer.invoke('folders:rename', id, name),
   deleteFolder: (id: string) => ipcRenderer.invoke('folders:delete', id),
   acceptSuggestion: (id: string) => ipcRenderer.invoke('papers:acceptSuggestion', id),
-  claudeStatus: () => ipcRenderer.invoke('claude:status'),
-  claudeLogin: () => ipcRenderer.invoke('claude:login'),
+  serviceStatus: (fresh?: boolean): Promise<ServiceStatus> => ipcRenderer.invoke('services:status', fresh),
+  serviceLogin: (provider: 'claude' | 'openai') => ipcRenderer.invoke('services:login', provider),
+  openTerminal: () => ipcRenderer.invoke('services:terminal'),
+  setDeepseekKey: (key: string): Promise<{ error?: string; status: ServiceStatus }> => ipcRenderer.invoke('services:deepseekKey', key),
 
   listPapers: () => ipcRenderer.invoke('papers:list'),
   importDialog: () => ipcRenderer.invoke('papers:importDialog'),

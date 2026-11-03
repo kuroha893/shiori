@@ -3,14 +3,14 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { ClaudeStatus } from '../shared/types'
 import { getSettings } from './settings'
 
 const run = promisify(execFile)
 
 /*
- * Everything AI goes through the user's own, unmodified Claude Code CLI, signed in with
- * their Claude subscription. Nothing here talks to the Anthropic API directly.
+ * Claude goes through the user's own, unmodified Claude Code CLI, signed in with their Claude subscription.
+ * DeepSeek runs in the same CLI, pointed at DeepSeek's Anthropic-compatible API with the user's key.
+ * Nothing here talks to an API directly.
  */
 
 const CANDIDATES = [
@@ -44,16 +44,21 @@ export async function findClaude(): Promise<string | undefined> {
 /**
  * A clean environment for the CLI: an ANTHROPIC_API_KEY would take precedence over the
  * subscription login (and bill the API), and variables of a parent Claude Code session
- * must not leak into ours.
+ * must not leak into ours. `extra` points it elsewhere, as for DeepSeek.
  */
-export function claudeEnv(): NodeJS.ProcessEnv {
+export function claudeEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
   for (const [k, v] of Object.entries(process.env)) {
     if (k.startsWith('ANTHROPIC_') || (k.startsWith('CLAUDE') && k !== 'CLAUDE_CONFIG_DIR')) continue
     env[k] = v
   }
+  return { ...withProxy(env), ...extra }
+}
+
+/** The PATH and proxy a CLI started from Finder lacks. */
+export function withProxy(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   env.PATH = [env.PATH, '/usr/local/bin', '/opt/homebrew/bin', join(homedir(), '.local/bin')].filter(Boolean).join(':')
-  // Apps opened from Finder don't inherit the shell's proxy variables, and the CLI ignores the macOS
+  // Apps opened from Finder don't inherit the shell's proxy variables, and the CLIs ignore the macOS
   // system proxy; hand it over explicitly when one is set.
   if (!env.HTTPS_PROXY && !env.https_proxy) {
     const proxy = systemProxy()
@@ -91,6 +96,14 @@ function systemProxy(): { url: string; exceptions?: string } | null {
   return proxyCache
 }
 
+export interface ClaudeStatus {
+  path?: string
+  version?: string
+  loggedIn: boolean
+  account?: string
+  error?: string
+}
+
 export async function claudeStatus(): Promise<ClaudeStatus> {
   const path = await findClaude()
   if (!path) return { loggedIn: false, error: 'not-installed' }
@@ -113,14 +126,15 @@ export async function claudeStatus(): Promise<ClaudeStatus> {
 
 /** Open Terminal with `claude auth login`; the sign-in itself happens in the browser. */
 export async function openLogin(): Promise<void> {
-  const path = (await findClaude()) || 'claude'
-  const cmd = `'${path.replace(/'/g, "'\\''")}' auth login`
-  await run('osascript', [
-    '-e',
-    `tell application "Terminal" to do script "${cmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`,
-    '-e',
-    'tell application "Terminal" to activate'
-  ])
+  await inTerminal(`${quote((await findClaude()) || 'claude')} auth login`)
+}
+
+export const quote = (path: string) => `'${path.replace(/'/g, "'\\''")}'`
+
+/** Open Terminal, running a command in it if one is given. */
+export async function inTerminal(cmd?: string): Promise<void> {
+  const script = cmd ? `tell application "Terminal" to do script "${cmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : 'tell application "Terminal" to reopen'
+  await run('osascript', ['-e', script, '-e', 'tell application "Terminal" to activate'])
 }
 
 export interface RunOptions {
@@ -139,6 +153,7 @@ export interface RunOptions {
   partial?: boolean
   onEvent?: (event: any) => void
   signal?: AbortSignal
+  env?: NodeJS.ProcessEnv
 }
 
 export interface RunResult {
@@ -159,7 +174,7 @@ export interface Conversation {
  * A single CLI process kept open across turns, with no tools. Replies start far sooner than
  * resuming a session for each message, which is what makes a conversation feel spoken.
  */
-export async function openConversation(opts: { cwd: string; model: string; systemPrompt: string }): Promise<Conversation> {
+export async function openConversation(opts: { cwd: string; model: string; systemPrompt: string; env?: NodeJS.ProcessEnv }): Promise<Conversation> {
   const path = await findClaude()
   if (!path) throw new Error('没有找到 Claude Code，请先在设置里安装并登录')
   const child = spawn(
@@ -182,7 +197,7 @@ export async function openConversation(opts: { cwd: string; model: string; syste
       opts.systemPrompt,
       '--no-session-persistence'
     ],
-    { cwd: opts.cwd, env: claudeEnv(), stdio: ['pipe', 'pipe', 'pipe'] }
+    { cwd: opts.cwd, env: claudeEnv(opts.env), stdio: ['pipe', 'pipe', 'pipe'] }
   )
   let open = true
   let out = ''
@@ -258,7 +273,7 @@ export async function runClaude(opts: RunOptions): Promise<RunResult> {
   if (opts.systemPrompt) args.push('--append-system-prompt', opts.systemPrompt)
 
   return new Promise<RunResult>((resolveRun, rejectRun) => {
-    const child = spawn(path, args, { cwd: opts.cwd, env: claudeEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(path, args, { cwd: opts.cwd, env: claudeEnv(opts.env), stdio: ['pipe', 'pipe', 'pipe'] })
     let out = ''
     let err = ''
     let result: RunResult | undefined
