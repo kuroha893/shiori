@@ -2,7 +2,7 @@ import { dialog, ipcMain, nativeImage, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../shared/contacts'
+import { BUILTIN, YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
 import { shippedFile } from './shippedContacts'
 import { closePet, petState } from './pet'
@@ -38,7 +38,7 @@ function readCrop(id: string): AvatarCrop | undefined {
   }
 }
 
-/** persona.md is the only copy of a persona. Yachiyo's first one comes with the app; older ones were kept in contacts.json. */
+/** persona.md is the only copy of a persona. A built-in contact's first one comes with the app; older ones were kept in contacts.json. */
 function readPersona(c: Stored): string {
   const file = personaFile(c.id)
   if (!existsSync(file)) {
@@ -61,19 +61,17 @@ function readStored(): Stored[] {
   }
 }
 
-/** Yachiyo is always there and always first, whatever the file says. */
+/** The built-in contacts are always there and always first, whatever the file says. */
 export function loadContacts(): Contact[] {
   const stored = readStored()
-  const legacy = getSettings().contacts?.[YACHIYO]
-  const yachiyo: Stored = {
-    voice: legacy?.voice ?? '',
-    language: legacy?.language ?? 'ja',
-    ...stored.find((c) => c.id === YACHIYO),
-    id: YACHIYO,
-    name: '八千代'
-  }
-  return [yachiyo, ...stored.filter((c) => c.id !== YACHIYO)].map((c) => {
-    const builtin = c.id === YACHIYO
+  const builtins: Stored[] = BUILTIN.map(({ id, name }) => {
+    // Yachiyo's voice and language were settings before there could be several contacts.
+    const legacy = id === YACHIYO ? getSettings().contacts?.[YACHIYO] : undefined
+    return { voice: legacy?.voice ?? '', language: legacy?.language ?? 'ja', ...stored.find((c) => c.id === id), id, name }
+  })
+  const own = stored.filter((c) => !BUILTIN.some((b) => b.id === c.id))
+  return [...builtins, ...own].map((c) => {
+    const builtin = BUILTIN.some((b) => b.id === c.id)
     const avatar = assetUrl(c.id, 'avatar.png', avatarFile(c.id))
     const portrait = assetUrl(c.id, 'portrait.jpg', portraitFile(c.id))
     const { persona: _old, ...rest } = c
@@ -112,7 +110,7 @@ export function saveContact(draft: ContactDraft): Contact[] {
   }
   if (draft.crop && draft.portrait !== null) writeFileSync(cropFile(id), JSON.stringify(draft.crop))
   const persona = draft.persona.trim()
-  if (before?.builtin && !persona) throw new Error('八千代的人设不能为空')
+  if (before?.builtin && !persona) throw new Error(`${name}的人设不能为空`)
   writeFileSync(personaFile(id), persona)
   const next: Contact = { id, name, persona, voice: draft.voice.trim(), language: draft.language }
   save(before ? list.map((c) => (c.id === id ? next : c)) : [...list, next])

@@ -1,6 +1,13 @@
-// The people you can call. Yachiyo ships with the app; the rest are added by the owner.
+// The people you can call. Shiori and Yachiyo ship with the app; the rest are added by the owner.
 
+export const SHIORI = 'shiori'
 export const YACHIYO = 'yachiyo'
+
+/** The contacts that ship with the app, in the order they are listed, ahead of the owner's own. */
+export const BUILTIN = [
+  { id: SHIORI, name: '詩織' },
+  { id: YACHIYO, name: '八千代' }
+]
 
 export type CallLanguage = 'ja' | 'zh'
 
