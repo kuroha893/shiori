@@ -13,7 +13,7 @@ import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
 import { closePet, initPet, syncPet } from './pet'
-import { endCall, initCall, placeCall, startCall, watchPaper } from './call'
+import { checkFishKey, endCall, initCall, placeCall, startCall, watchPaper } from './call'
 import { contactAsset, initContacts } from './contacts'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
@@ -129,6 +129,10 @@ function registerIpc(): void {
   ipcMain.handle('services:status', (_e, fresh?: boolean) => serviceStatus(fresh))
   ipcMain.handle('services:login', (_e, provider: 'claude' | 'openai') => (provider === 'openai' ? openCodexLogin() : openLogin()))
   ipcMain.handle('services:terminal', () => inTerminal())
+  ipcMain.handle('voice:fishKey', async (_e, key: string) => {
+    const error = await checkFishKey(key.trim())
+    return error ? { error } : { settings: saveSettings({ fishKey: key.trim() }) }
+  })
   ipcMain.handle('services:deepseekKey', async (_e, key: string) => {
     const clean = key.trim()
     const error = clean ? await checkDeepseekKey(clean) : undefined

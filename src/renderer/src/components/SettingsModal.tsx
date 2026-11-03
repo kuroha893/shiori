@@ -1,122 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Settings } from '../../../shared/types'
 import { pickModel, type ModelOption, type ModelUse, type ServiceStatus } from '../../../shared/models'
 import { api } from '../api'
-import { Icon } from './Icon'
 import { Modal, themeOptions } from './Chrome'
 import { ContactsList } from './ContactsList'
 import { GlossaryList } from './GlossaryList'
 import { FontPicker } from './FontPicker'
 import { ModelPicker } from './ModelPicker'
-
-const INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash'
-const CHATGPT_DOWNLOAD = 'https://chatgpt.com/download'
-
-function Copyable({ text }: { text: string }) {
-  const [done, setDone] = useState(false)
-  return (
-    <div className="cmd">
-      <code>{text}</code>
-      <button
-        className="icon-btn"
-        title="复制"
-        onClick={() => {
-          navigator.clipboard.writeText(text)
-          setDone(true)
-          setTimeout(() => setDone(false), 1500)
-        }}
-      >
-        <Icon name={done ? 'check' : 'copy'} size={14} />
-      </button>
-    </div>
-  )
-}
-
-const Pill = ({ ok, children }: { ok?: boolean; children: React.ReactNode }) => (
-  <span className={`pill ${ok ? 'ok' : 'need'}`}>
-    <span className="dot" />
-    {children}
-  </span>
-)
+import { CHATGPT_DOWNLOAD, installClaudeCode, KeyInput, Pill, saveDeepseekKey, Steps, useServicePolling, Waiting } from './ServiceSetup'
 
 /** Claude and DeepSeek both run in Claude Code, so it unfolds under the Claude row until it is installed. */
-function InstallClaudeCode() {
-  return (
-    <div className="svc-more">
-      <p className="svc-lead">Claude 和 DeepSeek 都通过 Claude Code 运行，装一次就好。</p>
-      <ol className="steps">
-        <li className="step">
-          <span className="step-num">1</span>
-          <div className="step-body">
-            <div className="step-title">
-              打开「终端」
-              <span className="spacer" />
-              <button className="btn sm" onClick={() => api.openTerminal()}>
-                <Icon name="terminal" size={13} />
-                打开终端
-              </button>
-            </div>
-          </div>
-        </li>
-        <li className="step">
-          <span className="step-num">2</span>
-          <div className="step-body">
-            <div className="step-title">粘贴这行命令，回车</div>
-            <Copyable text={INSTALL} />
-          </div>
-        </li>
-        <li className="step">
-          <span className="step-num">3</span>
-          <div className="step-body">
-            <div className="step-title">
-              <span className="waiting">
-                <span className="dot" />
-                装好后这里会自动检测到
-              </span>
-            </div>
-          </div>
-        </li>
-      </ol>
-    </div>
-  )
-}
-
-function DeepseekKey({ onDone }: { onDone: (status?: ServiceStatus) => void }) {
-  const [key, setKey] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string>()
-  const save = async () => {
-    setBusy(true)
-    setError(undefined)
-    const r = await api.setDeepseekKey(key)
-    setBusy(false)
-    if (r.error) setError(r.error)
-    else onDone(r.status)
-  }
-  return (
-    <div className="svc-more">
-      <div className="svc-key">
-        <input
-          className="input"
-          type="password"
-          spellCheck={false}
-          autoFocus
-          placeholder="sk-…"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !busy && save()}
-        />
-        <button className="btn primary" disabled={busy} onClick={save}>
-          {busy ? '检查中' : '保存'}
-        </button>
-        <button className="btn ghost" onClick={() => onDone()}>
-          取消
-        </button>
-      </div>
-      {error && <p className="svc-error">{error}</p>}
-    </div>
-  )
-}
+const InstallClaudeCode = () => (
+  <div className="svc-more">
+    <p className="svc-lead">Claude 和 DeepSeek 都通过 Claude Code 运行，装一次就好。</p>
+    <Steps steps={installClaudeCode({ title: <Waiting>装好后这里会自动检测到</Waiting> })} />
+  </div>
+)
 
 function Services({ services, onStatus }: { services?: ServiceStatus; onStatus: (s: ServiceStatus) => void }) {
   const [editingKey, setEditingKey] = useState(false)
@@ -176,12 +75,16 @@ function Services({ services, onStatus }: { services?: ServiceStatus; onStatus: 
         )}
       </div>
       {editingKey && (
-        <DeepseekKey
-          onDone={(status) => {
-            setEditingKey(false)
-            if (status) onStatus(status)
-          }}
-        />
+        <div className="svc-more">
+          <KeyInput
+            placeholder="sk-…"
+            save={saveDeepseekKey((status) => {
+              setEditingKey(false)
+              onStatus(status)
+            })}
+            onCancel={() => setEditingKey(false)}
+          />
+        </div>
       )}
     </div>
   )
@@ -200,13 +103,7 @@ export function SettingsModal(props: {
   const { settings: s, services, refreshServices } = props
   const models: ModelOption[] = services?.models ?? []
 
-  // While something is being installed or signed into elsewhere, keep looking so the row updates by itself.
-  const waiting = !!services && (services.claude.state !== 'ready' || services.openai.state === 'signedOut')
-  useEffect(() => {
-    if (!waiting) return
-    const t = setInterval(() => refreshServices(true), 3000)
-    return () => clearInterval(t)
-  }, [waiting, refreshServices])
+  useServicePolling(services, refreshServices)
 
   const picker = (label: string, key: 'processModel' | 'chatModel' | 'callModel', use: ModelUse, hint?: string) => (
     <div className="set-row">

@@ -2,8 +2,8 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Shiori is a paper reader for macOS. Drop in a PDF or an arXiv link, and Claude transcribes and translates the whole
-paper in the background. It comes back as a typeset Chinese–English article you can read, annotate and ask
+Shiori is a paper reader for macOS. Drop in a PDF or an arXiv link, and the AI you connect (Claude, ChatGPT or
+DeepSeek) transcribes and translates the whole paper in the background. It comes back as a typeset Chinese–English article you can read, annotate and ask
 questions about.
 
 ![Shiori reading a paper](docs/reader.png)
@@ -19,18 +19,21 @@ questions about.
 - **Original page** – every paragraph links to its page in the PDF.
 - **Highlights and notes** – four highlight colours and margin notes, plus a block-editor note for each paper with
   tables, formulas and images. Both export as Markdown.
-- **Ask Claude** – select any passage to have it explained or translated, or chat about the paper. Each paper
+- **Ask about it** – select any passage to have it explained or translated, or chat about the paper. Each paper
   keeps its own conversation.
+- **Your choice of AI** – Claude or ChatGPT through your own subscription, or DeepSeek with an API key. Processing,
+  questions and calls can each use a different model.
 - **Library** – arXiv import, reading progress, hearts for the papers you like, research directions to file them
-  under with a suggestion from Claude, and venue tags with their CCF rank.
+  under with a suggested one for each paper, and venue tags with their CCF rank.
 - **Contacts** – keep a favourite character on the line while you read. They chat with you by voice, with Chinese
   subtitles, and tell you when a paper is ready. Personality, picture and voice are all yours to set. Voices need
   your own Fish Audio key.
 - **Glossary** – your preferred translations of terms, used for every paper.
 - **Themes and fonts** – light, dark and sepia; any installed font for the interface.
 
-One contact comes built in: Yachiyo Runami from *Cosmic Princess Kaguya!*. Her pictures are non-commercial fan art;
-the character belongs to its rights holders.
+Two contacts come with the app, and are yours to change or delete like any other: Hayama Shiori, Shiori's own
+character, and Yachiyo Runami from *Cosmic Princess Kaguya!*. Yachiyo's pictures are non-commercial fan art; the
+character belongs to its rights holders.
 
 ## Screenshots
 
@@ -54,7 +57,11 @@ The call opened up, with the record of past calls:
 
 - macOS on Apple silicon
 - Node.js 20.19+ or 22.12+
-- [Claude Code](https://claude.com/claude-code), signed in with a Claude account
+- One AI service, any of:
+  - [Claude Code](https://claude.com/claude-code), signed in with a Claude account
+  - the [ChatGPT desktop app](https://chatgpt.com/download) or the Codex CLI, signed in with a ChatGPT account
+  - Claude Code with a [DeepSeek](https://platform.deepseek.com) API key, no Claude account needed
+- Optional: a [Fish Audio](https://fish.audio) API key, for the contacts' voices
 
 ## Getting started
 
@@ -73,10 +80,11 @@ npm run pack
 
 The app is written to `dist/mac-arm64/Shiori.app`.
 
-On first launch, open **Settings → Claude** to check that Claude Code is found and signed in. Papers are stored in
-`~/Documents/Shiori`, one folder per paper.
+On first launch, a welcome page walks you through connecting an AI service and, if you like, Fish Audio. Both can be
+changed later in **Settings**. Papers are stored in `~/Documents/Shiori`, one folder per paper.
 
 ## Built with
 
-Electron, React, pdf.js, KaTeX, markdown-it and Tiptap. Voices by Fish Audio. Fonts: Geist, Inter, Space Grotesk,
+Electron, React, pdf.js, KaTeX, markdown-it and Tiptap. AI through Claude Code and Codex, voices by Fish Audio, service
+marks from LobeHub Icons (MIT). Fonts: Geist, Inter, Space Grotesk,
 IBM Plex, Manrope and JetBrains Mono (SIL Open Font License).

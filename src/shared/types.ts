@@ -169,6 +169,8 @@ export interface Settings {
   petPosition?: { x: number; y: number }
   petScale?: number
   view: 'zh' | 'en' | 'both'
+  /** Whether the welcome page has been through, or skipped */
+  welcomed?: boolean
 }
 
 export interface PetState {

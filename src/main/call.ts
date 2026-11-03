@@ -157,12 +157,25 @@ async function talk(): Promise<Conversation> {
   return conversation
 }
 
+const FISH = process.env.FISH_AUDIO_URL ?? 'https://api.fish.audio'
+
+/** Ask Fish Audio whether a key is good, by reading its balance, which costs nothing. */
+export async function checkFishKey(key: string): Promise<string | undefined> {
+  try {
+    const res = await net.fetch(`${FISH}/wallet/self/api-credit`, { headers: { Authorization: `Bearer ${key}` } })
+    if (res.ok) return undefined
+    return res.status === 401 ? '这个 key 不对' : `Fish Audio 返回 ${res.status}`
+  } catch (e) {
+    return `连不上 Fish Audio（${(e as Error).message}）`
+  }
+}
+
 async function synthesize(text: string): Promise<{ audio: Uint8Array; type: string } | undefined> {
   const s = getSettings()
   const { voice, language } = person()
   if (!s.fishKey || !voice) return undefined
   try {
-    const res = await net.fetch(`${process.env.FISH_AUDIO_URL ?? 'https://api.fish.audio'}/v1/tts`, {
+    const res = await net.fetch(`${FISH}/v1/tts`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${s.fishKey}`, 'Content-Type': 'application/json', model: s.fishModel },
       body: JSON.stringify({ text, reference_id: voice, format: 'mp3', latency: 'balanced', language })

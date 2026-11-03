@@ -5,6 +5,7 @@ import { api } from '../api'
 import { Library } from './Library'
 import { Reader } from './Reader'
 import { SettingsModal } from './SettingsModal'
+import { Welcome } from './Welcome'
 import { applyFonts } from '../lib/fonts'
 
 export type Toast = (text: string) => void
@@ -68,6 +69,22 @@ export function App() {
 
   if (!settings) return null
   const paper = papers.find((p) => p.id === open)
+
+  if (!settings.welcomed)
+    return (
+      <Welcome
+        settings={settings}
+        services={services}
+        refreshServices={refreshServices}
+        onServices={setServices}
+        onSettings={setSettings}
+        onLibraryChosen={(s) => {
+          setSettings(s)
+          api.listPapers().then(setPapers)
+        }}
+        onDone={() => updateSettings({ welcomed: true })}
+      />
+    )
 
   return (
     <>

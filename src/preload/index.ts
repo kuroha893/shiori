@@ -26,6 +26,7 @@ const api = {
   serviceStatus: (fresh?: boolean): Promise<ServiceStatus> => ipcRenderer.invoke('services:status', fresh),
   serviceLogin: (provider: 'claude' | 'openai') => ipcRenderer.invoke('services:login', provider),
   openTerminal: () => ipcRenderer.invoke('services:terminal'),
+  setFishKey: (key: string): Promise<{ error?: string; settings?: Settings }> => ipcRenderer.invoke('voice:fishKey', key),
   setDeepseekKey: (key: string): Promise<{ error?: string; status: ServiceStatus }> => ipcRenderer.invoke('services:deepseekKey', key),
 
   listPapers: () => ipcRenderer.invoke('papers:list'),
