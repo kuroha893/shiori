@@ -32,8 +32,8 @@ export function useContacts(): Contact[] {
   return contacts
 }
 
-/** A built-in contact's picture wears a thin ring in its own hue. */
-export const ringStyle = (c: Pick<Contact, 'builtin' | 'hue'>) => (c.builtin && c.hue !== undefined ? ({ '--hue': c.hue } as React.CSSProperties) : undefined)
+/** A contact's picture wears a thin ring in its own hue. */
+export const ringStyle = (c: Pick<Contact, 'hue'>) => (c.hue !== undefined ? ({ '--hue': c.hue } as React.CSSProperties) : undefined)
 
 /** A contact's picture, or the first letter of the name without one. */
 export function ContactAvatar({ contact, src }: { contact: Pick<Contact, 'name' | 'avatar'>; src?: string | null }) {

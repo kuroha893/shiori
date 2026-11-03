@@ -304,7 +304,7 @@ button {
   border-color: var(--call-green);
   box-shadow: 0 0 0 2px var(--call-green), 0 2px 10px rgb(0 0 0 / 0.22);
 }
-/* Built-in contacts: a thin ring in their picture's hue, a hairline apart from it */
+/* Every contact's picture: a thin ring in its own hue, a hairline apart from it */
 .ringed {
   --ring: hsl(var(--hue) 60% 58%);
 }

@@ -9,7 +9,7 @@ import { listPapers, readMeta } from './library'
 import { keepOnTop, petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
 import { callPrompt, memoryPrompt } from './callPrompt'
-import { YACHIYO } from '../shared/contacts'
+import { YACHIYO, type Contact } from '../shared/contacts'
 import { contactAccent, contactDir, getContact } from './contacts'
 
 /* A call with a contact: you type, they answer aloud with subtitles. It stays open for hours, mostly in silence. */
@@ -69,7 +69,9 @@ const known = new Map<string, PaperMeta>()
 
 let contact = YACHIYO
 const dir = (id = contact) => contactDir(id)
-const person = () => getContact(contact) ?? getContact(YACHIYO)!
+/** Who is on the call; kept from when it started, in case they are deleted in the meantime. */
+let current: Contact | undefined
+const person = () => (current = getContact(contact) ?? current)!
 const memoryFile = () => join(dir(), 'memory.md')
 const readMemory = () => (existsSync(memoryFile()) ? readFileSync(memoryFile(), 'utf8') : '')
 

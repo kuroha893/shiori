@@ -59,6 +59,7 @@ const api = {
   listContacts: (): Promise<Contact[]> => ipcRenderer.invoke('contacts:list'),
   saveContact: (draft: ContactDraft): Promise<Contact[]> => ipcRenderer.invoke('contacts:save', draft),
   deleteContact: (id: string): Promise<Contact[]> => ipcRenderer.invoke('contacts:delete', id),
+  contactRomaji: (name: string): Promise<string> => ipcRenderer.invoke('contacts:romaji', name),
   pickPortrait: (): Promise<string | undefined> => ipcRenderer.invoke('contacts:pickPortrait'),
   contactPortrait: (id: string): Promise<string | undefined> => ipcRenderer.invoke('contacts:portrait', id),
   onContactsChanged: (fn: (list: Contact[]) => void) => on('contacts:changed', fn),

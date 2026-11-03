@@ -581,21 +581,6 @@ input.bare::placeholder {
   gap: 1px;
   min-width: 0;
 }
-.set-contact-name {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.set-contact-tag {
-  display: inline-flex;
-  align-items: center;
-  height: 17px;
-  padding: 0 6px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 5px;
-  font-size: 10.5px;
-  color: hsl(var(--muted-foreground));
-}
 .set-contact-romaji {
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -692,6 +677,62 @@ input.bare::placeholder {
   align-items: center;
   gap: 8px;
   padding-top: 2px;
+}
+.set-contact-romaji-edit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+}
+.set-contact-romaji-edit .input {
+  flex: 1;
+}
+.btn.ghost.danger:hover {
+  background: hsl(var(--destructive) / 0.08);
+}
+/* Deleting a contact: the confirmation opens where the buttons were */
+.danger-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid hsl(var(--destructive) / 0.35);
+  border-radius: var(--radius);
+  background: hsl(var(--destructive) / 0.05);
+}
+.danger-box h5 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.danger-box p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: hsl(var(--muted-foreground));
+}
+.danger-box p b {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+.danger-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.danger-row .input {
+  flex: 1;
+}
+.danger-row .spacer {
+  flex: 1;
+}
+.btn.destroy {
+  border-color: hsl(var(--destructive));
+  background: hsl(var(--destructive));
+  color: #fff;
+}
+.btn.destroy:disabled {
+  opacity: 0.4;
 }
 .set-contact-error {
   margin: 0;

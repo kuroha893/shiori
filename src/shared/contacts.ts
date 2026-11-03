@@ -1,12 +1,12 @@
-// The people you can call. Shiori and Yachiyo ship with the app; the rest are added by the owner.
+// The people you can call. Shiori and Yachiyo come with the app; from then on every contact is the owner's own.
 
 export const SHIORI = 'shiori'
 export const YACHIYO = 'yachiyo'
 
-/** The contacts that ship with the app, in the order they are listed, ahead of the owner's own. */
+/** The contacts that come with the app, in the order a library receives them; `formerly` are the names they once shipped under. */
 export const BUILTIN = [
-  { id: SHIORI, name: '叶山 诗织', romaji: 'Hayama Shiori' },
-  { id: YACHIYO, name: '月见 八千代', romaji: 'Runami Yachiyo' }
+  { id: SHIORI, name: '叶山 诗织', romaji: 'Hayama Shiori', formerly: ['詩織'] },
+  { id: YACHIYO, name: '月见 八千代', romaji: 'Runami Yachiyo', formerly: ['八千代'] }
 ]
 
 export type CallLanguage = 'ja' | 'zh'
@@ -32,15 +32,19 @@ export interface Contact {
   /** Fish Audio voice id */
   voice: string
   language: CallLanguage
-  builtin?: boolean
-  /** Built-in contacts only: the reading of their name, and the hue of their picture for the ring around it */
+  /** How the name is read, in Latin letters; filled in by the model when left empty */
   romaji?: string
+  /** The hue of the ring around their picture: the picture's own, or one from the name */
   hue?: number
+  /** How many calls they have had, and whether they keep notes about the owner */
+  calls?: number
+  remembers?: boolean
 }
 
 export interface ContactDraft {
   id?: string
   name: string
+  romaji?: string
   persona: string
   voice: string
   language: CallLanguage

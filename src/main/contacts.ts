@@ -1,5 +1,5 @@
 import { dialog, ipcMain, nativeImage, shell } from 'electron'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { BUILTIN, YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../shared/contacts'
@@ -7,47 +7,48 @@ import { root } from './library'
 import { shippedFile } from './shippedContacts'
 import { closePet, petState } from './pet'
 import { getSettings } from './settings'
+import { modelFor, runAgent } from './ai'
 
 /*
  * Contacts live in <library>/contacts.json. Each has a folder <library>/<id> with who they are now: persona.md,
- * picture, notes and call records. A contact that ships with the app also has resources/contacts/<id>, how they
- * started; anything the library doesn't have yet is looked up there.
+ * picture, notes and call records. Every contact is the owner's to change or delete, the ones that come with the
+ * app included: a library receives each of those once, as a copy of resources/contacts/<id>, and from then on they
+ * are its own. Only the desktop character (pet/) stays with the app, as part of it.
  */
 
-type Stored = Pick<Contact, 'id' | 'name' | 'voice' | 'language'> & { persona?: string }
+type Stored = Pick<Contact, 'id' | 'name' | 'voice' | 'language' | 'romaji'> & { persona?: string }
 
 const file = () => join(root(), 'contacts.json')
+/** Which of the app's contacts this library has received, so one the owner deleted stays deleted. */
+const receivedFile = () => join(root(), 'shipped-contacts.json')
 export const contactDir = (id: string) => join(root(), id)
 const avatarFile = (id: string) => join(contactDir(id), 'avatar.png')
 const portraitFile = (id: string) => join(contactDir(id), 'portrait.jpg')
 const cropFile = (id: string) => join(contactDir(id), 'avatar-crop.json')
 const personaFile = (id: string) => join(contactDir(id), 'persona.md')
 
-/** A file's address: the library's copy, marked by when it changed so a new one shows at once, or the shipped one. */
+let changed: (list: Contact[]) => void = () => {}
+
+/** A file's address, marked by when it changed so a new one shows at once. */
 function assetUrl(id: string, name: string, own: string): string | undefined {
-  const url = `shiori://contact/${id}/${name}`
-  if (existsSync(own)) return `${url}?v=${statSync(own).mtimeMs}`
-  return existsSync(shippedFile(id, name)) ? url : undefined
+  return existsSync(own) ? `shiori://contact/${id}/${name}?v=${statSync(own).mtimeMs}` : undefined
 }
 
 function readCrop(id: string): AvatarCrop | undefined {
   try {
-    return JSON.parse(readFileSync(existsSync(cropFile(id)) ? cropFile(id) : shippedFile(id, 'avatar-crop.json'), 'utf8'))
+    return JSON.parse(readFileSync(cropFile(id), 'utf8'))
   } catch {
     return undefined
   }
 }
 
-/** persona.md is the only copy of a persona. A built-in contact's first one comes with the app; older ones were kept in contacts.json. */
+/** persona.md is the only copy of a persona; older ones were kept in contacts.json. */
 function readPersona(c: Stored): string {
   const file = personaFile(c.id)
   if (!existsSync(file)) {
-    const first = shippedFile(c.id, 'persona.md')
-    const shipped = existsSync(first)
-    if (!c.persona && !shipped) return ''
+    if (!c.persona) return ''
     mkdirSync(contactDir(c.id), { recursive: true })
-    if (shipped) copyFileSync(first, file)
-    else writeFileSync(file, c.persona!)
+    writeFileSync(file, c.persona)
   }
   return readFileSync(file, 'utf8')
 }
@@ -61,35 +62,108 @@ function readStored(): Stored[] {
   }
 }
 
-/** The built-in contacts are always there and always first, whatever the file says. */
-export function loadContacts(): Contact[] {
-  const stored = readStored()
-  const builtins: Stored[] = BUILTIN.map(({ id, name }) => {
+const writeStored = (list: Stored[]) =>
+  writeFileSync(file(), JSON.stringify(list.map(({ id, name, voice, language, romaji }) => ({ id, name, voice, language, ...(romaji ? { romaji } : {}) })), null, 2))
+
+/** The voice and language an app's contact starts with. */
+function shippedVoice(id: string): Partial<Pick<Stored, 'voice' | 'language'>> {
+  try {
+    return JSON.parse(readFileSync(shippedFile(id, 'contact.json'), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+/** Copy an app's contact's files where the library lacks them. */
+function copyShipped(id: string): void {
+  for (const name of ['persona.md', 'avatar.png', 'portrait.jpg', 'avatar-crop.json']) {
+    const shipped = shippedFile(id, name)
+    const own = join(contactDir(id), name)
+    if (!existsSync(shipped) || existsSync(own)) continue
+    mkdirSync(contactDir(id), { recursive: true })
+    copyFileSync(shipped, own)
+  }
+}
+
+/**
+ * Hand the library the app's contacts it hasn't received yet: their files, copied where the library lacks them,
+ * and a place in contacts.json ahead of the rest. A library from before the record counts the ones it already
+ * lists as received; it used to read their pictures from the app, so it gets its own copies of what it lacks,
+ * and their names and readings as they are now.
+ */
+function receive(stored: Stored[]): Stored[] {
+  let got: string[] | undefined
+  try {
+    got = JSON.parse(readFileSync(receivedFile(), 'utf8'))
+  } catch {
+    /* none yet */
+  }
+  const first = !got
+  got ??= BUILTIN.filter((b) => stored.some((c) => c.id === b.id)).map((b) => b.id)
+  const fresh = BUILTIN.filter((b) => !got!.includes(b.id))
+  if (!first && !fresh.length) return stored
+  let list = stored
+  if (first) {
+    list = list.map((c) => {
+      const b = BUILTIN.find((x) => x.id === c.id)
+      if (!b) return c
+      copyShipped(b.id)
+      return b.formerly.includes(c.name) ? { ...c, name: b.name, romaji: c.romaji || b.romaji } : c
+    })
+  }
+  const arrivals: Stored[] = fresh.map((b) => {
+    copyShipped(b.id)
     // Yachiyo's voice and language were settings before there could be several contacts.
-    const legacy = id === YACHIYO ? getSettings().contacts?.[YACHIYO] : undefined
-    return { voice: legacy?.voice ?? '', language: legacy?.language ?? 'ja', ...stored.find((c) => c.id === id), id, name }
+    const legacy = b.id === YACHIYO ? getSettings().contacts?.[YACHIYO] : undefined
+    const start = shippedVoice(b.id)
+    return { id: b.id, name: b.name, romaji: b.romaji, voice: legacy?.voice ?? start.voice ?? '', language: legacy?.language ?? start.language ?? 'ja' }
   })
-  const own = stored.filter((c) => !BUILTIN.some((b) => b.id === c.id))
-  return [...builtins, ...own].map((c) => {
-    const shipped = BUILTIN.find((b) => b.id === c.id)
-    const avatar = assetUrl(c.id, 'avatar.png', avatarFile(c.id))
-    const portrait = assetUrl(c.id, 'portrait.jpg', portraitFile(c.id))
+  list = [...arrivals, ...list]
+  mkdirSync(root(), { recursive: true })
+  writeStored(list)
+  writeFileSync(receivedFile(), JSON.stringify([...got, ...fresh.map((b) => b.id)]))
+  return list
+}
+
+const callCount = (id: string) => {
+  try {
+    return readdirSync(join(contactDir(id), 'calls')).filter((f) => f.endsWith('.jsonl')).length
+  } catch {
+    return 0
+  }
+}
+
+const remembers = (id: string) => {
+  try {
+    return readFileSync(join(contactDir(id), 'memory.md'), 'utf8').trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+export function loadContacts(): Contact[] {
+  return receive(readStored()).map((c) => {
     const { persona: _old, ...rest } = c
-    const marks = shipped ? { builtin: true, romaji: shipped.romaji, hue: pictureHue(c.id) } : {}
-    return { ...rest, persona: readPersona(c), avatar, portrait, crop: readCrop(c.id), ...marks }
+    return {
+      ...rest,
+      persona: readPersona(c),
+      avatar: assetUrl(c.id, 'avatar.png', avatarFile(c.id)),
+      portrait: assetUrl(c.id, 'portrait.jpg', portraitFile(c.id)),
+      crop: readCrop(c.id),
+      hue: pictureHue(c.id) ?? nameHue(c.name),
+      calls: callCount(c.id),
+      remembers: remembers(c.id)
+    }
   })
 }
 
 export const getContact = (id: string) => loadContacts().find((c) => c.id === id)
 
-const save = (list: Contact[]) =>
-  writeFileSync(file(), JSON.stringify(list.map(({ id, name, voice, language }) => ({ id, name, voice, language })), null, 2))
-
 export function saveContact(draft: ContactDraft): Contact[] {
   const list = loadContacts()
   const before = list.find((c) => c.id === draft.id)
   if (draft.id && !before) throw new Error('这个联系人已经不在了')
-  const name = before?.builtin ? before.name : draft.name.trim()
+  const name = draft.name.trim()
   if (!name) throw new Error('名字不能为空')
   if (list.some((c) => c.name === name && c.id !== draft.id)) throw new Error(`已经有「${name}」了`)
   // The prefix keeps a contact's folder from ever colliding with "papers" and the like.
@@ -111,20 +185,53 @@ export function saveContact(draft: ContactDraft): Contact[] {
   }
   if (draft.crop && draft.portrait !== null) writeFileSync(cropFile(id), JSON.stringify(draft.crop))
   const persona = draft.persona.trim()
-  if (before?.builtin && !persona) throw new Error(`${name}的人设不能为空`)
   writeFileSync(personaFile(id), persona)
-  const next: Contact = { id, name, persona, voice: draft.voice.trim(), language: draft.language }
-  save(before ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
+  // A reading left as it was belongs to the old name, so a renamed contact gets a new one.
+  let romaji = (draft.romaji ?? '').trim()
+  if (before && before.name !== name && romaji === (before.romaji ?? '')) romaji = ''
+  const next: Stored = { id, name, voice: draft.voice.trim(), language: draft.language, romaji: romaji || undefined }
+  writeStored(before ? readStored().map((c) => (c.id === id ? next : c)) : [...readStored(), next])
+  if (!romaji) fillRomaji(id, name)
   return loadContacts()
+}
+
+/** How a name is read, in Latin letters, asked of the model the owner chats with. */
+export async function romajiFor(name: string): Promise<string> {
+  const model = await modelFor(getSettings().chatModel, 'chat')
+  const r = await runAgent({
+    cwd: root(),
+    model,
+    write: false,
+    prompt: `How is this name read, written in Latin letters the way it would appear on a name card? Japanese names in Hepburn, in the order written (葉山 詩織 → Hayama Shiori). Chinese names in pinyin without tone marks, family name first (李 小林 → Li Xiaolin). A name already in Latin letters stays as it is.
+
+Name: ${name}
+
+Reply with the reading only.`
+  })
+  const line = r.text.trim().split('\n')[0].replace(/^["'“「『]+|["'”」』.。]+$/g, '').trim()
+  if (r.isError || !line || line.length > 60 || !/^[\p{Script=Latin}\s'’.\-]+$/u.test(line)) throw new Error('没能生成读音')
+  return line
+}
+
+/** In the background; a contact renamed or given a reading by hand meanwhile keeps theirs. */
+function fillRomaji(id: string, name: string): void {
+  romajiFor(name)
+    .then((romaji) => {
+      const stored = readStored()
+      const c = stored.find((s) => s.id === id)
+      if (!c || c.name !== name || c.romaji) return
+      c.romaji = romaji
+      writeStored(stored)
+      changed(loadContacts())
+    })
+    .catch(() => {})
 }
 
 /** Her picture, notes and call records go to the Trash, so a slip can be undone. */
 async function deleteContact(id: string): Promise<Contact[]> {
-  const list = loadContacts()
-  const target = list.find((c) => c.id === id)
-  if (!target || target.builtin) return list
+  if (!readStored().some((c) => c.id === id)) return loadContacts()
   if (petState().contact === id) closePet()
-  save(list.filter((c) => c.id !== id))
+  writeStored(readStored().filter((c) => c.id !== id))
   if (existsSync(contactDir(id))) await shell.trashItem(contactDir(id))
   return loadContacts()
 }
@@ -141,19 +248,12 @@ async function pickPortrait(): Promise<string | undefined> {
 
 const hsl = (h: number, s: number, l: number) => `hsl(${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`
 
-/** The avatar file in use, the library's or the shipped one. */
-function avatarPath(id: string): string | undefined {
-  if (existsSync(avatarFile(id))) return avatarFile(id)
-  const shipped = shippedFile(id, 'avatar.png')
-  return existsSync(shipped) ? shipped : undefined
-}
-
 const hues = new Map<string, number | undefined>()
 
 /** The hue most of a contact's picture leans to; near-grey and near-black pixels have no say. Kept until the picture changes. */
 function pictureHue(id: string): number | undefined {
-  const path = avatarPath(id)
-  if (!path) return undefined
+  const path = avatarFile(id)
+  if (!existsSync(path)) return undefined
   const key = `${path}:${statSync(path).mtimeMs}`
   if (!hues.has(key)) hues.set(key, hueOf(path))
   return hues.get(key)
@@ -181,23 +281,24 @@ function hueOf(path: string): number | undefined {
   return best * 10 + 5
 }
 
-/** The color of a contact's call: their picture's hue at a lightness that reads on the black capsule; with no color, the name decides. */
+/** A hue for someone without a colorful picture, the same every time for the same name. */
+const nameHue = (name: string) => [...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)
+
+/** The color of a contact's call: their hue at a lightness that reads on the black capsule. */
 export function contactAccent(contact: Contact): string {
   const hue = pictureHue(contact.id)
-  if (hue !== undefined) return hsl(hue, 0.62, 0.8)
-  const hash = [...contact.name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)
-  return hsl(hash, 0.5, 0.8)
+  return hue !== undefined ? hsl(hue, 0.62, 0.8) : hsl(nameHue(contact.name), 0.5, 0.8)
 }
 
 /**
- * What shiori://contact/<id>/<path> may serve: the picture, library first, and the shipped pet/ files.
- * Notes and call records are never served.
+ * What shiori://contact/<id>/<path> may serve: the pictures in the library, and the desktop character's pet/
+ * files from the app. Notes and call records are never served.
  */
 export function contactAsset(id: string, rel: string): string | undefined {
   if (!getContact(id)) return undefined
-  if (rel !== 'avatar.png' && rel !== 'portrait.jpg' && !rel.startsWith('pet/')) return undefined
-  if (rel === 'avatar.png' && existsSync(avatarFile(id))) return avatarFile(id)
-  if (rel === 'portrait.jpg' && existsSync(portraitFile(id))) return portraitFile(id)
+  if (rel === 'avatar.png') return existsSync(avatarFile(id)) ? avatarFile(id) : undefined
+  if (rel === 'portrait.jpg') return existsSync(portraitFile(id)) ? portraitFile(id) : undefined
+  if (!rel.startsWith('pet/')) return undefined
   try {
     const file = shippedFile(id, rel)
     return existsSync(file) ? file : undefined
@@ -207,7 +308,9 @@ export function contactAsset(id: string, rel: string): string | undefined {
 }
 
 export function initContacts(onChange: (list: Contact[]) => void): void {
+  changed = onChange
   ipcMain.handle('contacts:list', () => loadContacts())
+  ipcMain.handle('contacts:romaji', (_e, name: string) => romajiFor(name))
   ipcMain.handle('contacts:save', (_e, draft: ContactDraft) => {
     const list = saveContact(draft)
     onChange(list)
