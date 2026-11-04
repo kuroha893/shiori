@@ -84,7 +84,6 @@ export function FontPicker({ kind, value, onChange }: { kind: 'ui' | 'mono'; val
             <div className="fp-head faint">本机已安装</div>
             {!system ? <div className="fp-empty faint">读取中…</div> : local.length ? local.map((f) => item(f, f)) : <div className="fp-empty faint">没有匹配的字体</div>}
           </div>
-          <div className="fp-foot faint">想用别的字体：在「字体册」里安装后，它会出现在这里。</div>
         </div>,
           document.body
         )}

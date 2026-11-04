@@ -150,7 +150,7 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
         <div className="set-row">
           <label>罗马音</label>
           <div className="set-contact-romaji-edit">
-            <input className="input" spellCheck={false} placeholder="保存后自动生成" value={form.romaji ?? ''} onChange={(e) => patch({ romaji: e.target.value })} />
+            <input className="input" spellCheck={false} value={form.romaji ?? ''} onChange={(e) => patch({ romaji: e.target.value })} />
             <button className="btn sm" disabled={reading || !form.name.trim()} onClick={regenerate}>
               {reading ? '生成中…' : '重新生成'}
             </button>
@@ -185,16 +185,14 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
               className="textarea"
               rows={form.persona.length > 600 ? 16 : 7}
               spellCheck={false}
-              placeholder="TA 是谁、性格怎样、和你是什么关系、怎么说话。写得越具体越像，也可以直接贴一段说话的例子。"
               value={form.persona}
               onChange={(e) => patch({ persona: e.target.value })}
             />
-            <p className="faint">存在 persona.md，下次通话生效。</p>
           </div>
         </div>
         <div className="set-row">
           <label>音色 ID</label>
-          <input className="input" spellCheck={false} placeholder="不填就只有字幕" value={form.voice} onChange={(e) => patch({ voice: e.target.value })} />
+          <input className="input" spellCheck={false} value={form.voice} onChange={(e) => patch({ voice: e.target.value })} />
         </div>
         <div className="set-row">
           <label>说的语言</label>

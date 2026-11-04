@@ -12,7 +12,6 @@ import { CHATGPT_DOWNLOAD, installClaudeCode, KeyInput, Pill, saveDeepseekKey, S
 /** Claude and DeepSeek both run in Claude Code, so it unfolds under the Claude row until it is installed. */
 const InstallClaudeCode = () => (
   <div className="svc-more">
-    <p className="svc-lead">Claude 和 DeepSeek 都通过 Claude Code 运行，装一次就好。</p>
     <Steps steps={installClaudeCode({ title: <Waiting>装好后这里会自动检测到</Waiting> })} />
   </div>
 )
@@ -105,15 +104,10 @@ export function SettingsModal(props: {
 
   useServicePolling(services, refreshServices)
 
-  const picker = (label: string, key: 'processModel' | 'chatModel' | 'callModel', use: ModelUse, hint?: string) => (
+  const picker = (label: string, key: 'processModel' | 'chatModel' | 'callModel', use: ModelUse) => (
     <div className="set-row">
       <label>{label}</label>
       <ModelPicker value={pickModel(s[key], models, use)} options={models.filter((m) => use !== 'process' || m.process)} onChange={(v) => props.onChange({ [key]: v })} />
-      {hint && (
-        <span className="faint" style={{ fontSize: 12 }}>
-          {hint}
-        </span>
-      )}
     </div>
   )
 
@@ -123,17 +117,14 @@ export function SettingsModal(props: {
         <h3>模型选择</h3>
         <div className="set-rows">
           <Services services={services} onStatus={props.onServices} />
-          {picker('处理论文', 'processModel', 'process', '转写、翻译和导读，最耗额度')}
+          {picker('处理论文', 'processModel', 'process')}
           {picker('问答默认', 'chatModel', 'chat')}
           {picker('通话模型', 'callModel', 'call')}
         </div>
       </section>
 
       <section className="set-section">
-        <h3>
-          书库
-          <small>每篇论文一个文件夹：原 PDF、转写稿、图表、批注、对话，全是普通文件。</small>
-        </h3>
+        <h3>书库</h3>
         <div className="set-rows">
           <div className="set-row">
             <div className="path" title={s.libraryPath}>
@@ -147,10 +138,7 @@ export function SettingsModal(props: {
       </section>
 
       <section className="set-section">
-        <h3>
-          阅读
-          <small>阅读页右上角的 Aa 也能随时调。</small>
-        </h3>
+        <h3>阅读</h3>
         <div className="set-rows">
           <div className="set-row">
             <label>主题</label>
@@ -176,21 +164,16 @@ export function SettingsModal(props: {
           <div className="set-row">
             <label>界面字体</label>
             <FontPicker kind="ui" value={s.uiFont} onChange={(uiFont) => props.onChange({ uiFont })} />
-            <span className="faint" style={{ fontSize: 12 }}>标题、按钮和英文界面</span>
           </div>
           <div className="set-row">
             <label>等宽字体</label>
             <FontPicker kind="mono" value={s.monoFont} onChange={(monoFont) => props.onChange({ monoFont })} />
-            <span className="faint" style={{ fontSize: 12 }}>日期、编号</span>
           </div>
         </div>
       </section>
 
       <section className="set-section">
-        <h3>
-          联系人
-          <small>点右下角的绿圈，选一个人通话。你打字，对方说话并配字幕。没填音色时只有字幕。</small>
-        </h3>
+        <h3>联系人</h3>
         <ContactsList petShown={s.petShown} onPetShown={(petShown) => props.onChange({ petShown })} toast={props.toast} />
       </section>
 
@@ -215,10 +198,7 @@ export function SettingsModal(props: {
       </section>
 
       <section className="set-section">
-        <h3>
-          术语表
-          <small>所有论文共用的译法。改了之后，新处理的论文和问答都会照新的来。</small>
-        </h3>
+        <h3>术语表</h3>
         <GlossaryList />
       </section>
     </Modal>
