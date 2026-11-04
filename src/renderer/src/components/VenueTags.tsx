@@ -97,6 +97,7 @@ function VenueEditor({
   const [pos, setPos] = useState<React.CSSProperties>()
   const [finding, setFinding] = useState<'busy' | 'none'>()
   const pop = useRef<HTMLDivElement>(null)
+  const sug = useRef<HTMLDivElement>(null)
 
   const dirty = venue.trim() !== base.venue || year !== base.year
   const list = query === undefined ? [] : venueSuggestions(query)
@@ -122,9 +123,15 @@ function VenueEditor({
   useLayoutEffect(() => {
     if (!anchor) return
     const r = anchor.getBoundingClientRect()
+    // Room for the editor with its suggestions open (they scroll past three); otherwise it opens upwards.
     const below = window.innerHeight - r.bottom > 260
     setPos({ left: Math.min(r.left, window.innerWidth - 336), ...(below ? { top: r.bottom + 8 } : { bottom: window.innerHeight - r.top + 8 }) })
   }, [anchor])
+
+  // Keyboard moves keep the highlighted suggestion in view.
+  useEffect(() => {
+    ;(sug.current?.children[hi] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' })
+  }, [hi])
 
   useEffect(() => {
     const down = (e: MouseEvent) => {
@@ -185,7 +192,7 @@ function VenueEditor({
         />
       </div>
       {list.length > 0 && (
-        <div className="vt-sug">
+        <div className="vt-sug" ref={sug}>
           {list.map((s, i) => (
             <button key={s.venue} className={i === hi ? 'on' : ''} onMouseEnter={() => setHi(i)} onClick={() => pick(s.venue, i)}>
               <VenueTags venue={s.venue} />

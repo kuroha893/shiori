@@ -728,8 +728,11 @@ button {
   width: 64px !important;
 }
 .vt-sug {
+  /* three suggestions; more scroll */
+  max-height: 108px;
   margin: 8px -4px 0;
   padding-top: 6px;
+  overflow-y: auto;
   border-top: 1px solid hsl(var(--border));
 }
 .vt-sug button {
