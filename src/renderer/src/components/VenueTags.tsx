@@ -41,13 +41,20 @@ export function VenueTags({ venue, year }: { venue?: string; year?: string }) {
 }
 
 /**
- * A paper's venue, which the owner can click to set it themselves. What they type applies at once; suggestions
- * are whole venues, so the track can't contradict the venue. Their own venue stays until they restore the found one.
+ * A paper's venue, which the owner can click to set it themselves. Suggestions are whole venues, so the track can't
+ * contradict the venue. What they type is a draft the tag previews; it is kept only when they save, and cancelling
+ * (the button, Esc, or a click elsewhere) leaves everything as it was. Their own venue stays until they restore the
+ * found one.
  */
 export function PaperVenue({ paper }: { paper: PaperMeta }) {
   const shown = shownVenue(paper)
   const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<{ venue: string; year: string }>()
   const anchor = useRef<HTMLSpanElement>(null)
+  const close = () => {
+    setOpen(false)
+    setDraft(undefined)
+  }
   return (
     <>
       <span
@@ -55,52 +62,66 @@ export function PaperVenue({ paper }: { paper: PaperMeta }) {
         className={`vt-edit ${open ? 'active' : ''}`}
         onClick={(e) => {
           e.stopPropagation()
-          setOpen((v) => !v)
+          if (open) close()
+          else setOpen(true)
         }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <VenueTags venue={shown.venue} year={shown.year} />
+        <VenueTags venue={draft ? draft.venue : shown.venue} year={draft ? draft.year : shown.year} />
       </span>
-      {open && <VenueEditor paper={paper} anchor={anchor.current} onClose={() => setOpen(false)} />}
+      {open && <VenueEditor paper={paper} anchor={anchor.current} onDraft={setDraft} onClose={close} />}
     </>
   )
 }
 
-function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTMLElement | null; onClose: () => void }) {
+function VenueEditor({
+  paper,
+  anchor,
+  onDraft,
+  onClose
+}: {
+  paper: PaperMeta
+  anchor: HTMLElement | null
+  onDraft: (d: { venue: string; year: string } | undefined) => void
+  onClose: () => void
+}) {
   const shown = shownVenue(paper)
-  const [venue, setVenue] = useState(() => venueText(shown.venue, shown.year))
-  const [year, setYear] = useState(shown.year ?? '')
+  // What the fields held when the editor opened, or after a fresh look found something.
+  const [base, setBase] = useState(() => ({ venue: venueText(shown.venue, shown.year), year: shown.year ?? '' }))
+  const [venue, setVenue] = useState(base.venue)
+  const [year, setYear] = useState(base.year)
   const [typing, setTyping] = useState(false)
   const [hi, setHi] = useState(0)
   const [pos, setPos] = useState<React.CSSProperties>()
+  const [up, setUp] = useState(false)
   const [finding, setFinding] = useState<'busy' | 'none'>()
   const pop = useRef<HTMLDivElement>(null)
-  const timer = useRef<number>(undefined)
-  const edited = useRef(false)
-  const venueRef = useRef(venue)
-  const yearRef = useRef(year)
-  venueRef.current = venue
-  yearRef.current = year
 
+  const dirty = venue.trim() !== base.venue || year !== base.year
   const list = typing ? venueSuggestions(venue) : []
 
-  const save = (v: string, y: string, now = false) => {
-    edited.current = true
-    window.clearTimeout(timer.current)
-    const write = () => api.updatePaper(paper.id, { venueEdit: { venue: v.trim(), year: y.trim() || undefined } })
-    if (now) write()
-    else timer.current = window.setTimeout(write, 250)
+  const edit = (v: string, y: string) => {
+    setVenue(v)
+    setYear(y)
+    onDraft(v.trim() === base.venue && y === base.year ? undefined : { venue: v, year: y })
   }
   const pick = (v: string) => {
-    setVenue(v)
+    edit(v, year)
     setTyping(false)
-    save(v, year, true)
+  }
+  const save = () => {
+    const v = venue.trim()
+    // Setting what was found anyway isn't an edit of the owner's own.
+    const same = v === venueText(paper.venue, paper.year) && year === (paper.year ?? '')
+    api.updatePaper(paper.id, { venueEdit: same || !v ? undefined : { venue: v, year: year || undefined } })
+    onClose()
   }
 
   useLayoutEffect(() => {
     if (!anchor) return
     const r = anchor.getBoundingClientRect()
     const below = window.innerHeight - r.bottom > 260
+    setUp(!below)
     setPos({ left: Math.min(r.left, window.innerWidth - 336), ...(below ? { top: r.bottom + 8 } : { bottom: window.innerHeight - r.top + 8 }) })
   }, [anchor])
 
@@ -122,17 +143,6 @@ function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTM
     }
   }, [anchor, onClose])
 
-  // Whatever is still waiting to be written goes out when the editor closes.
-  useEffect(
-    () => () => {
-      if (timer.current) {
-        window.clearTimeout(timer.current)
-        if (edited.current) api.updatePaper(paper.id, { venueEdit: { venue: venueRef.current.trim(), year: yearRef.current.trim() || undefined } })
-      }
-    },
-    [paper.id]
-  )
-
   return createPortal(
     <div className="popover vt-pop" style={pos} ref={pop} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
       <div className="vt-pop-row">
@@ -143,10 +153,9 @@ function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTM
           autoFocus
           spellCheck={false}
           onChange={(e) => {
-            setVenue(e.target.value)
+            edit(e.target.value, year)
             setTyping(true)
             setHi(0)
-            save(e.target.value, year)
           }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' && list.length) {
@@ -158,6 +167,7 @@ function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTM
             } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
               e.preventDefault()
               if (list[hi]) pick(list[hi].venue)
+              else if (dirty) save()
               else onClose()
             }
           }}
@@ -168,16 +178,12 @@ function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTM
           value={year}
           inputMode="numeric"
           maxLength={4}
-          onChange={(e) => {
-            const y = e.target.value.replace(/\D/g, '')
-            setYear(y)
-            save(venue, y)
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && onClose()}
+          onChange={(e) => edit(venue, e.target.value.replace(/\D/g, ''))}
+          onKeyDown={(e) => e.key === 'Enter' && (dirty ? save() : onClose())}
         />
       </div>
       {list.length > 0 && (
-        <div className="vt-sug">
+        <div className={`vt-sug ${up ? 'up' : ''}`}>
           {list.map((s, i) => (
             <button key={s.venue} className={i === hi ? 'on' : ''} onMouseEnter={() => setHi(i)} onClick={() => pick(s.venue)}>
               <VenueTags venue={s.venue} />
@@ -186,8 +192,27 @@ function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTM
           ))}
         </div>
       )}
-      <div className="vt-pop-foot">
-        {!paper.venueEdit && (
+      <div className={`vt-pop-foot ${dirty ? 'draft' : ''}`}>
+        {dirty ? (
+          <>
+            <button className="btn sm" onClick={onClose}>
+              取消
+            </button>
+            <button className="btn primary sm" onClick={save}>
+              保存
+            </button>
+          </>
+        ) : paper.venueEdit ? (
+          <button
+            className="btn ghost sm"
+            onClick={() => {
+              api.updatePaper(paper.id, { venueEdit: undefined })
+              onClose()
+            }}
+          >
+            恢复自动
+          </button>
+        ) : (
           <button
             className="btn ghost sm"
             disabled={finding === 'busy'}
@@ -195,26 +220,15 @@ function VenueEditor({ paper, anchor, onClose }: { paper: PaperMeta; anchor: HTM
               setFinding('busy')
               const { changed, meta } = await api.findVenue(paper.id).catch(() => ({ changed: false, meta: undefined }))
               if (changed && meta) {
-                setVenue(venueText(meta.venue, meta.year))
-                setYear(meta.year ?? '')
+                const found = { venue: venueText(meta.venue, meta.year), year: meta.year ?? '' }
+                setBase(found)
+                setVenue(found.venue)
+                setYear(found.year)
               }
               setFinding(changed ? undefined : 'none')
             }}
           >
             {finding === 'busy' ? '正在查找…' : finding === 'none' ? '没有找到更新' : '重新查找'}
-          </button>
-        )}
-        {paper.venueEdit && (
-          <button
-            className="btn ghost sm"
-            onClick={() => {
-              window.clearTimeout(timer.current)
-              timer.current = undefined
-              api.updatePaper(paper.id, { venueEdit: undefined })
-              onClose()
-            }}
-          >
-            恢复自动
           </button>
         )}
       </div>

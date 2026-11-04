@@ -766,8 +766,17 @@ button {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.vt-sug.up {
+  top: auto;
+  bottom: calc(100% - 8px);
+}
 .vt-pop-foot {
   display: flex;
   justify-content: flex-end;
+  gap: 6px;
   margin: 8px -4px -4px;
+}
+.vt-pop-foot.draft {
+  justify-content: flex-start;
+  margin: 10px 0 0;
 }
