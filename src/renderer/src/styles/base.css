@@ -728,16 +728,9 @@ button {
   width: 64px !important;
 }
 .vt-sug {
-  position: absolute;
-  left: 12px;
-  top: 48px;
-  z-index: 1;
-  width: 300px;
-  padding: 4px;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background: hsl(var(--popover));
-  box-shadow: var(--shadow-pop);
+  margin: 8px -4px 0;
+  padding-top: 6px;
+  border-top: 1px solid hsl(var(--border));
 }
 .vt-sug button {
   display: flex;
@@ -757,6 +750,13 @@ button {
 .vt-sug .vt {
   flex: none;
 }
+.vt-sug-check {
+  flex: none;
+  margin-left: auto;
+}
+.vt-sug-hint + .vt-sug-check {
+  margin-left: 0;
+}
 .vt-sug-hint {
   min-width: 0;
   margin-left: auto;
@@ -765,10 +765,6 @@ button {
   font-size: 11px;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.vt-sug.up {
-  top: auto;
-  bottom: calc(100% - 8px);
 }
 .vt-pop-foot {
   display: flex;

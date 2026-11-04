@@ -154,39 +154,66 @@ const fullName = (abbr?: string) => (abbr ? byAbbr.get(abbr.toUpperCase())?.[0]?
 
 /**
  * What the owner may mean by what they have typed, each a complete venue: the main track, its Findings (ACL
- * family only) and its workshops; any CCF venue; an organisation's technical report; arXiv. Text that matches none of
- * these is offered as it is, and as a technical report.
+ * family only) and its workshops; any CCF venue; an organisation's technical report; arXiv. A track typed along
+ * with the venue, in either order ("Findings of AC", "acl findings", "ICLR workshop"), is taken out before matching
+ * and its variant comes first. Text that matches none of these is offered as it is, and as a technical report.
  */
 export function venueSuggestions(typed: string): VenueSuggestion[] {
-  const q = typed.trim().toLowerCase()
+  const raw = typed.trim()
+  const q = raw.toLowerCase()
   if (!q) return []
+  // Words naming the track, also half typed ("works"), and the filler around them.
+  const words = q.split(/\s+/)
+  const starts = (w: string, whole: string) => w.length >= 4 && whole.startsWith(w)
+  const kind = (w: string) =>
+    starts(w, 'findings') ? 'findings' : starts(w, 'workshops') ? 'workshop' : starts(w, 'technical') || starts(w, 'reports') || w === 'tech' ? 'report' : undefined
+  const track = words.map(kind).find(Boolean)
+  const core = words.filter((w) => !kind(w) && w !== 'of' && w !== 'the').join(' ')
   const out: VenueSuggestion[] = []
   const add = (venue: string, hint?: string) => {
     if (!out.some((s) => s.venue.toLowerCase() === venue.toLowerCase())) out.push({ venue, hint })
   }
-  for (const f of FAMILIES) {
-    if (!f.label.toLowerCase().startsWith(q)) continue
-    const hint = fullName(f.ccf)
-    add(f.label, hint)
-    if (f.family === 'acl') add(`Findings of ${f.label}`)
-    add(`${f.label} Workshop`)
+  // The typed track's variant first, then the rest.
+  const variants = (main: string, hint: string | undefined, findings: boolean, workshop: boolean) => {
+    const all: [string | undefined, string, string | undefined][] = [[undefined, main, hint]]
+    if (findings) all.push(['findings', `Findings of ${main}`, undefined])
+    if (workshop) all.push(['workshop', `${main} Workshop`, undefined])
+    all.sort((a, b) => +(b[0] === track) - +(a[0] === track))
+    // With no venue typed yet, only the track asked for.
+    for (const [t, v, h] of all) if (core || t === track) add(v, h)
   }
-  const known = new Set(FAMILIES.map((f) => f.label.toUpperCase()))
-  for (const row of CCF) {
-    const abbr = row[0]
-    const hit = (abbr && abbr.toLowerCase().startsWith(q)) || (q.length >= 3 && row[4].toLowerCase().includes(q))
-    if (!hit || known.has(abbr.toUpperCase())) continue
-    add(DISPLAY[abbr] ?? (abbr || row[4]), abbr ? row[4] || undefined : undefined)
-    if (row[2] === 'C' && abbr.toLowerCase() === q) add(`${DISPLAY[abbr] ?? abbr} Workshop`)
+  const orgs = () => {
+    if (!core) return
+    for (const o of ORGS) {
+      if ([o.name, ...(o.aliases ?? [])].some((n) => n.toLowerCase().startsWith(core))) add(`${o.name} Technical Report`, '技术报告')
+    }
   }
-  for (const o of ORGS) {
-    if ([o.name, ...(o.aliases ?? [])].some((n) => n.toLowerCase().startsWith(q))) add(`${o.name} Technical Report`, '技术报告')
+
+  if (track === 'report') orgs()
+  else {
+    for (const f of FAMILIES) {
+      const hit = core ? f.label.toLowerCase().startsWith(core) : track === 'workshop' || (track === 'findings' && f.family === 'acl')
+      if (hit && !(track === 'findings' && f.family !== 'acl')) variants(f.label, fullName(f.ccf), f.family === 'acl', true)
+    }
+    // Only the ACL family has Findings; asked for, nothing else fits.
+    if (core && track !== 'findings') {
+      const known = new Set(FAMILIES.map((f) => f.label.toUpperCase()))
+      for (const row of CCF) {
+        const abbr = row[0]
+        const hit = (abbr && abbr.toLowerCase().startsWith(core)) || (core.length >= 3 && row[4].toLowerCase().includes(core))
+        if (!hit || known.has(abbr.toUpperCase())) continue
+        const name = DISPLAY[abbr] ?? (abbr || row[4])
+        const conf = row[2] === 'C' && !!abbr
+        if (track === 'workshop' && !conf) continue
+        variants(name, abbr ? row[4] || undefined : undefined, false, conf && (track === 'workshop' || abbr.toLowerCase() === core))
+      }
+      orgs()
+    }
+    if (core && ('arxiv'.startsWith(core) || 'preprint'.startsWith(core) || core === '预印本')) add('arXiv', '预印本')
   }
-  if ('arxiv'.startsWith(q) || 'preprint'.startsWith(q) || q === '预印本') add('arXiv', '预印本')
   if (!out.length) {
-    const raw = typed.trim()
     add(raw)
-    if (!venueTag(raw)?.report) add(`${raw} Technical Report`, '技术报告')
+    if (!track) add(`${raw} Technical Report`, '技术报告')
   }
   return out.slice(0, 8)
 }

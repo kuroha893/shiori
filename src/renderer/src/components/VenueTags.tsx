@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { PaperMeta } from '../../../shared/types'
 import { shownVenue, venueSuggestions, venueTag, venueText } from '../../../shared/venue'
 import { api } from '../api'
+import { Icon } from './Icon'
 
 const LOGOS = import.meta.glob<string>('../assets/orgs/*.svg', { query: '?raw', import: 'default', eager: true })
 const logoSvg = (name: string) => LOGOS[`../assets/orgs/${name}.svg`]
@@ -90,24 +91,25 @@ function VenueEditor({
   const [base, setBase] = useState(() => ({ venue: venueText(shown.venue, shown.year), year: shown.year ?? '' }))
   const [venue, setVenue] = useState(base.venue)
   const [year, setYear] = useState(base.year)
-  const [typing, setTyping] = useState(false)
+  // What the owner typed, which the suggestions follow; picking one fills the field but keeps the list as it was.
+  const [query, setQuery] = useState<string>()
   const [hi, setHi] = useState(0)
   const [pos, setPos] = useState<React.CSSProperties>()
-  const [up, setUp] = useState(false)
   const [finding, setFinding] = useState<'busy' | 'none'>()
   const pop = useRef<HTMLDivElement>(null)
 
   const dirty = venue.trim() !== base.venue || year !== base.year
-  const list = typing ? venueSuggestions(venue) : []
+  const list = query === undefined ? [] : venueSuggestions(query)
 
   const edit = (v: string, y: string) => {
     setVenue(v)
     setYear(y)
     onDraft(v.trim() === base.venue && y === base.year ? undefined : { venue: v, year: y })
   }
-  const pick = (v: string) => {
+  // The list stays after a pick, with the pick ticked, so another is one click away.
+  const pick = (v: string, i: number) => {
     edit(v, year)
-    setTyping(false)
+    setHi(i)
   }
   const save = () => {
     const v = venue.trim()
@@ -121,7 +123,6 @@ function VenueEditor({
     if (!anchor) return
     const r = anchor.getBoundingClientRect()
     const below = window.innerHeight - r.bottom > 260
-    setUp(!below)
     setPos({ left: Math.min(r.left, window.innerWidth - 336), ...(below ? { top: r.bottom + 8 } : { bottom: window.innerHeight - r.top + 8 }) })
   }, [anchor])
 
@@ -154,7 +155,7 @@ function VenueEditor({
           spellCheck={false}
           onChange={(e) => {
             edit(e.target.value, year)
-            setTyping(true)
+            setQuery(e.target.value)
             setHi(0)
           }}
           onKeyDown={(e) => {
@@ -166,7 +167,8 @@ function VenueEditor({
               setHi((h) => (h - 1 + list.length) % list.length)
             } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
               e.preventDefault()
-              if (list[hi]) pick(list[hi].venue)
+              const chosen = list.findIndex((s) => s.venue.toLowerCase() === venue.trim().toLowerCase())
+              if (list[hi] && hi !== chosen) pick(list[hi].venue, hi)
               else if (dirty) save()
               else onClose()
             }
@@ -183,11 +185,12 @@ function VenueEditor({
         />
       </div>
       {list.length > 0 && (
-        <div className={`vt-sug ${up ? 'up' : ''}`}>
+        <div className="vt-sug">
           {list.map((s, i) => (
-            <button key={s.venue} className={i === hi ? 'on' : ''} onMouseEnter={() => setHi(i)} onClick={() => pick(s.venue)}>
+            <button key={s.venue} className={i === hi ? 'on' : ''} onMouseEnter={() => setHi(i)} onClick={() => pick(s.venue, i)}>
               <VenueTags venue={s.venue} />
               {s.hint && <span className="vt-sug-hint">{s.hint}</span>}
+              {s.venue.toLowerCase() === venue.trim().toLowerCase() && <Icon name="check" size={14} className="vt-sug-check" />}
             </button>
           ))}
         </div>
