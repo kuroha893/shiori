@@ -7,7 +7,7 @@ const STAGE_HEIGHT = 300
 const SMALLEST = 0.2
 
 const PORTRAIT_MAX = 1800
-// How fast the circle changes size: a wheel notch is around 100, a pinch sends many small steps.
+// How fast the circle changes size: a wheel notch (with ⌘) is around 100, a pinch sends many small steps.
 const WHEEL_SPEED = 0.0015
 const PINCH_SPEED = 0.012
 
@@ -33,7 +33,10 @@ export function fitPortrait(src: string): Promise<string> {
   })
 }
 
-/** Where the avatar is cut from the portrait: drag the circle, and scroll or pinch to change its size. */
+/**
+ * Where the avatar is cut from the portrait: drag the circle, and pinch (or ⌘ and the wheel) to change its size.
+ * Plain scrolling goes on scrolling the page, so passing over the picture never changes the crop.
+ */
 export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: AvatarCrop; onChange: (crop: AvatarCrop, avatar: string) => void }) {
   const image = useRef<HTMLImageElement>(null)
   const [ratio, setRatio] = useState<number>() // height / width
@@ -85,9 +88,9 @@ export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: Avat
 
   onWheel.current = (e) => {
     const now = latest.current
-    if (!now || !ratio) return
-    e.preventDefault()
     // A pinch on the trackpad arrives as a wheel event with the control key set.
+    if (!now || !ratio || !(e.ctrlKey || e.metaKey)) return
+    e.preventDefault()
     const size = now.size * Math.exp(-e.deltaY * (e.ctrlKey ? PINCH_SPEED : WHEEL_SPEED))
     const next = fit({ ...now, size }, ratio)
     // It grows from its center.
@@ -128,7 +131,6 @@ export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: Avat
           />
         )}
       </div>
-      <p className="faint">拖动圆圈选择头像，滚轮或双指缩放。</p>
     </div>
   )
 }

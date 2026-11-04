@@ -638,10 +638,6 @@ input.bare::placeholder {
   gap: 8px;
   align-items: flex-start;
 }
-.set-crop p {
-  margin: 0;
-  font-size: 12px;
-}
 .set-crop-stage {
   position: relative;
   max-width: 100%;
