@@ -1,11 +1,12 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Annotation, Block, PaperMeta, Settings } from '../../../shared/types'
+import { shownVenue } from '../../../shared/venue'
 import { fileUrl } from '../api'
 import { renderMarkdown } from '../lib/markdown'
 import { offsetsToRange } from '../lib/anchors'
 import { Suggestion, useFolders } from './Folders'
 import { Icon } from './Icon'
-import { VenueTags } from './VenueTags'
+import { PaperVenue } from './VenueTags'
 
 export type View = Settings['view']
 type Lang = 'en' | 'zh'
@@ -251,9 +252,9 @@ export function Article({ paper, blocks, view, annotations, onJump, onPeek, onZo
       }}
     >
       <header className="doc-head">
-        {(paper.venue || paper.year || paper.arxiv) && (
+        {(shownVenue(paper).venue || shownVenue(paper).year || paper.arxiv) && (
           <div className="doc-kicker">
-            <VenueTags venue={paper.venue} year={paper.year} />
+            <PaperVenue paper={paper} />
             {paper.arxiv && <span className="mono">arXiv {paper.arxiv}</span>}
           </div>
         )}

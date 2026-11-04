@@ -84,7 +84,12 @@ ${
 4. Write info.json: {"title": "...", "title_zh": "...", "authors": ["..."], "venue": "...", "year": "..."}
    venue: the conference or journal's usual short name without the year, as the paper states it: "NeurIPS",
    "ACL", "CVPR", "TPAMI"; "Findings of EMNLP" for Findings papers; "<venue> Workshop" for workshop papers;
-   "arXiv" for a preprint that names no venue. year: the year of that venue, else of the preprint.
+   "<organization> Technical Report" for a technical report an organization released about its own model or
+   system (the title says Technical Report, or the authors are a company team such as "DeepSeek-AI" or "Qwen Team"),
+   with the organization's usual short name: "DeepSeek Technical Report", "Meta Technical Report";
+   "arXiv" for a preprint that names no venue. A paper counts as published at a venue only once accepted there:
+   "Under review at ICLR", "Submitted to NeurIPS" and the like are still "arXiv".
+   year: the year of that venue, else of the preprint.
 5. Reply with the single word DONE.
 
 Rules:
@@ -140,7 +145,25 @@ const GUIDE_SAMPLE = `## 要解决的问题
 
 这个想法成立了：Transformer 的翻译质量超过了当时最好的模型，训练成本却低得多。论文之外还有一点值得知道：后来的 BERT 和 GPT 都建立在这个架构上，这也是它今天仍然值得读的主要原因。`
 
-export function guidePrompt(o: { glossary: string; folders: string[]; source: Source }): string {
+const venueRules = (file: string) => `Name the venue as a citation would, without the year: "NeurIPS", "ICLR",
+"Findings of EMNLP", "<venue> Workshop"; the year is the venue's. Only acceptance counts: "under review" or
+"submitted to" a venue does not. If nothing is certain, write no ${file}.`
+
+/** A look on the web for where a paper has been accepted, for papers known so far only as preprints. */
+export function venueSearchPrompt(p: { title: string; authors: string[]; arxiv?: string; year?: string }, o: { file: string }): string {
+  return `Find out whether this paper has been accepted at a conference or journal, and where.
+
+Title: ${p.title}
+Authors: ${p.authors.slice(0, 6).join(', ')}${p.authors.length > 6 ? ', et al.' : ''}${p.arxiv ? `\narXiv: ${p.arxiv}` : ''}${p.year ? `\nFirst posted: ${p.year}` : ''}
+
+Search the web: the venue's list of accepted papers or its proceedings, OpenReview, the ACL Anthology, DBLP, the
+authors' own pages. Only if a page you actually read says the paper was accepted, write ${o.file} as
+{"venue": "...", "year": "...", "source": "<that page's URL>"}. ${venueRules(o.file)}
+
+Write nothing else, then reply with the single word DONE.`
+}
+
+export function guidePrompt(o: { glossary: string; folders: string[]; source: Source; preprint?: { arxiv?: string } }): string {
   return `You are writing the reading guide (导读) of an academic paper for a Chinese reader who has not read it yet.
 The guide is the underdrawing a painter lays down before any detail: it gives a rough but intuitive sense of the
 whole paper and of the line of research it belongs to, so the reader knows what they are looking at when they
@@ -221,7 +244,16 @@ ${o.folders.length ? o.folders.map((f) => `- ${f}`).join('\n') : '(none yet)'}
 If one of these fits, use its name exactly. Otherwise propose a short new Chinese name, broad enough to hold several
 related papers yet narrower than the reader's whole field: 幻觉与事实性 or 推理加速, not 大语言模型 and not the name of this
 paper's method. Write it to suggestion.json as {"name": "..."}.
-
+${
+  o.preprint
+    ? `
+So far this paper is known only as a preprint${o.preprint.arxiv ? ` (arXiv ${o.preprint.arxiv})` : ''}. Search the web for whether it has
+since been accepted at a conference or journal: the venue's list of accepted papers or its proceedings, OpenReview,
+the ACL Anthology, DBLP or the authors' own pages. Only if a page you actually read says so, write venue.json as
+{"venue": "...", "year": "...", "source": "<that page's URL>"}. ${venueRules('venue.json')}
+`
+    : ''
+}
 Write nothing else, then reply with the single word DONE.`
 }
 

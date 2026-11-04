@@ -9,8 +9,13 @@ export interface PaperMeta {
   title: string
   titleZh?: string
   authors: string[]
+  /** Where it was published, as found from the PDF, Semantic Scholar or the web; see shared/venue.ts */
   venue?: string
   year?: string
+  /** The owner's own venue and year, shown instead of the found ones and never overwritten */
+  venueEdit?: { venue: string; year?: string }
+  /** When a paper still only a preprint was last looked up, on Semantic Scholar and the web */
+  venueCheckedAt?: string
   arxiv?: string
   abstract?: string
   tags: string[]

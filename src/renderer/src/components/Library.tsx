@@ -1,11 +1,12 @@
 import { useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import type { PaperMeta, Settings } from '../../../shared/types'
+import { shownVenue } from '../../../shared/venue'
 import { modelLabel, pickModel, type ServiceStatus } from '../../../shared/models'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
 import { CallLauncher, HeartButton, Menu, ThemeButton, type MenuItem } from './Chrome'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
-import { VenueTags } from './VenueTags'
+import { PaperVenue } from './VenueTags'
 import brand from '../assets/brand.png'
 import type { Toast } from './App'
 
@@ -93,7 +94,7 @@ export function Library(props: {
       (p) =>
         inPlace(p) &&
         matches(p, filter) &&
-        (!q || [p.title, p.titleZh, p.authors.join(' '), p.venue, p.tags.join(' ')].some((s) => s?.toLowerCase().includes(q)))
+        (!q || [p.title, p.titleZh, p.authors.join(' '), shownVenue(p).venue, p.tags.join(' ')].some((s) => s?.toLowerCase().includes(q)))
     )
   }, [papers, filter, query, place])
 
@@ -411,7 +412,7 @@ function PaperCard({
         {folderNames.length > 0 && <p className="paper-folders">{folderNames.join(' · ')}</p>}
         {suggestion}
         <div className="paper-foot">
-          {p.venue || p.year ? <VenueTags venue={p.venue} year={p.year} /> : <span className="mono faint">{p.pages ? `${p.pages} 页` : ''}</span>}
+          {shownVenue(p).venue || shownVenue(p).year ? <PaperVenue paper={p} /> : <span className="mono faint">{p.pages ? `${p.pages} 页` : ''}</span>}
           <span className="spacer" />
           {p.status === 'ready' &&
             (p.finished ? (

@@ -9,6 +9,7 @@ import { closeCodex, openCodexLogin } from './codex'
 import { checkDeepseekKey, serviceStatus } from './ai'
 import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
 import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
+import { findVenue, initVenues } from './venue'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
@@ -165,6 +166,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('papers:process', (_e, id: string) => enqueue(id))
   ipcMain.handle('papers:guide', (_e, id: string) => startGuide(id))
+  ipcMain.handle('papers:findVenue', async (_e, id: string) => ({ changed: await findVenue(id, true), meta: lib.readMeta(id) }))
   ipcMain.handle('papers:cancel', (_e, id: string) => cancel(id))
   ipcMain.handle('papers:trash', async (_e, id: string) => {
     cancel(id)
@@ -222,6 +224,7 @@ app.whenReady().then(() => {
   initContacts((list) => send('contacts:changed', list))
   createWindow()
   initJobs(paperChanged)
+  initVenues(paperChanged)
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().some((w) => w.isVisible())) createWindow()

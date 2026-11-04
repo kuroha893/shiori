@@ -675,3 +675,99 @@ button {
 .vt-year-only {
   font-size: 12px;
 }
+.vt-tag.report {
+  align-items: center;
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.3);
+  background: hsl(var(--foreground) / 0.05);
+}
+.vt-chip.report {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--foreground) / 0.4);
+}
+.vt-logo {
+  display: inline-flex;
+  flex: none;
+  margin-right: -1px;
+}
+.vt-logo svg {
+  width: 1em;
+  height: 1em;
+}
+:root[data-theme='dark'] .vt-logo.mono-dark svg * {
+  fill: currentColor;
+}
+
+/* the venue as something the owner can click to set (components/VenueTags.tsx) */
+.vt-edit {
+  display: inline-flex;
+  min-width: 0;
+  border-radius: 7px;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.15s;
+}
+.vt-edit:hover,
+.vt-edit.active {
+  outline-color: hsl(var(--foreground) / 0.14);
+}
+.vt-pop {
+  z-index: 70;
+  width: 320px;
+  padding: 12px;
+}
+.vt-pop-row {
+  display: flex;
+  gap: 8px;
+}
+.vt-pop .input {
+  height: 30px;
+}
+.vt-pop-year {
+  flex: none;
+  width: 64px !important;
+}
+.vt-sug {
+  position: absolute;
+  left: 12px;
+  top: 48px;
+  z-index: 1;
+  width: 300px;
+  padding: 4px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+}
+.vt-sug button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  text-align: left;
+  cursor: default;
+}
+.vt-sug button.on {
+  background: hsl(var(--accent));
+}
+.vt-sug .vt {
+  flex: none;
+}
+.vt-sug-hint {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: hsl(var(--faint-foreground));
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vt-pop-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px -4px -4px;
+}

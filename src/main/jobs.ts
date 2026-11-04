@@ -10,6 +10,7 @@ import { parseModel } from '../shared/models'
 import { guidePrompt, processPrompt, verifyPrompt, type Source } from './prompts'
 import { getSettings } from './settings'
 import { workerCall } from './worker'
+import { applyFoundVenue, awaitingVenue, checkVenue, isPreprint } from './venue'
 
 type Notify = (meta: PaperMeta) => void
 
@@ -188,7 +189,8 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     })
     if (!check.isError && !/^\s*NONE\s*$/i.test(check.text)) await cropAll(id)
   })
-  startGuide(id)
+  // A paper still only a preprint is looked up first, so the guide run searches the web only if that found nothing.
+  void checkVenue(id).finally(() => startGuide(id))
 }
 
 async function finish(id: string, dir: string, figs: string[], verify?: () => Promise<void>): Promise<void> {
@@ -205,8 +207,11 @@ async function finish(id: string, dir: string, figs: string[], verify?: () => Pr
       if (info.title) patch.title = info.title
       if (info.title_zh) patch.titleZh = info.title_zh
       if (Array.isArray(info.authors) && info.authors.length) patch.authors = info.authors
-      if (info.venue) patch.venue = info.venue
-      if (info.year) patch.year = String(info.year)
+      // A PDF that names no venue doesn't undo one found elsewhere, such as arXiv's journal reference.
+      if (info.venue && !(isPreprint(info.venue) && !isPreprint(readMeta(id)?.venue))) {
+        patch.venue = info.venue
+        if (info.year) patch.year = String(info.year)
+      }
     } catch {
       /* keep what we had */
     }
@@ -230,14 +235,22 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   const dir = paperDir(id)
   const next = join(dir, 'summary.next.md')
   const suggestion = join(dir, 'suggestion.json')
+  const venue = join(dir, 'venue.json')
   rmSync(next, { force: true })
   rmSync(suggestion, { force: true })
+  rmSync(venue, { force: true })
+  const meta = readMeta(id)
   const model = await modelFor(getSettings().processModel, 'process')
   const source = sourceFor(model)
   if (source === 'pages') await ensurePaperText(id)
   const result = await runAgent({
     cwd: dir,
-    prompt: guidePrompt({ glossary: glossaryPrompt(), folders: loadFolders().map((f) => f.name), source }),
+    prompt: guidePrompt({
+      glossary: glossaryPrompt(),
+      folders: loadFolders().map((f) => f.name),
+      source,
+      preprint: meta && awaitingVenue(meta) ? { arxiv: meta.arxiv } : undefined
+    }),
     model,
     effort: getSettings().processEffort,
     write: true,
@@ -248,6 +261,7 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   if (!existsSync(next)) throw new Error('没有写出导读')
   renameSync(next, join(dir, 'summary.md'))
   applySuggestion(id, suggestion)
+  applyFoundVenue(id, venue)
 }
 
 /** A paper already filed by the owner gets no suggestion. */
