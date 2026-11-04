@@ -27,7 +27,7 @@ function history(messages: ChatMessage[]): string {
  */
 export async function ask(
   paper: string,
-  input: { text: string; quote?: { block: string; text: string }; model?: string },
+  input: { text: string; quote?: { block: string; text: string }; model?: string; effort?: string },
   emit: (e: ChatEvent) => void
 ): Promise<ChatMessage> {
   const meta = readMeta(paper)
@@ -67,6 +67,7 @@ export async function ask(
       cwd: paperDir(paper),
       prompt,
       model,
+      effort: input.effort ?? getSettings().chatEffort,
       write: false,
       session: resume ? chat.sessionId : undefined,
       instructions: chatSystemPrompt({ glossary: glossaryPrompt(), title: meta.titleZh || meta.title, source }),

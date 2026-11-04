@@ -378,6 +378,7 @@ export function Reader(props: {
             draftQuote={draftQuote}
             clearDraftQuote={() => setDraftQuote(undefined)}
             chatModel={settings.chatModel}
+            chatEffort={settings.chatEffort}
             models={props.services?.models ?? []}
             onOpenSettings={props.onOpenSettings}
             onJump={jump}

@@ -159,6 +159,7 @@ export interface CodexModel {
   displayName: string
   hidden: boolean
   inputModalities: string[]
+  supportedReasoningEfforts?: { reasoningEffort: string }[]
 }
 
 /** The signed-in account and the models it may use. */
@@ -186,6 +187,7 @@ export interface CodexRun {
   write: boolean
   search?: boolean
   instructions?: string
+  effort?: string
   /** Keep the thread loaded after the turn, to continue it with `thread` */
   keep?: boolean
   thread?: string
@@ -297,7 +299,7 @@ export async function runCodex(o: CodexRun): Promise<{ text: string; thread: str
 }
 
 /** A thread kept open across turns, with the system prompt in place of Codex's own instructions. */
-export async function openCodexConversation(o: { cwd: string; model: string; systemPrompt: string }) {
+export async function openCodexConversation(o: { cwd: string; model: string; systemPrompt: string; effort?: string }) {
   const c = await connect()
   const thread = await startThread(c, { cwd: o.cwd, model: o.model, write: false, base: o.systemPrompt })
   let open = true
@@ -306,8 +308,7 @@ export async function openCodexConversation(o: { cwd: string; model: string; sys
   })
   return {
     async send(text: string, onText: (text: string) => void): Promise<void> {
-      // Spoken replies want speed over deliberation.
-      const r = await turn(c, thread, text, { effort: 'low', onText })
+      const r = await turn(c, thread, text, { effort: o.effort, onText })
       if (r.isError) throw new Error(r.text)
     },
     alive: () => open && !c.closed,

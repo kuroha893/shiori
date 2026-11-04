@@ -14,10 +14,19 @@ export interface ModelOption {
   /** Name within its service, as listed under the service's heading */
   name: string
   process: boolean
+  /** Thinking levels it takes, least first; none when it has no choice */
+  efforts?: string[]
 }
 
 export const PROVIDER_NAMES: Record<Provider, string> = { claude: 'Claude', openai: 'ChatGPT', deepseek: 'DeepSeek' }
 export const PROVIDERS = Object.keys(PROVIDER_NAMES) as Provider[]
+
+/** Thinking levels from least to most, named as the services name them. */
+const EFFORT_ORDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+
+export const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+/** DeepSeek reads medium and xhigh as high; its none can't be sent through Claude Code, which drops it. */
+export const DEEPSEEK_EFFORTS = ['low', 'high', 'max']
 
 export const CLAUDE_MODELS = [
   { id: 'opus', name: 'Opus', process: true },
@@ -61,6 +70,18 @@ export function modelName(value: string): string {
 export function modelLabel(value: string): string {
   const { provider } = parseModel(value)
   return provider === 'openai' ? modelName(value) : `${PROVIDER_NAMES[provider]} ${modelName(value)}`
+}
+
+/**
+ * The level a model runs at: the chosen one when it takes it, otherwise the highest it takes below that (as
+ * Claude Code does), or its lowest.
+ */
+export function pickEffort(level: string | undefined, efforts: string[] | undefined): string | undefined {
+  if (!efforts?.length) return undefined
+  if (level && efforts.includes(level)) return level
+  const rank = (l: string) => EFFORT_ORDER.indexOf(l)
+  const below = efforts.filter((e) => rank(e) <= rank(level ?? ''))
+  return below.length ? below.reduce((a, b) => (rank(b) > rank(a) ? b : a)) : efforts.reduce((a, b) => (rank(b) < rank(a) ? b : a))
 }
 
 /**

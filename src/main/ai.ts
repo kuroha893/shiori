@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { net } from 'electron'
-import { CLAUDE_MODELS, DEEPSEEK_MODELS, parseModel, pickModel, type ModelOption, type ModelUse, type Provider, type ServiceStatus } from '../shared/models'
+import { CLAUDE_EFFORTS, CLAUDE_MODELS, DEEPSEEK_EFFORTS, DEEPSEEK_MODELS, parseModel, pickEffort, pickModel, type ModelOption, type ModelUse, type Provider, type ServiceStatus } from '../shared/models'
 import { claudeStatus, openConversation, runClaude, type Conversation } from './claude'
 import { codexAccount, findCodex, isDesktopCodex, openCodexConversation, runCodex, type Activity, type CodexModel } from './codex'
 import { getSettings } from './settings'
@@ -48,7 +48,13 @@ function codexOptions(models: CodexModel[]): ModelOption[] {
   const newest = Math.max(0, ...shown.map((m) => gen(m.id)))
   return shown
     .filter((m) => !newest || gen(m.id) === newest)
-    .map((m) => ({ value: `openai:${m.id}`, provider: 'openai', name: m.displayName, process: m.inputModalities.includes('image') }))
+    .map((m) => ({
+      value: `openai:${m.id}`,
+      provider: 'openai',
+      name: m.displayName,
+      process: m.inputModalities.includes('image'),
+      efforts: m.supportedReasoningEfforts?.map((e) => e.reasoningEffort)
+    }))
 }
 
 async function check(): Promise<ServiceStatus> {
@@ -75,9 +81,13 @@ async function check(): Promise<ServiceStatus> {
   }
   const deepseek: ServiceStatus['deepseek'] = { state: !getSettings().deepseekKey ? 'noKey' : !c.path ? 'needsClaudeCode' : 'ready' }
   const models: ModelOption[] = [
-    ...(claude.state === 'ready' ? CLAUDE_MODELS.map((m) => ({ value: `claude:${m.id}`, provider: 'claude' as const, name: m.name, process: m.process })) : []),
+    ...(claude.state === 'ready'
+      ? CLAUDE_MODELS.map((m) => ({ value: `claude:${m.id}`, provider: 'claude' as const, name: m.name, process: m.process, efforts: CLAUDE_EFFORTS }))
+      : []),
     ...gpt,
-    ...(deepseek.state === 'ready' ? DEEPSEEK_MODELS.map((m) => ({ value: `deepseek:${m.id}`, provider: 'deepseek' as const, name: m.name, process: m.process })) : [])
+    ...(deepseek.state === 'ready'
+      ? DEEPSEEK_MODELS.map((m) => ({ value: `deepseek:${m.id}`, provider: 'deepseek' as const, name: m.name, process: m.process, efforts: DEEPSEEK_EFFORTS }))
+      : [])
   ]
   return { claude, openai, deepseek, models }
 }
@@ -103,6 +113,11 @@ export async function modelFor(value: string, use: ModelUse): Promise<string> {
   return picked
 }
 
+/** The level a settled model runs at, from the level wanted for its place. */
+async function effortFor(model: string, wanted: string | undefined): Promise<string | undefined> {
+  return pickEffort(wanted, (await serviceStatus()).models.find((m) => m.value === model)?.efforts)
+}
+
 /** Ask DeepSeek whether a key is good, before keeping it. */
 export async function checkDeepseekKey(key: string): Promise<string | undefined> {
   try {
@@ -121,6 +136,8 @@ export interface AgentRun {
   prompt: string
   /** A "<provider>:<model>" already settled by modelFor */
   model: string
+  /** The thinking level wanted, from the place's setting */
+  effort?: string
   /** Whether it may write files in cwd */
   write: boolean
   search?: boolean
@@ -153,6 +170,7 @@ function claudeActivity(name: string, input: any): Activity | undefined {
 
 export async function runAgent(r: AgentRun): Promise<AgentResult> {
   const { provider, model } = parseModel(r.model)
+  const effort = await effortFor(r.model, r.effort)
   let streamed = ''
   const text = (d: string) => {
     streamed += d
@@ -168,6 +186,7 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
       cwd: r.cwd,
       prompt: r.prompt,
       model,
+      effort,
       write: r.write,
       search: r.search,
       instructions: r.instructions,
@@ -189,6 +208,7 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
     cwd: r.cwd,
     prompt: r.prompt,
     model: cli.model,
+    effort,
     env: cli.env,
     tools,
     allowedTools: r.search ? ['WebSearch'] : undefined,
@@ -216,9 +236,10 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
 }
 
 /** A conversation kept open across turns, for calls. */
-export async function talkTo(o: { cwd: string; model: string; systemPrompt: string }): Promise<Conversation> {
+export async function talkTo(o: { cwd: string; model: string; systemPrompt: string; effort?: string }): Promise<Conversation> {
   const { provider, model } = parseModel(o.model)
-  if (provider === 'openai') return openCodexConversation({ ...o, model })
+  const effort = await effortFor(o.model, o.effort)
+  if (provider === 'openai') return openCodexConversation({ ...o, model, effort })
   const cli = viaClaude(provider, model)
-  return openConversation({ ...o, model: cli.model, env: cli.env })
+  return openConversation({ ...o, model: cli.model, effort, env: cli.env })
 }

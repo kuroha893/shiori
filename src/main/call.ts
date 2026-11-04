@@ -152,6 +152,7 @@ async function talk(): Promise<Conversation> {
   conversation = await talkTo({
     cwd: dir(),
     model: await modelFor(getSettings().callModel, 'call'),
+    effort: getSettings().callEffort,
     systemPrompt: callPrompt({ contact: person(), memory: readMemory(), lastCall: lastCallTail() })
   })
   return conversation
@@ -466,7 +467,7 @@ function rememberCall(call: Record[]): void {
   const folder = dir()
   const prompt = memoryPrompt(person().name, readMemory(), call.map(transcriptLine).join('\n'))
   modelFor(getSettings().callModel, 'call')
-    .then((model) => runAgent({ cwd: folder, prompt, model, write: true }))
+    .then((model) => runAgent({ cwd: folder, prompt, model, effort: getSettings().callEffort, write: true }))
     .catch(() => {})
 }
 

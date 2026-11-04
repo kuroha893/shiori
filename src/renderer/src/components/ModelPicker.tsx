@@ -1,20 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { modelLabel, modelName, parseModel, PROVIDER_NAMES, PROVIDERS, type ModelOption } from '../../../shared/models'
+import { modelLabel, modelName, parseModel, pickEffort, PROVIDER_NAMES, PROVIDERS, type ModelOption } from '../../../shared/models'
 import { Icon } from './Icon'
 
-/** Pick a model from the connected services, grouped by service. `mini` sits in the chat composer. */
-export function ModelPicker({ value, options, onChange, mini }: { value?: string; options: ModelOption[]; onChange: (value: string) => void; mini?: boolean }) {
+/**
+ * Pick a model from the connected services, grouped by service, and how hard it thinks, from the levels that
+ * model takes. `mini` sits in the chat composer.
+ */
+export function ModelPicker({
+  value,
+  options,
+  onChange,
+  effort,
+  onEffort,
+  mini
+}: {
+  value?: string
+  options: ModelOption[]
+  onChange: (value: string) => void
+  effort: string
+  onEffort: (effort: string) => void
+  mini?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<React.CSSProperties>()
   const ref = useRef<HTMLDivElement>(null)
   const pop = useRef<HTMLDivElement>(null)
 
+  const efforts = options.find((o) => o.value === value)?.efforts
+  const level = pickEffort(effort, efforts)
   // Rendered into <body> like the font picker, so the scrolling settings dialog can't clip it. Opens upwards
   // when there's no room below, as in the composer.
   const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
-    const need = 24 + options.length * 34 + new Set(options.map((o) => o.provider)).size * 26
+    const need = 24 + options.length * 34 + new Set(options.map((o) => o.provider)).size * 26 + (efforts?.length ? 66 : 0)
     setPos(window.innerHeight - r.bottom - 16 >= need ? { left: r.left, top: r.bottom + 6 } : { left: r.left, bottom: window.innerHeight - r.top + 6 })
     setOpen((v) => !v)
   }
@@ -53,6 +72,7 @@ export function ModelPicker({ value, options, onChange, mini }: { value?: string
               {modelName(value)}
             </>
           )}
+          {level && <span className="lvl">· {level}</span>}
         </span>
         <Icon name="down" size={14} className="faint" />
       </button>
@@ -81,6 +101,25 @@ export function ModelPicker({ value, options, onChange, mini }: { value?: string
                 </div>
               )
             })}
+            {efforts?.length ? (
+              <div className="mp-effort">
+                <div className="fp-head faint">思考</div>
+                <div className="seg">
+                  {efforts.map((e) => (
+                    <button
+                      key={e}
+                      className={e === level ? 'on' : ''}
+                      onClick={() => {
+                        onEffort(e)
+                        setOpen(false)
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>,
           document.body
         )}

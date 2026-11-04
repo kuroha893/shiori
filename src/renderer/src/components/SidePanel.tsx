@@ -16,7 +16,7 @@ export interface ChatApi {
   streaming: string | undefined
   status: string | undefined
   busy: boolean
-  send: (text: string, quote?: Quote, model?: string) => void
+  send: (text: string, quote?: Quote, model?: string, effort?: string) => void
   stop: () => void
   reset: () => void
 }
@@ -45,14 +45,14 @@ export function useChat(paperId: string): ChatApi {
   }, [paperId])
 
   const send = useCallback(
-    (text: string, quote?: Quote, model?: string) => {
+    (text: string, quote?: Quote, model?: string, effort?: string) => {
       if (busy || !text.trim()) return
       const msg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text, quote, createdAt: new Date().toISOString() }
       setMessages((m) => [...m, msg])
       setBusy(true)
       setStreaming('')
       setStatus('正在思考…')
-      api.ask(paperId, { text, quote: quote && { block: quote.block, text: quote.text }, model }).catch((e: Error) => {
+      api.ask(paperId, { text, quote: quote && { block: quote.block, text: quote.text }, model, effort }).catch((e: Error) => {
         setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'assistant', text: `出错了：${e.message}`, createdAt: new Date().toISOString(), error: true }])
         setStreaming(undefined)
         setStatus(undefined)
@@ -90,6 +90,7 @@ interface Props {
   draftQuote?: Quote
   clearDraftQuote: () => void
   chatModel: string
+  chatEffort: string
   /** Models of the connected services */
   models: ModelOption[]
   onOpenSettings: () => void
@@ -218,6 +219,7 @@ function Chat(p: Props) {
   const { chat } = p
   const [text, setText] = useState('')
   const [chosen, setChosen] = useState(p.chatModel)
+  const [effort, setEffort] = useState(p.chatEffort)
   const model = pickModel(chosen, p.models, 'chat')
   const list = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -233,7 +235,7 @@ function Chat(p: Props) {
 
   const submit = () => {
     if (!text.trim() || chat.busy) return
-    chat.send(text.trim(), p.draftQuote, model)
+    chat.send(text.trim(), p.draftQuote, model, effort)
     setText('')
     p.clearDraftQuote()
   }
@@ -255,7 +257,7 @@ function Chat(p: Props) {
           <div className="chat-hello">
             <p className="faint">选中正文里的任意文字可以直接提问。也可以从这里开始：</p>
             {SUGGESTIONS.map((s) => (
-              <button key={s} className="suggest" onClick={() => chat.send(s, undefined, model)}>
+              <button key={s} className="suggest" onClick={() => chat.send(s, undefined, model, effort)}>
                 {s}
               </button>
             ))}
@@ -320,7 +322,7 @@ function Chat(p: Props) {
           }}
         />
         <div className="composer-foot">
-          <ModelPicker mini value={model} options={p.models} onChange={setChosen} />
+          <ModelPicker mini value={model} options={p.models} onChange={setChosen} effort={effort} onEffort={setEffort} />
           <span className="faint hint">↩ 发送 · ⇧↩ 换行</span>
           {chat.busy ? (
             <button className="icon-btn bordered" title="停止" onClick={chat.stop}>

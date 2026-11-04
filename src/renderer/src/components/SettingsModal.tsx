@@ -104,10 +104,16 @@ export function SettingsModal(props: {
 
   useServicePolling(services, refreshServices)
 
-  const picker = (label: string, key: 'processModel' | 'chatModel' | 'callModel', use: ModelUse) => (
+  const picker = (label: string, use: ModelUse) => (
     <div className="set-row">
       <label>{label}</label>
-      <ModelPicker value={pickModel(s[key], models, use)} options={models.filter((m) => use !== 'process' || m.process)} onChange={(v) => props.onChange({ [key]: v })} />
+      <ModelPicker
+        value={pickModel(s[`${use}Model`], models, use)}
+        options={models.filter((m) => use !== 'process' || m.process)}
+        onChange={(v) => props.onChange({ [`${use}Model`]: v })}
+        effort={s[`${use}Effort`]}
+        onEffort={(v) => props.onChange({ [`${use}Effort`]: v })}
+      />
     </div>
   )
 
@@ -117,9 +123,9 @@ export function SettingsModal(props: {
         <h3>模型选择</h3>
         <div className="set-rows">
           <Services services={services} onStatus={props.onServices} />
-          {picker('处理论文', 'processModel', 'process')}
-          {picker('问答默认', 'chatModel', 'chat')}
-          {picker('通话模型', 'callModel', 'call')}
+          {picker('处理论文', 'process')}
+          {picker('问答默认', 'chat')}
+          {picker('通话模型', 'call')}
         </div>
       </section>
 

@@ -47,7 +47,7 @@ const api = {
   saveNote: (id: string, doc: object) => ipcRenderer.invoke('papers:saveNote', id, doc),
   saveNoteImage: (id: string, ext: string, bytes: ArrayBuffer): Promise<string> => ipcRenderer.invoke('papers:saveNoteImage', id, ext, bytes),
 
-  ask: (id: string, input: { text: string; quote?: { block: string; text: string }; model?: string }) =>
+  ask: (id: string, input: { text: string; quote?: { block: string; text: string }; model?: string; effort?: string }) =>
     ipcRenderer.invoke('chat:ask', id, input),
   stopAsking: (id: string) => ipcRenderer.invoke('chat:stop', id),
   resetChat: (id: string) => ipcRenderer.invoke('chat:reset', id),

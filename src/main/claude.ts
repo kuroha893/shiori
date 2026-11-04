@@ -141,6 +141,7 @@ export interface RunOptions {
   cwd: string
   prompt: string
   model: string
+  effort?: string
   tools: string[]
   /** Tools that may run without asking; headless runs cannot ask */
   allowedTools?: string[]
@@ -174,7 +175,7 @@ export interface Conversation {
  * A single CLI process kept open across turns, with no tools. Replies start far sooner than
  * resuming a session for each message, which is what makes a conversation feel spoken.
  */
-export async function openConversation(opts: { cwd: string; model: string; systemPrompt: string; env?: NodeJS.ProcessEnv }): Promise<Conversation> {
+export async function openConversation(opts: { cwd: string; model: string; systemPrompt: string; effort?: string; env?: NodeJS.ProcessEnv }): Promise<Conversation> {
   const path = await findClaude()
   if (!path) throw new Error('没有找到 Claude Code，请先在设置里安装并登录')
   const child = spawn(
@@ -189,6 +190,7 @@ export async function openConversation(opts: { cwd: string; model: string; syste
       '--include-partial-messages',
       '--model',
       opts.model,
+      ...(opts.effort ? ['--effort', opts.effort] : []),
       '--restricted',
       '--strict-mcp-config',
       '--tools',
@@ -267,6 +269,7 @@ export async function runClaude(opts: RunOptions): Promise<RunResult> {
     opts.resume ? '--resume' : '--session-id',
     opts.sessionId
   ]
+  if (opts.effort) args.push('--effort', opts.effort)
   if (opts.writable) args.push('--permission-mode', 'acceptEdits')
   if (opts.allowedTools?.length) args.push('--allowedTools', opts.allowedTools.join(','))
   if (opts.partial) args.push('--include-partial-messages')

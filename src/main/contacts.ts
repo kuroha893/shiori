@@ -201,6 +201,7 @@ export async function romajiFor(name: string): Promise<string> {
   const r = await runAgent({
     cwd: root(),
     model,
+    effort: getSettings().chatEffort,
     write: false,
     prompt: `How is this name read, written in Latin letters the way it would appear on a name card? Japanese names in Hepburn, in the order written (葉山 詩織 → Hayama Shiori). Chinese names in pinyin without tone marks, family name first (李 小林 → Li Xiaolin). A name already in Latin letters stays as it is.
 

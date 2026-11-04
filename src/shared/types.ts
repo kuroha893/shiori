@@ -143,6 +143,10 @@ export interface Settings {
   /** "<provider>:<model>", see shared/models.ts */
   processModel: string
   chatModel: string
+  /** Thinking level wanted for each place; a model that lacks it runs at the nearest below, see pickEffort */
+  processEffort: string
+  chatEffort: string
+  callEffort: string
   theme: 'system' | 'light' | 'dark' | 'sepia'
   readingFont: 'serif' | 'sans'
   /** CSS family names of the interface and monospace fonts */

@@ -164,6 +164,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     cwd: dir,
     prompt: processPrompt({ pages, glossary, source }),
     model,
+    effort: getSettings().processEffort,
     write: true,
     keep: true,
     onActivity,
@@ -180,6 +181,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
       cwd: dir,
       prompt: verifyPrompt(figs),
       model,
+      effort: getSettings().processEffort,
       write: true,
       session: first.session,
       signal
@@ -237,6 +239,7 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
     cwd: dir,
     prompt: guidePrompt({ glossary: glossaryPrompt(), folders: loadFolders().map((f) => f.name), source }),
     model,
+    effort: getSettings().processEffort,
     write: true,
     search: true,
     signal

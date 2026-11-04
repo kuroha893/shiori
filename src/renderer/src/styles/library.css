@@ -994,6 +994,10 @@ input.gloss-en {
 .mp .fp-current:disabled {
   color: hsl(var(--faint-foreground));
 }
+.mp .fp-current .lvl {
+  margin-left: 4px;
+  color: hsl(var(--faint-foreground));
+}
 .mp-pop {
   z-index: 70;
   width: 220px;
@@ -1009,6 +1013,24 @@ input.gloss-en {
 }
 .mp-pop .fp-name {
   font-size: 13.5px;
+}
+.mp-pop:has(.mp-effort) {
+  width: 264px;
+}
+.mp-effort {
+  margin-top: 6px;
+  padding-top: 2px;
+  border-top: 1px solid hsl(var(--border));
+}
+.mp-effort .seg {
+  display: flex;
+  margin: 0 4px 4px;
+}
+.mp-effort .seg button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 5px;
+  font-size: 12px;
 }
 .mp.mini .fp-current {
   min-width: 0;
