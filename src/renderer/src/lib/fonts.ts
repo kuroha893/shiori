@@ -1,4 +1,5 @@
 // Open-licensed (OFL) fonts that ship with the app, and how the chosen ones reach the CSS.
+import '@fontsource-variable/outfit'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import '@fontsource-variable/inter'
@@ -17,6 +18,7 @@ export interface FontChoice {
 
 export const BUNDLED: Record<'ui' | 'mono', FontChoice[]> = {
   ui: [
+    { family: 'Outfit Variable', label: 'Outfit' },
     { family: 'Geist Variable', label: 'Geist' },
     { family: 'Inter Variable', label: 'Inter' },
     { family: 'Space Grotesk Variable', label: 'Space Grotesk' },

@@ -85,4 +85,4 @@ npm run pack
 
 ## 技术栈
 
-Electron、React、pdf.js、KaTeX、markdown-it 和 Tiptap。AI 通过 Claude Code 和 Codex 运行，语音由 Fish Audio 提供，服务图标来自 LobeHub Icons（MIT 许可）。字体：Geist、Inter、Space Grotesk、IBM Plex、Manrope 和 JetBrains Mono（SIL 开源字体许可）。
+Electron、React、pdf.js、KaTeX、markdown-it 和 Tiptap。AI 通过 Claude Code 和 Codex 运行，语音由 Fish Audio 提供，服务图标来自 LobeHub Icons（MIT 许可）。字体：Outfit、Geist、Inter、Space Grotesk、IBM Plex、Manrope 和 JetBrains Mono（SIL 开源字体许可）。

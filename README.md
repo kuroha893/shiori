@@ -104,5 +104,5 @@ changed later in **Settings**. Papers are stored in `~/Documents/Shiori`, one fo
 ## Built with
 
 Electron, React, pdf.js, KaTeX, markdown-it and Tiptap. AI through Claude Code and Codex, voices by Fish Audio, service
-marks from LobeHub Icons (MIT). Fonts: Geist, Inter, Space Grotesk,
+marks from LobeHub Icons (MIT). Fonts: Outfit, Geist, Inter, Space Grotesk,
 IBM Plex, Manrope and JetBrains Mono (SIL Open Font License).

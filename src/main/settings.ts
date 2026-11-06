@@ -15,7 +15,7 @@ const defaults: Settings = {
   callEffort: 'low',
   theme: 'system',
   readingFont: 'serif',
-  uiFont: 'Geist Variable',
+  uiFont: 'Outfit Variable',
   monoFont: 'Geist Mono Variable',
   fontSize: 18,
   lineHeight: 1.85,

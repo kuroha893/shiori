@@ -35,8 +35,8 @@
   --hl-pink: hsl(335 85% 66% / 0.30);
 
   /* overridden at runtime from Settings (lib/fonts.ts) */
-  --font-display: 'Geist Variable', 'PingFang SC', -apple-system, sans-serif;
-  --font-ui: 'Geist Variable', 'PingFang SC', -apple-system, 'Helvetica Neue', sans-serif;
+  --font-display: 'Outfit Variable', 'PingFang SC', -apple-system, sans-serif;
+  --font-ui: 'Outfit Variable', 'PingFang SC', -apple-system, 'Helvetica Neue', sans-serif;
   --font-mono: 'Geist Mono Variable', 'SF Mono', Menlo, monospace;
   --font-serif: 'Charter', 'Songti SC', 'STSong', serif;
   color-scheme: light;
