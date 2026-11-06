@@ -1,12 +1,20 @@
-# Shiori 栞
+<p align="center">
+  <img src="build/icon.png" width="160" alt="Shiori">
+</p>
 
-**English** | [简体中文](README.zh-CN.md)
+<h1 align="center">Shiori 栞</h1>
 
-Shiori is a paper reader for macOS. Drop in a PDF or an arXiv link, and the AI you connect (Claude, ChatGPT or
-DeepSeek) transcribes and translates the whole paper in the background. It comes back as a typeset Chinese–English article you can read, annotate and ask
-questions about.
+<p align="center">A bilingual reader for AI conference papers, on macOS</p>
+
+<p align="center"><b>English</b> | <a href="README.zh-CN.md">简体中文</a></p>
+
+<br>
 
 ![Shiori reading a paper](docs/reader.png)
+
+Shiori is a paper reader for macOS. Drop in a PDF or an arXiv link, and the AI you connect (Claude, ChatGPT or
+DeepSeek) transcribes and translates the whole paper in the background. It comes back as a typeset Chinese–English
+article you can read, annotate and ask questions about.
 
 ## Features
 

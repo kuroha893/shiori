@@ -1,10 +1,18 @@
-# Shiori 栞
+<p align="center">
+  <img src="build/icon.png" width="160" alt="Shiori">
+</p>
 
-[English](README.md) | **简体中文**
+<h1 align="center">Shiori 栞</h1>
 
-Shiori 是一款 macOS 上的论文阅读器。放入 PDF 或 arXiv 链接，你接入的 AI（Claude、ChatGPT 或 DeepSeek）会在后台转写并翻译整篇论文，把它变成一篇排好版的中英双语文章，你可以直接阅读、批注和提问。
+<p align="center">macOS 上的中英双语 AI 顶会论文阅读器</p>
+
+<p align="center"><a href="README.md">English</a> | <b>简体中文</b></p>
+
+<br>
 
 ![Shiori 阅读论文的界面](docs/reader.png)
+
+Shiori 是一款 macOS 上的论文阅读器。放入 PDF 或 arXiv 链接，你接入的 AI（Claude、ChatGPT 或 DeepSeek）会在后台转写并翻译整篇论文，把它变成一篇排好版的中英双语文章，你可以直接阅读、批注和提问。
 
 ## 功能
 
