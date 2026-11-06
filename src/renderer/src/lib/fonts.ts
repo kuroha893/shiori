@@ -7,6 +7,8 @@ import '@fontsource-variable/space-grotesk'
 import '@fontsource-variable/ibm-plex-sans'
 import '@fontsource-variable/manrope'
 import '@fontsource-variable/jetbrains-mono'
+import '@fontsource/dm-mono/400.css'
+import '@fontsource/dm-mono/500.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/600.css'
 
@@ -26,6 +28,7 @@ export const BUNDLED: Record<'ui' | 'mono', FontChoice[]> = {
     { family: 'Manrope Variable', label: 'Manrope' }
   ],
   mono: [
+    { family: 'DM Mono', label: 'DM Mono' },
     { family: 'Geist Mono Variable', label: 'Geist Mono' },
     { family: 'JetBrains Mono Variable', label: 'JetBrains Mono' },
     { family: 'IBM Plex Mono', label: 'IBM Plex Mono' }

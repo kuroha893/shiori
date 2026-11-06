@@ -16,7 +16,7 @@ const defaults: Settings = {
   theme: 'system',
   readingFont: 'serif',
   uiFont: 'Outfit Variable',
-  monoFont: 'Geist Mono Variable',
+  monoFont: 'DM Mono',
   fontSize: 18,
   lineHeight: 1.85,
   panelWidth: 400,
