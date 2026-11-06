@@ -207,10 +207,16 @@ function distance(a: string, b: string, max: number): number {
   return prev[b.length]
 }
 
+/** Raised when the rules below find pairs they missed before; every edition is then looked through once more. */
+export const PAIRS_VERSION = 1
+
+const titleWords = (t: string) => new Set(plainText(t).toLowerCase().normalize('NFKD').split(/[^a-z0-9]+/).filter((w) => w.length > 2))
+
 /**
  * Pairs that may be one paper listed twice under slightly different titles: one title starts with the other, the
- * two differ by a few letters, or they share a distinctive name before a colon ("LongVideoScaler: ..."). A first
- * author that differs settles it. Claude decides the rest on its next patrol.
+ * two differ by a few letters, or they share a distinctive name before a colon ("LongVideoScaler: ..."); a first
+ * author that differs rules those out. Also two papers each listed by one channel only, by different channels, that
+ * share an author and some of their title, as the camera-ready often renames a paper. Claude decides every pair.
  */
 export function findAmbiguous(e: Edition): [string, string][] {
   const list = loadPapers(e.conf, e.year)
@@ -244,6 +250,25 @@ export function findAmbiguous(e: Edition): [string, string][] {
         out.push([a.key, b.key])
       }
   }
+  const byName = new Map<string, ConfPaper[]>()
+  for (const p of list)
+    if (p.sources.length === 1) for (const n of new Set(p.authors.map(surname))) if (n) byName.set(n, [...(byName.get(n) ?? []), p])
+  for (const group of byName.values())
+    for (let i = 0; i < group.length; i++)
+      for (let j = i + 1; j < group.length; j++) {
+        const [a, b] = [group[i], group[j]]
+        if (a.sources[0] === b.sources[0]) continue
+        const id = [a.key, b.key].sort().join()
+        if (decided.has(id)) continue
+        const [wa, wb] = [titleWords(a.title), titleWords(b.title)]
+        const common = [...wa].filter((w) => wb.has(w)).length
+        const overlap = common / Math.max(1, wa.size + wb.size - common)
+        const namesB = new Set(b.authors.map(surname))
+        const shared = [...new Set(a.authors.map(surname))].filter((n) => n && namesB.has(n)).length
+        if (!(overlap >= 0.8 || (overlap >= 0.3 && (surname(a.authors[0]) === surname(b.authors[0]) || shared >= 2)))) continue
+        decided.add(id)
+        out.push([a.key, b.key])
+      }
   return out.slice(0, 200)
 }
 
@@ -267,6 +292,12 @@ export function mergeSame(e: Edition, pairs: [string, string][]): number {
     a.kind ??= b.kind
     a.url ??= b.url
     a.arxiv ??= b.arxiv
+    a.area ??= b.area
+    a.branch ??= b.branch
+    a.titleZh ??= b.titleZh
+    a.abstractZh ??= b.abstractZh
+    a.fixes = b.fixes || a.fixes ? { ...b.fixes, ...a.fixes } : undefined
+    a.leftovers = leftoversOf(a)
     a.follows = [...new Set([...(a.follows ?? []), ...(b.follows ?? [])])]
     if (b.firstSeen < a.firstSeen) a.firstSeen = b.firstSeen
     gone.add(kb)

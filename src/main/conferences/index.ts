@@ -23,7 +23,7 @@ import { loadFolders } from '../folders'
 import { callEvent } from '../call'
 import { prepare } from '../jobs'
 import * as S from './store'
-import { LINKS_VERSION, findAmbiguous, leftoversOf, mergeChannel, mergeSame, runChannel, scriptFile } from './scripts'
+import { LINKS_VERSION, PAIRS_VERSION, findAmbiguous, leftoversOf, mergeChannel, mergeSame, runChannel, scriptFile } from './scripts'
 import * as T from './tasks'
 import { findArxiv } from './arxiv'
 import * as OR from '../openreview'
@@ -205,6 +205,9 @@ function planEdition(c: Conference, e: Edition, editions: Edition[], now: number
   }
   if (!e.released) return
 
+  // Possible duplicates are decided in every phase: a finished edition still shows both rows.
+  if (e.fetchedAt && ((e.pairs ?? 0) < PAIRS_VERSION || e.ambiguous?.length)) ai.add(`dedupe:${ref}`, () => dedupe(e.conf, e.year))
+
   if (!archived && ph !== 'complete') {
     // No channels yet: look again daily while hot, weekly after.
     if (!e.discoveredAt || (!e.channels.length && ago(e.discoveredAt, now) >= (ph === 'hot' ? DAY : 7 * DAY)))
@@ -212,7 +215,7 @@ function planEdition(c: Conference, e: Edition, editions: Edition[], now: number
     else if (e.channels.length && ago(e.fetchedAt, now) >= (ph === 'hot' ? 20 * 3600_000 : 7 * DAY))
       fetcher.add(`fetch:${ref}`, () => fetchEdition(e.conf, e.year))
     else if (e.fetchedAt && ph === 'hot' && ago(e.patrolledAt, now) >= 20 * 3600_000) ai.add(`patrol:${ref}`, () => patrolEdition(e.conf, e.year, true))
-    else if (e.fetchedAt && (e.channels.some((ch) => ch.error) || e.ambiguous?.length) && ago(e.patrolledAt, now) >= DAY)
+    else if (e.fetchedAt && e.channels.some((ch) => ch.error) && ago(e.patrolledAt, now) >= DAY)
       ai.add(`patrol:${ref}`, () => patrolEdition(e.conf, e.year, false))
   }
 
@@ -431,6 +434,70 @@ async function lookForCopies(conf: string, year: number): Promise<void> {
   if (failed) throw failed
 }
 
+/**
+ * Pairs that may be one paper listed twice, found afresh with the current rules, decided by Claude a batch at a
+ * time with the web at hand. Shiori merges only the pairs Claude calls one paper.
+ */
+async function dedupe(conf: string, year: number): Promise<void> {
+  const e = S.readEdition(conf, year)
+  if (!e) return
+  const ref = editionRef(conf, year)
+  await step(e, '查重', async () => {
+    let merged = 0
+    let done = 0
+    for (let round = 0; round < 20; round++) {
+      const cur = S.readEdition(conf, year)!
+      const fresh = findAmbiguous(cur)
+      const pending = [...(cur.ambiguous ?? []), ...fresh]
+      if (fresh.length) S.updateEdition(conf, year, { ambiguous: pending })
+      if (!pending.length) {
+        S.updateEdition(conf, year, { pairs: PAIRS_VERSION })
+        break
+      }
+      busy(ref, { label: '查重', progress: done / (done + pending.length) })
+      const batch = pending.slice(0, T.SAME_BATCH)
+      const r = await T.decideSame(cur, batch)
+      merged += applySame(conf, year, r.same)
+      const decided = new Set(batch.map((p) => [...p].sort().join()))
+      const latest = S.readEdition(conf, year)!
+      S.updateEdition(conf, year, {
+        ambiguous: (latest.ambiguous ?? []).filter((p) => !decided.has([...p].sort().join())),
+        distinct: [...(latest.distinct ?? []), ...r.different]
+      })
+      done += batch.length
+    }
+    if (merged) S.logEdition(conf, year, `合并了 ${merged} 篇重复的论文`)
+  })
+}
+
+/** Folds each pair Claude called one paper into the one whose title it was published under; 稍后再看 and the library follow. */
+function applySame(conf: string, year: number, same: [string, string][]): number {
+  const e = S.readEdition(conf, year)
+  if (!e || !same.length) return 0
+  const n = mergeSame(e, same)
+  const ref = editionRef(conf, year)
+  const papers = new Map(S.loadPapers(conf, year).map((p) => [p.key, p]))
+  const into = new Map(same.filter(([keep, fold]) => papers.has(keep) && !papers.has(fold)).map(([keep, fold]) => [`${ref}/${fold}`, keep]))
+  const later = S.loadLater()
+  if (later.some((i) => into.has(i.ref))) {
+    const next = later.flatMap((i) => {
+      const keep = into.get(i.ref)
+      if (!keep) return [i]
+      const p = papers.get(keep)!
+      return later.some((x) => x.ref === `${ref}/${keep}`) ? [] : [{ ...i, ref: `${ref}/${keep}`, title: p.title, titleZh: p.titleZh }]
+    })
+    S.saveLater(next)
+    send('later:changed')
+  }
+  for (const m of libraryPapers()) {
+    const keep = m.source && into.get(`${m.source.edition}/${m.source.key}`)
+    const meta = keep && updateMeta(m.id, { source: { edition: ref, key: keep } })
+    if (meta) paperChanged(meta)
+  }
+  changed()
+  return n
+}
+
 /** 稍后再看 papers whose PDF just appeared: say so once. */
 function pdfArrived(conf: string, year: number, keys: string[]): void {
   const later = S.loadLater()
@@ -455,18 +522,14 @@ async function patrolEdition(conf: string, year: number, search: boolean): Promi
   if (!e) return
   await step(e, search ? '巡查' : '修脚本', async () => {
     const r = await T.patrol(e, { effort: 'medium', search, onRound: () => busy(editionRef(conf, year), { label: '测试脚本' }) })
-    const merged = r.same.length ? mergeSame(e, r.same) : 0
-    const decided = new Set([...r.same, ...r.different].map((p) => [...p].sort().join()))
     const latest = S.readEdition(conf, year)!
     const changedChannels = JSON.stringify(r.channels.map((c) => c.id)) !== JSON.stringify(latest.channels.map((c) => c.id)) || r.channels.some((c) => !c.error && latest.channels.find((x) => x.id === c.id)?.error)
     S.updateEdition(conf, year, {
       channels: r.channels,
       patrolledAt: new Date().toISOString(),
-      officialCount: r.officialCount ?? latest.officialCount,
-      ambiguous: (latest.ambiguous ?? []).filter((p) => !decided.has([...p].sort().join())),
-      distinct: [...(latest.distinct ?? []), ...r.different]
+      officialCount: r.officialCount ?? latest.officialCount
     })
-    const notes = [r.note, merged && `合并了 ${merged} 篇重复的论文`, r.officialCount && !latest.officialCount && `官方公布录用 ${r.officialCount} 篇`].filter(Boolean)
+    const notes = [r.note, r.officialCount && !latest.officialCount && `官方公布录用 ${r.officialCount} 篇`].filter(Boolean)
     if (notes.length) S.logEdition(conf, year, notes.join('；'))
     // New or repaired channels are run at once.
     if (changedChannels) S.updateEdition(conf, year, { fetchedAt: undefined })

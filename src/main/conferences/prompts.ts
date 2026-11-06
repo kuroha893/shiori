@@ -93,6 +93,23 @@ date.json:
 Write nothing else, then reply with the single word DONE.`
 }
 
+/** Pairs that may be one paper listed twice, for Claude to decide, looking them up when it must. */
+export function samePrompt(o: { edition: string; count: number; input: string; out: string }): string {
+  return `The papers of ${o.edition} come from more than one list (the official site, the proceedings, ...), merged by
+title. ${o.input} holds ${o.count} pairs, a and b, that may be one paper listed twice: a title can change for the
+camera-ready or be spelt differently, and the same authors also often write two different papers. For each paper:
+key, title, authors, the start of its abstract, its track and presentation, the list it came from, and where it is
+(page, PDF, arXiv).
+
+Decide every pair. Compare the authors and the abstracts first; when that doesn't settle it, look the papers up
+(their pages and PDFs, the proceedings, OpenReview, arXiv, a web search). When they are one paper, say which title it
+was published under (usually the proceedings' or the camera-ready's). When you can't tell, call them different: two
+rows are better than one wrong merge.
+
+Write ${o.out}: [{"a": "<key>", "b": "<key>", "same": true or false, "title": "<the key whose title it was published
+under, when same>"}, ...], covering every pair. Write nothing else, then reply with the single word DONE.`
+}
+
 /** Finding where an edition's papers are listed, and writing a script for each place. */
 export function discoverPrompt(o: { edition: string; fullName?: string; releaseDate?: string; past?: boolean; existing?: string }): string {
   return `Shiori, a paper reader, follows the accepted papers of ${o.edition}${o.fullName ? ` (${o.fullName})` : ''}. Today is ${today()}.${
@@ -116,7 +133,7 @@ ${SCRIPTS(o.edition)}`
 }
 
 /** The daily look while an edition is fresh: news, new channels, broken scripts, duplicates. */
-export function patrolPrompt(o: { edition: string; state: string; failing: string[]; pairs: string; search: boolean }): string {
+export function patrolPrompt(o: { edition: string; state: string; failing: string[]; search: boolean }): string {
   const tasks = [
     o.search &&
       `- Search the web, briefly (a few searches are enough when nothing changed): how many papers the conference
@@ -124,9 +141,7 @@ export function patrolPrompt(o: { edition: string; state: string; failing: strin
   a site that adds abstracts or PDFs). If one gives something the channels below lack, add a channel for it.`,
     o.failing.length &&
       `- These channels failed or suddenly found nothing: ${o.failing.join(', ')}. out/<id>.json holds the last run;
-  find out why and fix the script, or drop the channel if its source is gone.`,
-    o.pairs &&
-      `- These pairs may be one paper listed twice under slightly different titles. Decide each:\n${o.pairs}`
+  find out why and fix the script, or drop the channel if its source is gone.`
   ].filter(Boolean)
   return `A check on ${o.edition}, whose papers are still being published. Today is ${today()}.
 
@@ -137,8 +152,7 @@ To do:
 ${tasks.join('\n')}
 
 Write patrol.json:
-{"officialCount": <number or null>, "same": [["keyA", "keyB"], ...], "different": [["keyA", "keyB"], ...],
- "note": "一句中文：今天有什么变化；没有就留空"}
+{"officialCount": <number or null>, "note": "一句中文：今天有什么变化；没有就留空"}
 Then keep channels.json up to date with anything you added, changed or dropped.
 ${SCRIPTS(o.edition)}`
 }

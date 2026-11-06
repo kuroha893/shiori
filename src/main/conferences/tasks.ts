@@ -205,26 +205,14 @@ export async function discover(e: Edition, fullName: string | undefined, o: Loop
 export interface PatrolResult {
   channels: Channel[]
   officialCount?: number
-  same: [string, string][]
-  different: [string, string][]
   note?: string
 }
 
-/** The daily look while papers are coming in; with search off, only failing scripts and duplicates. */
+/** The daily look while papers are coming in; with search off, only failing scripts. */
 export async function patrol(e: Edition, o: LoopOptions & { search: boolean }): Promise<PatrolResult> {
   const dir = editionDir(e.conf, e.year)
   const papers = loadPapers(e.conf, e.year)
   const failing = e.channels.filter((c) => c.error).map((c) => c.id)
-  const byKey = new Map(papers.map((p) => [p.key, p]))
-  const pairs = (e.ambiguous ?? [])
-    .slice(0, 60)
-    .map(([a, b]) => {
-      const pa = byKey.get(a)
-      const pb = byKey.get(b)
-      return pa && pb ? `  ${a}: ${pa.title} (${pa.authors.slice(0, 3).join(', ')})\n  ${b}: ${pb.title} (${pb.authors.slice(0, 3).join(', ')})` : ''
-    })
-    .filter(Boolean)
-    .join('\n\n')
   const state = [
     `- ${papers.length} papers merged${e.officialCount ? `; the conference says it accepted ${e.officialCount}` : ''}; ${papers.filter((p) => p.abstract).length} with an abstract, ${papers.filter((p) => p.pdf).length} with a PDF link`,
     ...e.channels.map((c) => `- channel ${c.id} (${c.name}, ${c.url ?? ''}): ${c.error ? `FAILED: ${c.error.slice(0, 200)}` : `${c.count ?? 0} papers`}, last run ${c.ranAt ?? 'never'}`)
@@ -232,14 +220,11 @@ export async function patrol(e: Edition, o: LoopOptions & { search: boolean }): 
   const file = join(dir, 'patrol.json')
   rmSync(file, { force: true })
   writeFileSync(join(dir, 'channels.json'), JSON.stringify(e.channels.map(({ id, name, url, kind, provides, note }) => ({ id, name, url, kind, provides, note })), null, 1))
-  await scriptLoop(dir, P.patrolPrompt({ edition: e.name, state, failing, pairs, search: o.search }), o)
+  await scriptLoop(dir, P.patrolPrompt({ edition: e.name, state, failing, search: o.search }), o)
   const out = take<any>(file) ?? {}
-  const pairList = (v: unknown) => (Array.isArray(v) ? v.filter((x) => Array.isArray(x) && x.length === 2 && x.every((k) => byKey.has(k))) : []) as [string, string][]
   return {
     channels: readChannels(e),
     officialCount: Number.isInteger(out.officialCount) && out.officialCount > 0 ? out.officialCount : undefined,
-    same: pairList(out.same),
-    different: pairList(out.different),
     note: typeof out.note === 'string' && out.note.trim() ? out.note.trim().slice(0, 200) : undefined
   }
 }
@@ -473,6 +458,61 @@ export async function translateAbstract(title: string, abstract: string): Promis
 /* ---------- what the rules couldn't read ---------- */
 
 const LOOKUP_BATCH = 25
+
+/** Pairs Claude decides in one run */
+export const SAME_BATCH = 25
+
+/** Claude's word on pairs that may be one paper listed twice: for each same pair, the key to keep first. */
+export async function decideSame(e: Edition, pairs: [string, string][], signal?: AbortSignal): Promise<{ same: [string, string][]; different: [string, string][] }> {
+  const dir = editionDir(e.conf, e.year)
+  const input = 'pairs.json'
+  const out = 'same.json'
+  const byKey = new Map(loadPapers(e.conf, e.year).map((p) => [p.key, p]))
+  const lists = new Map(e.channels.map((c) => [c.id, c.name]))
+  const paper = (p: ConfPaper) => ({
+    key: p.key,
+    title: p.title,
+    authors: p.authors,
+    abstract: p.abstract?.slice(0, 700),
+    track: p.track,
+    kind: p.kind,
+    list: p.sources.map((s) => lists.get(s) ?? s).join(', '),
+    page: p.url,
+    pdf: p.pdf,
+    arxiv: p.arxiv && `https://arxiv.org/abs/${p.arxiv}`
+  })
+  const live = pairs.filter(([a, b]) => byKey.has(a) && byKey.has(b))
+  if (!live.length) return { same: [], different: [] }
+  writeFileSync(join(dir, input), JSON.stringify(live.map(([a, b]) => ({ a: paper(byKey.get(a)!), b: paper(byKey.get(b)!) })), null, 1))
+  rmSync(join(dir, out), { force: true })
+  const r = await runAgent({
+    cwd: dir,
+    prompt: P.samePrompt({ edition: e.name, count: live.length, input, out }),
+    model: await processModel(),
+    effort: 'medium',
+    write: true,
+    search: true,
+    fetch: true,
+    signal
+  })
+  rmSync(join(dir, input), { force: true })
+  if (r.isError) throw new Error(r.text || 'Claude 出错了')
+  const answers = take<unknown[]>(join(dir, out))
+  if (!Array.isArray(answers)) throw new Error('没有写出结果')
+  const open = new Map(live.map(([a, b]) => [[a, b].sort().join(), [a, b] as [string, string]]))
+  const same: [string, string][] = []
+  const different: [string, string][] = []
+  for (const x of answers as { a?: unknown; b?: unknown; same?: unknown; title?: unknown }[]) {
+    if (typeof x?.a !== 'string' || typeof x.b !== 'string') continue
+    const id = [x.a, x.b].sort().join()
+    if (!open.delete(id)) continue
+    if (x.same === true) same.push(x.title === x.b ? [x.b, x.a] : [x.a, x.b])
+    else different.push([x.a, x.b])
+  }
+  // A pair left unanswered counts as two papers, so it isn't asked about again and again.
+  different.push(...open.values())
+  return { same, different }
+}
 
 /**
  * The authors' own macros (\ours, \method) and formulas that don't compile, in an edition's titles and abstracts:

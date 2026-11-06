@@ -81,6 +81,8 @@ export interface Edition {
   tidied?: number
   /** The version of the link rules its papers' PDF links were last merged with */
   links?: number
+  /** The version of the duplicate rules its papers were last looked through with */
+  pairs?: number
   /** Whether OpenReview lets a signed-in reader see its papers yet, and when Shiori last asked */
   openReview?: { public: boolean; at: string }
 }
