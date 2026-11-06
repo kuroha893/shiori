@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import type { CallLine, CallMood, CallState, PastCall } from '../../shared/types'
 import type { CallBridge } from '../../preload/call'
 import { Icon } from './components/Icon'
+// The fonts that ship with the app, so the call can use the one chosen for the interface.
+import './lib/fonts'
 import './styles/call.css'
 
 declare global {
