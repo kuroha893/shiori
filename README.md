@@ -31,9 +31,9 @@ questions about.
 - **Glossary** – your preferred translations of terms, used for every paper.
 - **Themes and fonts** – light, dark and sepia; any installed font for the interface.
 
-Two contacts come with the app, and are yours to change or delete like any other: Hayama Shiori, Shiori's own
-character, and Yachiyo Runami from *Cosmic Princess Kaguya!*. Yachiyo's pictures are non-commercial fan art; the
-character belongs to its rights holders.
+Three contacts come with the app, and are yours to change or delete like any other: Hayama Shiori, Shiori's own
+character, Yachiyo Runami from *Cosmic Princess Kaguya!*, and Aemeath from *Wuthering Waves*. Yachiyo's and
+Aemeath's pictures are non-commercial fan art; the characters belong to their rights holders.
 
 ## Screenshots
 

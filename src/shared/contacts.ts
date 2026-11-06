@@ -1,12 +1,14 @@
-// The people you can call. Shiori and Yachiyo come with the app; from then on every contact is the owner's own.
+// The people you can call. Shiori, Yachiyo and Aemeath come with the app; from then on every contact is the owner's own.
 
 export const SHIORI = 'shiori'
 export const YACHIYO = 'yachiyo'
+export const AEMEATH = 'aemeath'
 
 /** The contacts that come with the app, in the order a library receives them; `formerly` are the names they once shipped under. */
 export const BUILTIN = [
   { id: SHIORI, name: '叶山 诗织', romaji: 'Hayama Shiori', formerly: ['詩織'] },
-  { id: YACHIYO, name: '月见 八千代', romaji: 'Runami Yachiyo', formerly: ['八千代'] }
+  { id: YACHIYO, name: '月见 八千代', romaji: 'Runami Yachiyo', formerly: ['八千代'] },
+  { id: AEMEATH, name: '爱弥斯', romaji: 'Aemeath', formerly: [] as string[] }
 ]
 
 export type CallLanguage = 'ja' | 'zh'

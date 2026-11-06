@@ -87,9 +87,9 @@ function copyShipped(id: string): void {
 
 /**
  * Hand the library the app's contacts it hasn't received yet: their files, copied where the library lacks them,
- * and a place in contacts.json ahead of the rest. A library from before the record counts the ones it already
- * lists as received; it used to read their pictures from the app, so it gets its own copies of what it lacks,
- * and their names and readings as they are now.
+ * and a place in contacts.json right after the app's contacts that come before them, ahead of the owner's own.
+ * A library from before the record counts the ones it already lists as received; it used to read their pictures
+ * from the app, so it gets its own copies of what it lacks, and their names and readings as they are now.
  */
 function receive(stored: Stored[]): Stored[] {
   let got: string[] | undefined
@@ -111,14 +111,16 @@ function receive(stored: Stored[]): Stored[] {
       return b.formerly.includes(c.name) ? { ...c, name: b.name, romaji: c.romaji || b.romaji } : c
     })
   }
-  const arrivals: Stored[] = fresh.map((b) => {
+  for (const b of fresh) {
     copyShipped(b.id)
     // Yachiyo's voice and language were settings before there could be several contacts.
     const legacy = b.id === YACHIYO ? getSettings().contacts?.[YACHIYO] : undefined
     const start = shippedVoice(b.id)
-    return { id: b.id, name: b.name, romaji: b.romaji, voice: legacy?.voice ?? start.voice ?? '', language: legacy?.language ?? start.language ?? 'ja' }
-  })
-  list = [...arrivals, ...list]
+    const arrival = { id: b.id, name: b.name, romaji: b.romaji, voice: legacy?.voice ?? start.voice ?? '', language: legacy?.language ?? start.language ?? 'ja' }
+    const before = BUILTIN.slice(0, BUILTIN.indexOf(b)).map((x) => x.id)
+    const at = list.reduce((n, c, i) => (before.includes(c.id) ? i + 1 : n), 0)
+    list = [...list.slice(0, at), arrival, ...list.slice(at)]
+  }
   mkdirSync(root(), { recursive: true })
   writeStored(list)
   writeFileSync(receivedFile(), JSON.stringify([...got, ...fresh.map((b) => b.id)]))
