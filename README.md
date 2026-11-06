@@ -22,9 +22,14 @@ questions about.
 - **Ask about it** – select any passage to have it explained or translated, or chat about the paper. Each paper
   keeps its own conversation.
 - **Your choice of AI** – Claude or ChatGPT through your own subscription, or DeepSeek with an API key. Processing,
-  questions and calls can each use a different model.
-- **Library** – arXiv import, reading progress, hearts for the papers you like, research directions to file them
-  under with a suggested one for each paper, and venue tags with their CCF rank.
+  questions and calls can each use a different model, each with its own thinking level.
+- **Library** – arXiv import, reading progress, hearts for the papers you like, a watch-later list, and your own
+  categories to file papers under, with one suggested for each paper. Venue tags and their CCF rank are looked up for
+  you, technical reports carry their organisation's mark, and you can correct any of them.
+- **Conferences** – follow the accepted papers of ICML, NeurIPS, ICLR, ACL and EMNLP, or any conference you add. The AI
+  sorts each edition into a map of themes in Chinese and gives every title a Chinese translation. Follow research
+  directions, keep papers for later, and import any of them into your library in one click; papers on OpenReview can
+  be imported once you sign in.
 - **Contacts** – keep a favourite character on the line while you read. They chat with you by voice, with Chinese
   subtitles, and tell you when a paper is ready. Personality, picture and voice are all yours to set. Voices need
   your own Fish Audio key.
@@ -37,9 +42,13 @@ Aemeath's pictures are non-commercial fan art; the characters belong to their ri
 
 ## Screenshots
 
-Your library, with research directions, hearts and venue tags:
+Your library, with your categories, hearts and venue tags:
 
 ![The library](docs/library.png)
+
+An edition of a conference, its papers sorted by theme, with the themes down the side:
+
+![NeurIPS 2026 papers sorted by theme](docs/conference.png)
 
 Chinese and the original English, side by side:
 
@@ -49,9 +58,9 @@ A call while you read, with subtitles on the desktop:
 
 ![A call in its capsule, with subtitles, over a paper](docs/call-capsule.png)
 
-The call opened up, with the record of past calls:
+The call opened up, with the record of past calls. From left to right, the three contacts that come with the app:
 
-<img src="docs/call-screen.png" alt="The call screen" width="380">
+![The call screens of the three contacts](docs/call-screens.png)
 
 ## Requirements
 
@@ -62,6 +71,7 @@ The call opened up, with the record of past calls:
   - the [ChatGPT desktop app](https://chatgpt.com/download) or the Codex CLI, signed in with a ChatGPT account
   - Claude Code with a [DeepSeek](https://platform.deepseek.com) API key, no Claude account needed
 - Optional: a [Fish Audio](https://fish.audio) API key, for the contacts' voices
+- Optional: an [OpenReview](https://openreview.net) account, to import papers from OpenReview
 
 ## Getting started
 

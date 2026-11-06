@@ -14,8 +14,9 @@ Shiori 是一款 macOS 上的论文阅读器。放入 PDF 或 arXiv 链接，你
 - **原文页面**：每一段都能跳到它在 PDF 里的那一页。
 - **批注和笔记**：四种高亮颜色和批注，每篇论文还有一份块编辑器笔记，支持表格、公式和图片。两者都能导出为 Markdown。
 - **随时提问**：选中任意段落，让 AI 解释或翻译，也可以就整篇论文聊天。每篇论文的对话单独保存。
-- **自选 AI**：用你自己的 Claude 或 ChatGPT 订阅，或者填一个 DeepSeek API key。处理论文、问答和通话可以分别用不同的模型。
-- **书架**：支持 arXiv 导入和阅读进度，可以给喜欢的论文点红心，按研究方向归类（每篇都会给出建议），还会显示会议标签和 CCF 等级。
+- **自选 AI**：用你自己的 Claude 或 ChatGPT 订阅，或者填一个 DeepSeek API key。处理论文、问答和通话可以分别用不同的模型，各自设定思考程度。
+- **书架**：支持 arXiv 导入和阅读进度，可以给喜欢的论文点红心、留着稍后再看，放进自己的分类（每篇都会给出建议）。会议标签和 CCF 等级会自动查找，技术报告显示机构标志，也可以手动修改。
+- **会议**：跟踪 ICML、NeurIPS、ICLR、ACL 和 EMNLP 的录用论文，会议列表可以自己增减。AI 把每一届整理成中文主题目录，标题都配上中文。可以关注研究方向、稍后再看，一键导入书架；OpenReview 上的论文登录后也能导入。
 - **联系人**：读论文的时候，和喜欢的角色挂个电话吧。TA 会用语音陪你聊天，配中文字幕，论文翻译好了也会告诉你。人设、立绘、声音都能自定义。语音需要自备 Fish Audio 密钥。
 - **术语表**：设定你习惯的术语译法，所有论文都会遵循。
 - **主题和字体**：浅色、深色和护眼三种主题，界面可以使用任意已安装的字体。
@@ -24,9 +25,13 @@ Shiori 是一款 macOS 上的论文阅读器。放入 PDF 或 arXiv 链接，你
 
 ## 截图
 
-书架，可以按研究方向归类，还有红心和会议标签：
+书架，可以按自己的分类整理，还有红心和会议标签：
 
 ![书架](docs/library.png)
+
+一届会议的论文按主题排好，左边是主题目录：
+
+![NeurIPS 2026 的论文，按主题排列](docs/conference.png)
 
 中文和英文原文逐段对照：
 
@@ -36,9 +41,9 @@ Shiori 是一款 macOS 上的论文阅读器。放入 PDF 或 arXiv 链接，你
 
 ![阅读时的胶囊通话和字幕](docs/call-capsule.png)
 
-展开通话，可以看过去的通话记录：
+展开通话，可以看过去的通话记录。从左到右是三位自带联系人：
 
-<img src="docs/call-screen.png" alt="通话界面" width="380">
+![三位联系人的通话界面](docs/call-screens.png)
 
 ## 环境要求
 
@@ -49,6 +54,7 @@ Shiori 是一款 macOS 上的论文阅读器。放入 PDF 或 arXiv 链接，你
   - [ChatGPT 桌面版](https://chatgpt.com/download)或 Codex CLI，并已登录 ChatGPT 账号
   - Claude Code 加一个 [DeepSeek](https://platform.deepseek.com) API key，不需要 Claude 账号
 - 可选：一个 [Fish Audio](https://fish.audio) API key，用于联系人的语音
+- 可选：一个 [OpenReview](https://openreview.net) 账号，用于导入 OpenReview 上的论文
 
 ## 开始使用
 
