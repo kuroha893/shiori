@@ -23,7 +23,7 @@ import { loadFolders } from '../folders'
 import { callEvent } from '../call'
 import { prepare } from '../jobs'
 import * as S from './store'
-import { LINKS_VERSION, PAIRS_VERSION, findAmbiguous, leftoversOf, mergeChannel, mergeSame, runChannel, scriptFile } from './scripts'
+import { LINKS_VERSION, PAIRS_VERSION, authorList, findAmbiguous, leftoversOf, mergeChannel, mergeSame, runChannel, scriptFile } from './scripts'
 import * as T from './tasks'
 import { findArxiv } from './arxiv'
 import * as OR from '../openreview'
@@ -639,6 +639,7 @@ async function retidy(conf: string, year: number): Promise<void> {
   for (const p of list) {
     const read = (s: string) => applyFixes(tidyTex(s), p.fixes)
     p.title = read(p.title)
+    p.authors = authorList(p.authors)
     if (p.abstract) p.abstract = read(p.abstract)
     if (p.titleZh) p.titleZh = read(p.titleZh)
     if (p.abstractZh) p.abstractZh = read(T.dropTitleLine(p.abstractZh))
@@ -651,8 +652,8 @@ async function retidy(conf: string, year: number): Promise<void> {
   let laterChanged = false
   for (const item of later) {
     const p = item.ref.startsWith(`${ref}/`) ? byKey.get(item.ref.slice(ref.length + 1)) : undefined
-    if (!p || (item.title === p.title && item.titleZh === p.titleZh && item.abstract === p.abstract)) continue
-    Object.assign(item, { title: p.title, titleZh: p.titleZh, abstract: p.abstract })
+    if (!p || (item.title === p.title && item.titleZh === p.titleZh && item.abstract === p.abstract && item.authors.join() === p.authors.join())) continue
+    Object.assign(item, { title: p.title, titleZh: p.titleZh, abstract: p.abstract, authors: p.authors })
     laterChanged = true
   }
   if (laterChanged) {
@@ -661,8 +662,8 @@ async function retidy(conf: string, year: number): Promise<void> {
   }
   for (const m of libraryPapers()) {
     if (m.source?.edition !== ref) continue
-    const patch = { title: tidyTex(m.title), titleZh: m.titleZh && tidyTex(m.titleZh), abstract: m.abstract && tidyTex(m.abstract) }
-    if (patch.title === m.title && patch.titleZh === m.titleZh && patch.abstract === m.abstract) continue
+    const patch = { title: tidyTex(m.title), titleZh: m.titleZh && tidyTex(m.titleZh), abstract: m.abstract && tidyTex(m.abstract), authors: authorList(m.authors) }
+    if (patch.title === m.title && patch.titleZh === m.titleZh && patch.abstract === m.abstract && patch.authors.join() === m.authors.join()) continue
     const meta = updateMeta(m.id, patch)
     if (meta) paperChanged(meta)
   }

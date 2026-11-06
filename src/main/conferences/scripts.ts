@@ -74,13 +74,35 @@ const link = (v: unknown) => {
   return s && /^https?:\/\//.test(s) ? s : undefined
 }
 
+const ENTITY: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+
+/** The characters behind HTML entities a site left in (O&#x27;Brien), twice over for one encoded twice (&amp;#x27;). */
+function unentity(s: string): string {
+  const once = (t: string) =>
+    t.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, c: string) => {
+      const n = c[0] === '#' ? parseInt(c.slice(c[1].toLowerCase() === 'x' ? 2 : 1), c[1].toLowerCase() === 'x' ? 16 : 10) : NaN
+      return c[0] === '#' ? (n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m) : ENTITY[c.toLowerCase()] ?? m
+    })
+  return once(once(s))
+}
+
+/** Authors' names as people read them; a name a script cut at the ; of an entity ("Timothy O&#x27", "Donnell") is put back together. */
+export function authorList(names: string[]): string[] {
+  const out: string[] = []
+  for (const name of names.map((n) => unentity(n).trim()).filter(Boolean)) {
+    const last = out[out.length - 1]
+    if (last && /&(#x?[0-9a-f]+|[a-z]+)$/i.test(last)) out[out.length - 1] = unentity(`${last};${name}`)
+    else out.push(name)
+  }
+  return out
+}
+
 function clean(raw: any): RawPaper | undefined {
   const title = text(raw?.title, 500)
   if (!title || normTitle(title).length < 4) return undefined
-  const authors = (Array.isArray(raw.authors) ? raw.authors : typeof raw.authors === 'string' ? raw.authors.split(/\s*[,;]\s*|\s+and\s+/) : [])
-    .map((a: unknown) => text(typeof a === 'object' && a ? (a as any).name ?? (a as any).fullname : a, 120))
-    .filter(Boolean)
-    .slice(0, 100) as string[]
+  // One string of names is split only once its entities are characters again, so O&#x27;Donnell stays whole.
+  const listed = Array.isArray(raw.authors) ? raw.authors : typeof raw.authors === 'string' ? unentity(raw.authors).split(/\s*[,;]\s*|\s+and\s+/) : []
+  const authors = authorList(listed.map((a: unknown) => text(typeof a === 'object' && a ? (a as any).name ?? (a as any).fullname : a, 120)).filter(Boolean)).slice(0, 100)
   const arxiv = text(raw.arxiv, 40)?.match(/\d{4}\.\d{4,5}/)?.[0]
   const abstract = text(raw.abstract, 8000)
   return {

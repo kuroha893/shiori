@@ -170,6 +170,8 @@ const ACCENT: Record<string, string> = {
 const LETTER: Record<string, string> = { ss: 'ß', o: 'ø', O: 'Ø', ae: 'æ', AE: 'Æ', oe: 'œ', OE: 'Œ', aa: 'å', AA: 'Å', l: 'ł', L: 'Ł', i: 'ı', j: 'ȷ' }
 // Markdown's own characters are written escaped, so they stay text.
 const SYMBOL: Record<string, string> = {
+  // escaped for Markdown by the author (\<think\>, \*, \|): the character itself
+  '<': '\\<', '>': '>', '*': '\\*', '|': '|',
   '%': '%', '&': '&', '#': '#', '{': '\\{', '}': '\\}', _: '\\_', $: '\\$', ',': '\u2009', ' ': ' ', ';': ' ', ':': ' ', '!': '', '-': '', '/': '', '@': '', '\\': ' ',
   // \n left in by a script that didn't decode its source
   n: ' ',
@@ -400,8 +402,8 @@ const dashes = (t: string) =>
     .map((x, i) => (i % 2 ? x : x.replace(/---/g, '—').replace(/(?<=[\w\s)])--(?=[\w\s(])/g, '–')))
     .join('')
 
-/** Raised whenever these rules change, so text already stored is read again. */
-export const TIDY_VERSION = 1
+/** Raised whenever these rules change, or how authors' names are read (conferences/scripts.ts), so text already stored is read again. */
+export const TIDY_VERSION = 2
 
 /** A title or abstract as Shiori keeps it. Reading it again changes nothing. */
 export function tidyTex(s: string): string {
@@ -410,7 +412,7 @@ export function tidyTex(s: string): string {
     // \\% for \%: written for a site that reads Markdown before math
     .replace(/\\\\(?=[$%&#_{}|])/g, '\\')
     // \$L^\star\$ around a formula, for the same reason
-    .replace(/\\\$(\S(?:[^$]*?\S)?)\\\$/g, (m, inner) => (/\\[a-zA-Z]|[_^]|^\S+$/.test(inner) ? `$${inner}$` : m))
+    .replace(/\\\$(\S(?:[^$]*?\S)?)\\\$/g, (m, inner) => (/\\[a-zA-Z]|[_^]|^\S+$/.test(inner) && /[A-Za-z0-9]/.test(inner) ? `$${inner}$` : m))
   return dashes(prose(src))
     .replace(/[ \u00a0]{2,}/g, ' ')
     .trim()
