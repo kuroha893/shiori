@@ -1179,6 +1179,7 @@ function EditionPage(props: Props & { c: ConferenceSummary; year: number; onYear
   return (
     <>
       <aside className="lib-side cf-side">
+        <div className="side-lights drag" />
         <button className="cf-back" onClick={props.onBack}>
           <Icon name="back" size={14} />
           会议

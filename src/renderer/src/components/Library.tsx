@@ -231,10 +231,6 @@ export function Library(props: {
     >
       <CallLauncher />
       <header className="topbar drag">
-        <div className="brand">
-          <img className="brand-mark" src={brand} alt="" draggable={false} />
-          <span>Shiori</span>
-        </div>
         <SpaceSwitch space={space} onChange={setSpace} fresh={space === 'lib' && !!overview?.fresh} />
         <div className="topbar-actions">
           <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
@@ -250,6 +246,10 @@ export function Library(props: {
       ) : (
       <>
       <aside className="lib-side">
+          <div className="brand drag">
+            <img className="brand-mark" src={brand} alt="" draggable={false} />
+            <span>Shiori</span>
+          </div>
           <button className={`lib-side-item ${place === 'all' ? 'on' : ''}`} onClick={() => setPlace('all')}>
             <span>全部论文</span>
             <i>{papers.length}</i>
