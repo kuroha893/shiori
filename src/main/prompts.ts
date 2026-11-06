@@ -26,8 +26,8 @@ Block types and attributes:
 - \`@@ list id=l-<n> page=<page>\`: a bulleted or numbered list in Markdown.
 - \`@@ quote\`, \`@@ code\`: rarely needed (pseudo-code that is plain text, quoted passages).
 - \`@@ note id=fn-1 page=<page>\`: a footnote.
-- \`@@ ref id=ref-12 num=12\`: one bibliography entry, original text only, no @@zh. For author-year styles
-  number them in order and still use ref-<n>.
+- \`@@ ref id=ref-12 num=12\`: one bibliography entry, original text only, without its number (the reader shows
+  num beside it), no @@zh. For author-year styles number them in order and still use ref-<n>.
 
 Example:
 

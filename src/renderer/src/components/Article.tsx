@@ -25,6 +25,13 @@ function caption(b: Block, lang: Lang): string {
   )
 }
 
+/** A reference without the number its original text may start with ("[12] …", "12. …"), which is shown beside it. */
+function refText(b: Block): string {
+  const en = b.parts.en ?? ''
+  const num = b.attrs.num
+  return num && /^\d+$/.test(num) ? en.replace(new RegExp(`^\\s*(?:\\[${num}\\]|${num}\\.)\\s+`), '') : en
+}
+
 /** The HTML of one block in one language; also used by hover previews. */
 export function blockHtml(paperId: string, b: Block, lang: Lang): string {
   switch (b.type) {
@@ -33,7 +40,7 @@ export function blockHtml(paperId: string, b: Block, lang: Lang): string {
     case 'eq':
       return renderMarkdown(b.parts.en ?? '')
     case 'ref':
-      return renderMarkdown(b.parts.en ?? '', true)
+      return renderMarkdown(refText(b), true)
     case 'fig':
     case 'tab': {
       const img = b.bbox ? `<img src="${fileUrl(paperId, `figures/${b.id}.png`)}" alt="" draggable="false">` : ''
