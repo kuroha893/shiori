@@ -16,6 +16,8 @@ import { destroyWorker } from './worker'
 import { closePet, initPet, syncPet } from './pet'
 import { checkFishKey, endCall, initCall, placeCall, startCall, watchPaper } from './call'
 import { contactAsset, initContacts } from './contacts'
+import { initConferences, markFile } from './conferences'
+import { initOpenReview } from './openreview'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -193,12 +195,17 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   app.setName('Shiori')
-  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://contact/<id>/<path> a contact's picture and character.
+  // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://contact/<id>/<path> a contact's picture and character;
+  // shiori://conf/<id>/mark a conference's downloaded mark.
   protocol.handle('shiori', (req) => {
     const u = new URL(req.url)
     if (u.host === 'contact') {
       const [id, ...rest] = u.pathname.slice(1).split('/').map(decodeURIComponent)
       const file = contactAsset(id, rest.join('/'))
+      return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
+    }
+    if (u.host === 'conf') {
+      const file = markFile(decodeURIComponent(u.pathname.slice(1).split('/')[0]))
       return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
     }
     if (u.host !== 'paper') return new Response('not found', { status: 404 })
@@ -225,6 +232,8 @@ app.whenReady().then(() => {
   createWindow()
   initJobs(paperChanged)
   initVenues(paperChanged)
+  initOpenReview({ send, window: () => main })
+  initConferences({ send, paperChanged })
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().some((w) => w.isVisible())) createWindow()

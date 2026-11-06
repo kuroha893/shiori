@@ -8,7 +8,8 @@ import { SettingsModal } from './SettingsModal'
 import { Welcome } from './Welcome'
 import { applyFonts } from '../lib/fonts'
 
-export type Toast = (text: string) => void
+/** A short note at the bottom; with `until`, it stays until that settles instead of fading. */
+export type Toast = (text: string, until?: Promise<unknown>) => void
 
 function applyTheme(theme: Settings['theme']): void {
   const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -56,10 +57,14 @@ export function App() {
     if (settings) applyFonts(settings.uiFont, settings.monoFont)
   }, [settings?.uiFont, settings?.monoFont])
 
-  const showToast: Toast = useCallback((text) => {
+  const showToast: Toast = useCallback((text, until) => {
     setToast(text)
     window.clearTimeout((showToast as any).t)
-    ;(showToast as any).t = window.setTimeout(() => setToast(undefined), 2600)
+    if (!until) (showToast as any).t = window.setTimeout(() => setToast(undefined), 2600)
+    else {
+      const hide = () => setToast((t) => (t === text ? undefined : t))
+      until.then(hide, hide)
+    }
   }, [])
 
   const updateSettings = useCallback(async (patch: Partial<Settings>) => {

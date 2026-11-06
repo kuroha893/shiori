@@ -148,6 +148,20 @@ export async function importArxiv(input: string): Promise<PaperMeta> {
   return meta
 }
 
+/** A PDF downloaded from a conference listing, with what the listing says about it. */
+export function importDownloaded(bytes: Buffer, info: Partial<PaperMeta> & { title: string }): PaperMeta {
+  ensureLibrary()
+  const hash = createHash('sha1').update(bytes).digest('hex').slice(0, 6)
+  const id = info.arxiv ? info.arxiv.replace(/\//g, '_') : `${slug(info.title)}-${hash}`
+  const existing = readMeta(id)
+  if (existing) return existing
+  mkdirSync(paperDir(id), { recursive: true })
+  writeFileSync(join(paperDir(id), 'paper.pdf'), bytes)
+  const meta = newMeta(id, info.title, info)
+  writeMeta(meta)
+  return meta
+}
+
 export async function trashPaper(id: string): Promise<void> {
   await shell.trashItem(paperDir(id))
 }

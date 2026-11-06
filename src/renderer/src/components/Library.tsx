@@ -1,12 +1,15 @@
-import { useMemo, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { PaperMeta, Settings } from '../../../shared/types'
 import { shownVenue } from '../../../shared/venue'
+import { plainText } from '../../../shared/tex'
 import { modelLabel, pickModel, type ServiceStatus } from '../../../shared/models'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
-import { CallLauncher, HeartButton, Menu, ThemeButton, type MenuItem } from './Chrome'
+import { CallLauncher, HeartButton, LaterButton, Menu, ThemeButton, type MenuItem } from './Chrome'
+import { Conferences, LaterCard, useConfOverview, useLater } from './Conferences'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
 import { PaperVenue } from './VenueTags'
+import { PaperText } from './PaperText'
 import brand from '../assets/brand.png'
 import type { Toast } from './App'
 
@@ -46,10 +49,28 @@ export function Library(props: {
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
   const folders = useFolders()
-  const [chosenPlace, setPlace] = useState<'all' | 'none' | 'liked' | string>('all')
+  const [space, setSpace] = useState<'lib' | 'conf'>('lib')
+  const [chosenPlace, setPlace] = useState<'all' | 'none' | 'liked' | 'later' | string>('all')
   const likedCount = papers.filter((p) => p.likedAt).length
-  // The liked list disappears with its last heart.
-  const place = chosenPlace === 'liked' && !likedCount ? 'all' : chosenPlace
+  const later = useLater()
+  const laterCount = papers.filter((p) => p.laterAt).length + later.length
+  const overview = useConfOverview()
+  // The liked and later lists disappear with their last paper.
+  const place = (chosenPlace === 'liked' && !likedCount) || (chosenPlace === 'later' && !laterCount) ? 'all' : chosenPlace
+  // A PDF that turned up for a 稍后再看 paper stays marked until the owner leaves the list.
+  useEffect(() => {
+    if (place === 'later') return () => void api.laterSeen()
+  }, [place])
+  // ⌘1 and ⌘2 switch between the library and the conferences.
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (!e.metaKey || (e.key !== '1' && e.key !== '2')) return
+      e.preventDefault()
+      setSpace(e.key === '1' ? 'lib' : 'conf')
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
   const [creating, setCreating] = useState<{ paper?: string }>()
   const [renaming, setRenaming] = useState<string>()
   const [dropOn, setDropOn] = useState<string>()
@@ -86,7 +107,8 @@ export function Library(props: {
   }
 
   const inPlace = (p: PaperMeta) =>
-    place === 'all' || (place === 'none' ? !p.folders?.length : place === 'liked' ? !!p.likedAt : !!p.folders?.includes(place))
+    place === 'all' ||
+    (place === 'none' ? !p.folders?.length : place === 'liked' ? !!p.likedAt : place === 'later' ? !!p.laterAt : !!p.folders?.includes(place))
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -94,7 +116,7 @@ export function Library(props: {
       (p) =>
         inPlace(p) &&
         matches(p, filter) &&
-        (!q || [p.title, p.titleZh, p.authors.join(' '), shownVenue(p).venue, p.tags.join(' ')].some((s) => s?.toLowerCase().includes(q)))
+        (!q || [plainText(p.title), p.titleZh && plainText(p.titleZh), p.authors.join(' '), shownVenue(p).venue, p.tags.join(' ')].some((s) => s?.toLowerCase().includes(q)))
     )
   }, [papers, filter, query, place])
 
@@ -116,7 +138,7 @@ export function Library(props: {
       y,
       items: [
         ...folders.map((f) => ({ label: f.name, icon: p.folders?.includes(f.id) ? 'check' : 'folder', onClick: () => fileUnder(p, f.id) })),
-        { label: '新建方向…', icon: 'plus', onClick: () => setCreating({ paper: p.id }) }
+        { label: '新建分类…', icon: 'plus', onClick: () => setCreating({ paper: p.id }) }
       ]
     })
 
@@ -148,7 +170,7 @@ export function Library(props: {
           icon: 'trash',
           danger: true,
           onClick: () => {
-            if (!confirm(`删除方向「${name}」？里面的论文不会被删除。`)) return
+            if (!confirm(`删除分类「${name}」？里面的论文不会被删除。`)) return
             api.deleteFolder(id)
             if (place === id) setPlace('all')
           }
@@ -178,11 +200,12 @@ export function Library(props: {
       x,
       y,
       items: [
-        { label: '归入方向…', icon: 'folder', onClick: () => openFolderMenu(p, x, y) },
+        { label: '归入分类…', icon: 'folder', onClick: () => openFolderMenu(p, x, y) },
         ...(p.status === 'processing' || p.status === 'queued'
           ? [{ label: '取消处理', icon: 'stop', onClick: () => api.cancelPaper(p.id) }]
           : [{ label: p.processedAt ? '重新处理' : '开始处理', icon: 'refresh', onClick: () => api.processPaper(p.id) }]),
         { label: p.finished ? '标为未读完' : '标为已读完', icon: 'check', onClick: () => api.updatePaper(p.id, { finished: !p.finished }) },
+        { label: p.laterAt ? '移出稍后再看' : '稍后再看', icon: 'bookmark', onClick: () => api.updatePaper(p.id, { laterAt: p.laterAt ? undefined : new Date().toISOString() }) },
         { label: '在 Finder 中显示', icon: 'folder', onClick: () => api.revealPaper(p.id) },
         ...(p.arxiv ? [{ label: '打开 arXiv 页面', icon: 'external', onClick: () => api.openExternal(`https://arxiv.org/abs/${p.arxiv}`) }] : []),
         {
@@ -212,6 +235,7 @@ export function Library(props: {
           <img className="brand-mark" src={brand} alt="" draggable={false} />
           <span>Shiori</span>
         </div>
+        <SpaceSwitch space={space} onChange={setSpace} fresh={space === 'lib' && !!overview?.fresh} />
         <div className="topbar-actions">
           <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
           <button className="icon-btn bordered no-drag" title="设置" onClick={props.onOpenSettings}>
@@ -221,8 +245,11 @@ export function Library(props: {
       </header>
 
       <div className="lib-body">
-      {papers.length > 0 && (
-        <aside className="lib-side">
+      {space === 'conf' ? (
+        <Conferences overview={overview} library={papers} ready={ready} onOpenPaper={props.onOpen} toast={toast} />
+      ) : (
+      <>
+      <aside className="lib-side">
           <button className={`lib-side-item ${place === 'all' ? 'on' : ''}`} onClick={() => setPlace('all')}>
             <span>全部论文</span>
             <i>{papers.length}</i>
@@ -230,7 +257,7 @@ export function Library(props: {
           <button
             className={`lib-side-item ${place === 'none' ? 'on' : ''} ${dropOn === 'none' ? 'drop' : ''}`}
             onClick={() => setPlace('none')}
-            title="把论文拖到这里，可以把它移出所有方向"
+            title="把论文拖到这里，可以把它移出所有分类"
             {...dropProps('none', (p) => setPaperFolders(p.id, []))}
           >
             <span>未分类</span>
@@ -242,9 +269,18 @@ export function Library(props: {
               <i>{likedCount}</i>
             </button>
           )}
+          {laterCount > 0 && (
+            <button
+              className={`lib-side-item ${place === 'later' ? 'on' : ''}`}
+              onClick={() => setPlace('later')}
+            >
+              <span>稍后再看</span>
+              {later.some((i) => i.pdfNew) ? <b className="lib-side-badge">PDF</b> : <i>{laterCount}</i>}
+            </button>
+          )}
           <div className="lib-side-head">
-            <span>研究方向</span>
-            <button className="icon-btn" title="新建方向" onClick={() => setCreating({})}>
+            <span>我的分类</span>
+            <button className="icon-btn" title="新建分类" onClick={() => setCreating({})}>
               <Icon name="plus" size={14} />
             </button>
           </div>
@@ -267,10 +303,9 @@ export function Library(props: {
               </button>
             )
           )}
-          {creating && <NameInput placeholder="方向名称" onDone={(name) => createFolder(name, creating.paper)} />}
-          {!folders.length && !creating && <p className="lib-side-hint faint">点 + 新建方向，再把论文拖进来。</p>}
+          {creating && <NameInput placeholder="分类名称" onDone={(name) => createFolder(name, creating.paper)} />}
+          {!folders.length && !creating && <p className="lib-side-hint faint">点 + 新建分类，再把论文拖进来。</p>}
         </aside>
-      )}
       <main className="lib-scroll">
         <div className="lib-inner">
           <section className="lib-hero fade-in">
@@ -278,7 +313,9 @@ export function Library(props: {
             <p className="muted">
               {stats.total ? (
                 <>
-                  共 <b>{stats.total}</b> 篇 · 已读完 <b>{stats.done}</b> 篇 · 本月读过 <b>{stats.month}</b> 篇
+                  <span>共 <b>{stats.total}</b> 篇</span>
+                  <span>已读完 <b>{stats.done}</b> 篇</span>
+                  <span>本月读过 <b>{stats.month}</b> 篇</span>
                 </>
               ) : (
                 '把论文放进来，Shiori 会在后台把它整理成一篇排好版的中文文章。'
@@ -347,10 +384,13 @@ export function Library(props: {
                 onMenu={(x, y) => openMenu(p, x, y)}
               />
             ))}
+            {place === 'later' && later.map((item) => <LaterCard key={item.ref} item={item} ready={ready} toast={toast} />)}
           </section>
-          {papers.length > 0 && !shown.length && <p className="empty faint">没有符合条件的论文</p>}
+          {papers.length > 0 && !shown.length && !(place === 'later' && later.length) && <p className="empty faint">没有符合条件的论文</p>}
         </div>
       </main>
+      </>
+      )}
       </div>
 
       {dragging && (
@@ -401,15 +441,21 @@ function PaperCard({
         {p.pages ? <img src={`${fileUrl(p.id, 'thumb.png')}?v=${p.pages}`} alt="" draggable={false} /> : <Icon name="file" size={22} />}
       </div>
       <div className="paper-body">
-        <h3>{p.titleZh || p.title}</h3>
-        {p.titleZh && <p className="paper-en">{p.title}</p>}
+        <PaperText as="h3" text={p.titleZh || p.title} zh={!!p.titleZh} />
+        {p.titleZh && <PaperText as="p" className="paper-en" text={p.title} />}
         {p.authors.length > 0 && (
           <p className="paper-authors muted">
             {p.authors.slice(0, 4).join(', ')}
             {p.authors.length > 4 && ` 等 ${p.authors.length} 人`}
           </p>
         )}
-        {folderNames.length > 0 && <p className="paper-folders">{folderNames.join(' · ')}</p>}
+        {folderNames.length > 0 && (
+          <p className="paper-folders">
+            {folderNames.map((n) => (
+              <span key={n}>{n}</span>
+            ))}
+          </p>
+        )}
         {suggestion}
         <div className="paper-foot">
           {shownVenue(p).venue || shownVenue(p).year ? <PaperVenue paper={p} /> : <span className="mono faint">{p.pages ? `${p.pages} 页` : ''}</span>}
@@ -451,6 +497,7 @@ function PaperCard({
               {p.status === 'error' ? '重试' : '处理'}
             </button>
           )}
+          <LaterButton paper={p} />
           <HeartButton paper={p} />
           <button
             className="icon-btn more"
@@ -474,5 +521,48 @@ function PaperCard({
         {p.status === 'error' && p.error && <p className="paper-error">{p.error}</p>}
       </div>
     </article>
+  )
+}
+
+/**
+ * 书库 or 会议. The switch waits above the top bar and drops down when the pointer comes near the top middle, staying a
+ * moment after it leaves. The top bar drags the window and gets no mouse events, so the zone that wakes it is no-drag.
+ */
+function SpaceSwitch({ space, onChange, fresh }: { space: 'lib' | 'conf'; onChange: (s: 'lib' | 'conf') => void; fresh: boolean }) {
+  const [open, setOpen] = useState(false)
+  const timers = useRef<{ show?: number; hide?: number }>({})
+  const clear = () => {
+    window.clearTimeout(timers.current.show)
+    window.clearTimeout(timers.current.hide)
+  }
+  const show = () => {
+    clear()
+    timers.current.show = window.setTimeout(() => setOpen(true), 60)
+  }
+  const hide = (after: number) => {
+    clear()
+    timers.current.hide = window.setTimeout(() => setOpen(false), after)
+  }
+  useEffect(() => clear, [])
+  return (
+    <>
+      <div className={`space-zone no-drag ${fresh ? 'fresh' : ''} ${open ? 'open' : ''}`} onMouseEnter={show} onMouseLeave={() => hide(2000)}>
+        <i className="space-handle" />
+      </div>
+      <div className={`seg space-switch no-drag ${open ? 'open' : ''}`} onMouseEnter={show} onMouseLeave={() => hide(2000)}>
+        {(['lib', 'conf'] as const).map((s) => (
+          <button
+            key={s}
+            className={space === s ? 'on' : ''}
+            onClick={() => {
+              onChange(s)
+              hide(700)
+            }}
+          >
+            {s === 'lib' ? '书库' : '会议'}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }

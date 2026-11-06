@@ -1,7 +1,8 @@
 import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, Folder, GlossaryEntry, PaperMeta, PetState, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, Folder, GlossaryEntry, OpenReviewAccount, PaperMeta, PetState, Settings } from '../shared/types'
 import type { ServiceStatus } from '../shared/models'
+import type { ConfOverview, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../shared/conferences'
 
 const on = <T>(channel: string, fn: (v: T) => void) => {
   const h = (_e: unknown, v: T) => fn(v)
@@ -66,6 +67,38 @@ const api = {
   contactPortrait: (id: string): Promise<string | undefined> => ipcRenderer.invoke('contacts:portrait', id),
   onContactsChanged: (fn: (list: Contact[]) => void) => on('contacts:changed', fn),
   onPetChanged: (fn: (s: PetState) => void) => on('pet:changed', fn),
+
+  confOverview: (): Promise<ConfOverview> => ipcRenderer.invoke('conf:overview'),
+  confStart: () => ipcRenderer.invoke('conf:start'),
+  confAdd: (name: string) => ipcRenderer.invoke('conf:add', name),
+  confSetTracking: (id: string, on: boolean) => ipcRenderer.invoke('conf:setTracking', id, on),
+  confDelete: (id: string) => ipcRenderer.invoke('conf:delete', id),
+  confRetry: (id: string) => ipcRenderer.invoke('conf:retry', id),
+  confAddPast: (id: string, year: number) => ipcRenderer.invoke('conf:addPast', id, year),
+  confDeleteEdition: (conf: string, year: number) => ipcRenderer.invoke('conf:deleteEdition', conf, year),
+  confRefresh: (conf: string, year: number) => ipcRenderer.invoke('conf:refresh', conf, year),
+  confEdition: (conf: string, year: number): Promise<EditionView | undefined> => ipcRenderer.invoke('conf:edition', conf, year),
+  confPapers: (q: PaperQuery): Promise<ListedPaper[]> => ipcRenderer.invoke('conf:papers', q),
+  confPaper: (ref: string): Promise<ListedPaper | undefined> => ipcRenderer.invoke('conf:paper', ref),
+  confSeen: (conf: string, year: number) => ipcRenderer.invoke('conf:seen', conf, year),
+  confKeywords: (text: string): Promise<string> => ipcRenderer.invoke('conf:keywords', text),
+  confTranslate: (ref: string): Promise<string> => ipcRenderer.invoke('conf:translate', ref),
+  confImport: (ref: string): Promise<PaperMeta | { signIn: true }> => ipcRenderer.invoke('conf:import', ref),
+  openReviewAccount: (): Promise<OpenReviewAccount | undefined> => ipcRenderer.invoke('openreview:account'),
+  openReviewSignIn: (): Promise<OpenReviewAccount | undefined> => ipcRenderer.invoke('openreview:signIn'),
+  openReviewSignOut: () => ipcRenderer.invoke('openreview:signOut'),
+  followAdd: (name: string): Promise<Follow> => ipcRenderer.invoke('follows:add', name),
+  followFromFolders: () => ipcRenderer.invoke('follows:fromFolders'),
+  followFromMap: (edition: string, o: { branch?: string; theme?: string }): Promise<Follow> => ipcRenderer.invoke('follows:fromMap', edition, o),
+  followUpdate: (id: string, patch: Partial<Pick<Follow, 'name' | 'note' | 'keywords'>>) => ipcRenderer.invoke('follows:update', id, patch),
+  followDelete: (id: string) => ipcRenderer.invoke('follows:delete', id),
+  laterList: (): Promise<LaterItem[]> => ipcRenderer.invoke('later:list'),
+  laterSet: (ref: string, on: boolean) => ipcRenderer.invoke('later:set', ref, on),
+  laterRemove: (ref: string) => ipcRenderer.invoke('later:remove', ref),
+  laterSeen: () => ipcRenderer.invoke('later:seen'),
+  onConfChanged: (fn: () => void) => on('conf:changed', fn),
+  onLaterChanged: (fn: () => void) => on('later:changed', fn),
+  onOpenReviewChanged: (fn: () => void) => on('openreview:changed', fn),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),
   onFoldersChanged: (fn: (f: Folder[]) => void) => on('folders:changed', fn),

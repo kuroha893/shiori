@@ -46,15 +46,23 @@ export function caretOffset(root: Element, x: number, y: number): number | undef
 
 
 /**
- * The selected text with formulas written back as $LaTeX$. Range.toString() would repeat each formula
- * (KaTeX keeps a hidden MathML copy next to the visible one) and garble quotes sent to Claude.
+ * Formulas in a copied range written back as their $LaTeX$ source. As they are, each would come out twice (KaTeX
+ * keeps a hidden MathML copy next to the visible one); punctuation kept inside a formula's last piece comes along.
  */
-export function selectionText(range: Range): string {
-  const frag = range.cloneContents()
+export function formulasAsSource(frag: DocumentFragment): void {
   for (const ann of [...frag.querySelectorAll('annotation[encoding="application/x-tex"]')]) {
-    const holder = ann.closest('.katex') ?? ann.closest('.katex-mathml') ?? ann
-    holder.replaceWith(`$${ann.textContent?.trim()}$`)
+    const display = ann.closest('.katex-display')
+    const holder = display ?? ann.closest('.katex') ?? ann.closest('.katex-mathml') ?? ann
+    const punct = [...holder.querySelectorAll('.katex-punct')].map((n) => n.textContent).join('')
+    const d = display ? '$$' : '$'
+    holder.replaceWith(`${d}${ann.textContent?.trim()}${d}${punct}`)
   }
   frag.querySelectorAll('.katex-html, .katex-mathml').forEach((n) => n.remove())
+}
+
+/** The selected text on one line with formulas as $LaTeX$, for quotes sent to Claude. */
+export function selectionText(range: Range): string {
+  const frag = range.cloneContents()
+  formulasAsSource(frag)
   return (frag.textContent ?? '').replace(/\s+/g, ' ').trim()
 }

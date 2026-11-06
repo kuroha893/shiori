@@ -2,16 +2,45 @@ import MarkdownIt from 'markdown-it'
 import mdKatex from '@vscode/markdown-it-katex'
 import cjkFriendly from 'markdown-it-cjk-friendly'
 import DOMPurify from 'dompurify'
+import { drawTex, escapeTags, formulaAt } from '../../../shared/tex'
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
 // Paper text and AI answers are untrusted: rendered Markdown always goes through DOMPurify.
 const md = new MarkdownIt({ html: true, linkify: true, breaks: false })
 // **强调：**紧跟汉字 — CommonMark alone leaves these asterisks as text.
 md.use(cjkFriendly)
 md.use((mdKatex as any).default ?? mdKatex, {
-  throwOnError: false,
+  // Every formula drawn the same way: with the macros authors expect, and as its source when KaTeX can't draw it.
+  katex: { renderToString: (tex: string, o?: { displayMode?: boolean }) => drawTex(tex, o?.displayMode)?.html ?? `<code>${esc(tex)}</code>` },
   enableMathBlockInHtml: true,
   enableMathInlineInHtml: true,
   enableFencedBlocks: true
+})
+
+// $...$ paired the way TeX pairs it, so 2.5$\times$ and $\sim$6 are math and "$5 to $10" is not; $$ stays the plugin's.
+const prices = new WeakMap<object, Set<number>>()
+md.inline.ruler.disable('math_inline')
+md.inline.ruler.after('escape', 'tex_inline', (state, silent) => {
+  const { src, pos } = state
+  if (src[pos] !== '$' || src[pos + 1] === '$') return false
+  let second = prices.get(state)
+  if (second?.has(pos)) return false
+  const f = formulaAt(src, pos)
+  if (!f) return false
+  if (f.price !== undefined) {
+    // the closing dollar sign of the pair is text too
+    if (!second) prices.set(state, (second = new Set()))
+    second.add(f.price - 1)
+    return false
+  }
+  if (!silent) {
+    const t = state.push('math_inline', 'math', 0)
+    t.markup = '$'
+    t.content = f.tex
+  }
+  state.pos = f.end
+  return true
 })
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
@@ -85,6 +114,12 @@ function polish(html: string, zh: boolean): string {
     t.replaceWith(frag)
   }
   return tpl.innerHTML
+}
+
+/** A title or abstract on one line or in one paragraph; undefined when there is nothing to draw. A bare <think> is text. */
+export function inlineHtml(text: string, zh = false): string | undefined {
+  if (!/[$*_\\<&`[~]|:\/\//.test(text)) return undefined
+  return renderMarkdown(escapeTags(text), true, zh)
 }
 
 export function renderMarkdown(src: string, inline = false, zh = false): string {

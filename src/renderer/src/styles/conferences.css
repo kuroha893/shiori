@@ -1,0 +1,1124 @@
+/* ---------- 书库 / 会议 switch ---------- */
+
+/* It waits above the top bar; a faint handle shows where, and turns blue when there are new conference papers. */
+.space-zone {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  z-index: 1;
+  width: 360px;
+  height: 56px;
+  transform: translateX(-50%);
+}
+.space-handle {
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  width: 34px;
+  height: 4px;
+  margin-left: -17px;
+  border-radius: 2px;
+  background: hsl(var(--foreground) / 0.16);
+  transition: opacity 0.2s, background 0.2s;
+}
+.space-zone:hover .space-handle {
+  background: hsl(var(--foreground) / 0.3);
+}
+.space-zone.fresh .space-handle {
+  background: hsl(var(--primary) / 0.8);
+}
+.space-zone.open .space-handle {
+  opacity: 0;
+}
+.space-switch {
+  position: absolute;
+  left: 50%;
+  top: 13px;
+  z-index: 2;
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  transform: translate(-50%, -62px);
+  transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s;
+}
+.space-switch.open {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.space-switch button {
+  min-width: 64px;
+  height: 28px;
+  font-size: 13px;
+}
+
+/* ---------- shared with the library ---------- */
+
+.lib-side-badge {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  text-align: center;
+}
+.icon-btn.later.on,
+.cf-later.on {
+  color: hsl(var(--primary));
+}
+.icon-btn.later.on svg,
+.cf-later.on svg {
+  fill: currentColor;
+}
+.paper .later:not(.on) {
+  opacity: 0;
+}
+.paper:hover .later {
+  opacity: 1;
+}
+.later-card h3 {
+  -webkit-line-clamp: 3;
+}
+.later-abstract {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- pieces ---------- */
+
+.cf-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  height: 30px;
+}
+.cf-mark {
+  display: inline-flex;
+  flex: none;
+  width: 30px;
+  height: 30px;
+}
+.cf-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.cf-mark .on-dark,
+:root[data-theme='dark'] .cf-mark .on-light {
+  display: none;
+}
+:root[data-theme='dark'] .cf-mark .on-dark {
+  display: block;
+}
+.cf-name b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.cf-name-year {
+  margin-left: -2px;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.cf-name.big {
+  height: 36px;
+  gap: 10px;
+}
+.cf-name.big .cf-mark {
+  width: 36px;
+  height: 36px;
+}
+.cf-name.big b {
+  font-size: 19px;
+}
+.cf-name.big .cf-name-year {
+  font-size: 16px;
+}
+
+.cf-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 12px;
+}
+.cf-wave i {
+  width: 2.5px;
+  border-radius: 2px;
+  background: hsl(var(--primary));
+  animation: cf-wave 0.9s ease-in-out infinite;
+}
+.cf-wave i:nth-child(1) {
+  height: 6px;
+}
+.cf-wave i:nth-child(2) {
+  height: 12px;
+  animation-delay: -0.3s;
+}
+.cf-wave i:nth-child(3) {
+  height: 8px;
+  animation-delay: -0.6s;
+}
+@keyframes cf-wave {
+  50% {
+    transform: scaleY(0.45);
+  }
+}
+
+/* Small state pieces, the way the call screen shows its timer. */
+.cf-cap {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 13px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cf-cap s {
+  color: hsl(var(--faint-foreground));
+  text-decoration: none;
+}
+.cf-cap.icon {
+  padding: 0 7px;
+}
+.cf-cap.stopped {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+}
+.cf-cap.err {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+  cursor: pointer;
+}
+.cf-cap.fresh {
+  gap: 4px;
+  background: hsl(var(--primary) / 0.14);
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.cf-cap.fresh svg {
+  opacity: 0.8;
+}
+.cf-cap.sm {
+  height: 20px;
+  padding: 0 7px;
+  gap: 3px;
+  font-size: 11px;
+}
+.cf-bar {
+  position: relative;
+  width: 64px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: hsl(var(--foreground) / 0.12);
+}
+.cf-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: hsl(var(--primary));
+  transition: width 0.4s;
+}
+
+.cf-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 4px;
+}
+.cf-skel.wide {
+  padding: 30px 0;
+}
+.cf-skel i {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, hsl(var(--foreground) / 0.06), hsl(var(--foreground) / 0.12), hsl(var(--foreground) / 0.06));
+  background-size: 200% 100%;
+  animation: cf-shimmer 1.4s linear infinite;
+}
+@keyframes cf-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- home ---------- */
+
+.cf-search {
+  margin-top: 22px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.cf-search.tight {
+  margin-top: 0;
+  padding: 0;
+}
+.cf-search-err {
+  margin: 8px 2px 0;
+  font-size: 12.5px;
+  color: hsl(var(--destructive));
+}
+.cf-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 0 2px;
+}
+.cf-kw {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  font: inherit;
+  font-size: 12px;
+}
+.cf-kw button {
+  display: inline-flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  opacity: 0.55;
+}
+.cf-kw button:hover {
+  opacity: 1;
+}
+.cf-kw.add {
+  width: 90px;
+  padding: 0 10px;
+  border: 1px dashed hsl(var(--border));
+  background: none;
+  color: hsl(var(--foreground));
+  outline: 0;
+}
+.cf-kw.add::placeholder {
+  color: hsl(var(--faint-foreground));
+}
+
+.cf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 34px 0 12px;
+}
+.cf-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cf-follows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
+  box-shadow: var(--shadow);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.15s;
+}
+.cf-chip:hover {
+  border-color: hsl(var(--foreground) / 0.3);
+}
+.cf-chip.pending {
+  color: hsl(var(--muted-foreground));
+}
+.cf-chip .cf-cap {
+  margin-right: -6px;
+}
+.cf-chip.add {
+  padding: 0 10px;
+  border-style: dashed;
+  background: none;
+  box-shadow: none;
+  color: hsl(var(--faint-foreground));
+}
+.cf-chip-input {
+  width: 160px;
+  height: 32px;
+  border-radius: 16px;
+}
+
+.cf-confs {
+  padding: 6px;
+}
+.cf-conf {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 60px;
+  padding: 0 14px;
+  border-radius: calc(var(--radius) + 2px);
+  transition: background 0.15s;
+}
+.cf-conf + .cf-conf {
+  box-shadow: 0 -1px 0 hsl(var(--border) / 0.6);
+}
+.cf-conf.go {
+  cursor: pointer;
+}
+.cf-conf:hover {
+  background: hsl(var(--accent));
+}
+.cf-conf:hover + .cf-conf,
+.cf-conf:hover {
+  box-shadow: none;
+}
+.cf-conf-name {
+  display: flex;
+  flex: none;
+  width: 200px;
+}
+.cf-count {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 92px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.cf-count small {
+  font-size: 12px;
+  font-weight: 400;
+  color: hsl(var(--faint-foreground));
+}
+.cf-conf .spacer {
+  flex: 1;
+}
+.cf-conf.off .cf-name,
+.cf-conf.off .cf-count {
+  opacity: 0.45;
+}
+.cf-conf .more {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.cf-conf:hover .more {
+  opacity: 1;
+}
+.cf-add {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 16px;
+  color: hsl(var(--faint-foreground));
+  font-size: 13.5px;
+}
+
+.cf-modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: hsl(0 0% 0% / 0.25);
+}
+.cf-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 340px;
+  padding: 18px;
+  box-shadow: var(--shadow-pop);
+}
+.cf-modal-row {
+  display: flex;
+  gap: 8px;
+}
+.cf-modal-row .input {
+  flex: 1;
+}
+.cf-records {
+  width: min(560px, 90vw);
+  max-height: 70vh;
+}
+.cf-records-err {
+  margin: 0;
+  font-size: 12.5px;
+  color: hsl(var(--destructive));
+}
+.cf-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cf-channel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.cf-channel a {
+  display: inline-flex;
+  cursor: pointer;
+}
+.cf-channel .spacer {
+  flex: 1;
+}
+.cf-log {
+  overflow-y: auto;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 10px;
+}
+.cf-log p {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+  user-select: text;
+}
+.cf-log .mono {
+  flex: none;
+}
+
+/* a direction's page */
+.cf-fhead {
+  align-items: center;
+}
+.cf-fhead .spacer {
+  flex: 1;
+}
+.cf-fhead .n {
+  align-self: baseline;
+}
+.cf-fkw {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 4px;
+}
+.cf-kw.quiet {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+.cf-kw.quiet button {
+  opacity: 0;
+}
+.cf-kw.quiet:hover button {
+  opacity: 0.7;
+}
+.cf-rename {
+  width: 260px;
+  height: 34px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.cf-nav .cf-rename {
+  flex: 1;
+  width: auto;
+  height: 26px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* ---------- streams of papers ---------- */
+
+.cf-list-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 22px;
+}
+.cf-list-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+.cf-list-head .n {
+  font-size: 16px;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.cf-list-head .icon-btn {
+  align-self: center;
+  margin-left: -6px;
+}
+.cf-none {
+  display: flex;
+  justify-content: center;
+  padding: 80px 0;
+  color: hsl(var(--faint-foreground));
+}
+
+.cf-stream {
+  margin-top: 8px;
+}
+.cf-section {
+  position: relative;
+}
+/* Each section's header sticks while you are inside it, as a frosted bar naming the part you are in. */
+.cf-th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -14px;
+  padding: 26px 14px 10px;
+}
+.cf-th-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.cf-th h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cf-th .n {
+  font-size: 15px;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.cf-th-sub {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
+}
+.cf-th-sub.on {
+  display: inline-flex;
+}
+.cf-th-sub svg {
+  flex: none;
+  color: hsl(var(--faint-foreground));
+}
+.cf-th-sub span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cf-th-prog {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: hsl(var(--foreground) / 0.08);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.cf-th-prog i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 1px;
+  background: hsl(var(--primary));
+}
+.cf-th.stuck {
+  padding: 12px 14px;
+  border-radius: 0 0 12px 12px;
+  background: hsl(var(--background) / 0.72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 1px 0 hsl(var(--border) / 0.7), 0 12px 24px -18px hsl(0 0% 0% / 0.5);
+}
+.cf-th.stuck h2 {
+  font-size: 16px;
+}
+.cf-th.stuck .n {
+  font-size: 13px;
+}
+.cf-th.stuck .cf-th-prog {
+  opacity: 1;
+}
+.cf-div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 2px;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+}
+.cf-div i {
+  font-style: normal;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.cf-div::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: hsl(var(--border));
+}
+.cf-th + .cf-div {
+  margin-top: 6px;
+}
+
+.cf-paper {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 20px;
+  margin: 0 -14px;
+  padding: 16px 14px;
+  border-radius: calc(var(--radius) + 2px);
+  cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+.cf-paper + .cf-paper {
+  box-shadow: 0 -1px 0 hsl(var(--border) / 0.6);
+}
+.cf-paper:hover {
+  background: hsl(var(--accent) / 0.6);
+}
+.cf-paper.open {
+  background: hsl(var(--card));
+  box-shadow: var(--shadow);
+}
+.cf-paper.open + .cf-paper,
+.cf-paper:hover + .cf-paper {
+  box-shadow: none;
+}
+.cf-paper-main {
+  min-width: 0;
+}
+.cf-paper h3 {
+  position: relative;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+}
+.cf-dot {
+  position: absolute;
+  left: -12px;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: hsl(var(--primary));
+}
+.cf-paper-en {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: hsl(var(--faint-foreground));
+}
+.cf-paper .katex {
+  font-size: 1em;
+}
+.cf-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: hsl(var(--faint-foreground));
+}
+.cf-authors {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cf-plus {
+  flex: none;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: hsl(var(--muted));
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cf-meta .cf-plus {
+  margin-left: 0;
+}
+.cf-tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.cf-tag.oral {
+  background: hsl(36 90% 55% / 0.16);
+  color: hsl(30 80% 38%);
+}
+:root[data-theme='dark'] .cf-tag.oral {
+  color: hsl(36 85% 62%);
+}
+.cf-tag.spot {
+  background: hsl(var(--primary) / 0.14);
+  color: hsl(var(--primary));
+}
+.cf-tag.track,
+.cf-tag.edition {
+  border: 1px solid hsl(var(--border));
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+.cf-act {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: 1px;
+}
+.cf-act .btn {
+  min-width: 52px;
+  justify-content: center;
+}
+/* 暂未公开 with the day it was last looked for beneath, 导入 beside them. */
+.cf-act.closed {
+  align-items: center;
+  gap: 8px;
+}
+.cf-closed {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.cf-closed .cf-cap {
+  gap: 4px;
+}
+.cf-closed svg {
+  flex: none;
+  opacity: 0.8;
+}
+.cf-closed-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--muted-foreground) / 0.7);
+  white-space: nowrap;
+}
+.cf-later:not(.on) {
+  opacity: 0;
+}
+.cf-paper:hover .cf-later,
+.cf-paper.open .cf-later {
+  opacity: 1;
+}
+.cf-inlib {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: hsl(140 50% 50% / 0.14);
+  color: hsl(140 50% 32%);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+:root[data-theme='dark'] .cf-inlib {
+  color: hsl(140 45% 58%);
+}
+.cf-inlib:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.cf-abs {
+  grid-column: 1 / -1;
+  margin-top: 14px;
+  cursor: auto;
+}
+.cf-abs p {
+  margin: 0;
+  user-select: text;
+}
+.cf-abs p.zh {
+  font-size: 14px;
+  line-height: 1.85;
+  color: hsl(var(--foreground) / 0.88);
+}
+.cf-abs p.en {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed hsl(var(--border));
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: hsl(var(--faint-foreground));
+}
+.cf-abs p.en.only {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: hsl(var(--muted-foreground));
+}
+.cf-links {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+.cf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 12px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.cf-link:hover {
+  color: hsl(var(--foreground));
+}
+
+/* ---------- one edition: its table of contents takes the sidebar's place ---------- */
+
+.lib-side.cf-side {
+  display: flex;
+  flex-direction: column;
+  width: 268px;
+  padding: 18px 10px 0 14px;
+  overflow: hidden;
+}
+.cf-back {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  margin-left: -2px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 12.5px;
+}
+.cf-back:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+.cf-side-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 8px 8px;
+}
+.cf-side-title .spacer {
+  flex: 1;
+}
+.cf-side-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px 8px;
+}
+.cf-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-right: -4px;
+  padding: 0 4px 24px 0;
+  overflow-y: auto;
+}
+.cf-nav::-webkit-scrollbar {
+  width: 0;
+}
+.cf-nav-label {
+  margin: 16px 10px 6px;
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+}
+.cf-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+}
+.cf-nav-item > span:first-child {
+  flex: 1;
+}
+.cf-nav-item {
+  cursor: default;
+}
+/* hovering a theme or branch not followed yet offers to follow it, in place of its count */
+.cf-nav-follow {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+  transform: translateY(-50%);
+}
+.cf-nav-item.followable:hover .cf-nav-follow {
+  display: inline-flex;
+}
+.cf-nav-item.followable:hover > i {
+  visibility: hidden;
+}
+.cf-nav-follow:hover {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.cf-nav-item i {
+  font-style: normal;
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.cf-nav-item:hover {
+  background: hsl(var(--foreground) / 0.04);
+  color: hsl(var(--foreground));
+}
+.cf-nav-item.on {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+.cf-nav-item.empty {
+  opacity: 0.35;
+}
+.cf-nav-sub {
+  margin: 2px 0 4px 12px;
+  padding-left: 8px;
+  border-left: 1px solid hsl(var(--border));
+}
+.cf-nav-item.sub {
+  min-height: 28px;
+  font-size: 12.5px;
+}
+.cf-nav-item.sub.on {
+  background: hsl(var(--foreground) / 0.05);
+  font-weight: 400;
+}
+.cf-nav-item.sub.on::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  width: 2px;
+  height: 16px;
+  border-radius: 1px;
+  background: hsl(var(--primary));
+}
+
+.cf-edition {
+  padding-top: 26px;
+}
+.cf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+}
+.cf-filters .sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: hsl(var(--border));
+}
+.cf-f {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background: none;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 12.5px;
+}
+.cf-f i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.cf-f:not(.on):not(:disabled):hover {
+  border-color: hsl(var(--foreground) / 0.3);
+  color: hsl(var(--foreground));
+}
+.cf-f.on {
+  border-color: hsl(var(--foreground));
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.cf-f.on i {
+  color: hsl(var(--background) / 0.6);
+}
+.cf-f:disabled {
+  opacity: 0.35;
+}

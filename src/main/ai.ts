@@ -141,6 +141,8 @@ export interface AgentRun {
   /** Whether it may write files in cwd */
   write: boolean
   search?: boolean
+  /** May also read web pages (with search) */
+  fetch?: boolean
   /** Added to the system prompt */
   instructions?: string
   /** Continue this session of the same service */
@@ -203,6 +205,8 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
   const cli = viaClaude(provider, model)
   const tools = r.write ? ['Read', 'Write', 'Edit', 'Glob', 'Grep'] : ['Read', 'Grep', 'Glob']
   if (r.search) tools.push('WebSearch')
+  if (r.fetch) tools.push('WebFetch')
+  const web = tools.filter((t) => t.startsWith('Web'))
   const sessionId = r.session ?? randomUUID()
   const res = await runClaude({
     cwd: r.cwd,
@@ -211,7 +215,7 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
     effort,
     env: cli.env,
     tools,
-    allowedTools: r.search ? ['WebSearch'] : undefined,
+    allowedTools: web.length ? web : undefined,
     systemPrompt: r.instructions,
     sessionId,
     resume: !!r.session,

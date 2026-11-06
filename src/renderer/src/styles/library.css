@@ -110,6 +110,9 @@
   font-size: 12px;
   line-height: 1.6;
 }
+.paper-folders span + span {
+  margin-left: 10px;
+}
 .paper-folders {
   margin: 6px 0 0;
   font-size: 12px;
@@ -162,6 +165,10 @@
 .lib-hero p {
   margin: 10px 0 0;
   font-size: 14.5px;
+}
+/* the stats sit apart by space alone */
+.lib-hero p span + span {
+  margin-left: 18px;
 }
 .lib-hero b {
   color: hsl(var(--foreground));

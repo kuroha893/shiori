@@ -98,6 +98,23 @@ export function HeartButton({ paper, bordered }: { paper: PaperMeta; bordered?: 
   )
 }
 
+/** 稍后再看: a mark that never downloads or processes anything. */
+export function LaterButton({ paper }: { paper: PaperMeta }) {
+  const on = !!paper.laterAt
+  return (
+    <button
+      className={`icon-btn later ${on ? 'on' : ''}`}
+      title={on ? '移出稍后再看' : '稍后再看'}
+      onClick={(e) => {
+        e.stopPropagation()
+        api.updatePaper(paper.id, { laterAt: on ? undefined : new Date().toISOString() })
+      }}
+    >
+      <Icon name="bookmark" />
+    </button>
+  )
+}
+
 /** Close on outside click or Escape. */
 export function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void, active = true) {
   useEffect(() => {

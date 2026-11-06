@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { Settings } from '../../../shared/types'
+import { useEffect, useState } from 'react'
+import type { OpenReviewAccount, Settings } from '../../../shared/types'
 import { pickModel, type ModelOption, type ModelUse, type ServiceStatus } from '../../../shared/models'
 import { api } from '../api'
 import { Modal, themeOptions } from './Chrome'
@@ -8,6 +8,47 @@ import { GlossaryList } from './GlossaryList'
 import { FontPicker } from './FontPicker'
 import { ModelPicker } from './ModelPicker'
 import { CHATGPT_DOWNLOAD, installClaudeCode, KeyInput, Pill, saveDeepseekKey, Steps, useServicePolling, Waiting } from './ServiceSetup'
+
+/** The OpenReview account conference papers download through: signing in happens on OpenReview's own page. */
+function OpenReviewRow() {
+  const [account, setAccount] = useState<OpenReviewAccount | null>()
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const load = () => api.openReviewAccount().then((a) => setAccount(a ?? null))
+    load()
+    return api.onOpenReviewChanged(load)
+  }, [])
+  const signIn = async () => {
+    setBusy(true)
+    try {
+      await api.openReviewSignIn()
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="set-row">
+      <label>OpenReview</label>
+      {account ? (
+        <>
+          <div className="path" title={account.name}>
+            {account.name}
+          </div>
+          <button className="btn sm" onClick={() => api.openReviewSignOut()}>
+            退出
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="spacer" />
+          <button className="btn sm" disabled={busy || account === undefined} onClick={signIn}>
+            登录
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
 
 /** Claude and DeepSeek both run in Claude Code, so it unfolds under the Claude row until it is installed. */
 const InstallClaudeCode = () => (
@@ -140,6 +181,7 @@ export function SettingsModal(props: {
               更改
             </button>
           </div>
+          <OpenReviewRow />
         </div>
       </section>
 

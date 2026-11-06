@@ -9,6 +9,7 @@ import { SidePanel, useChat, type Quote, type Tab } from './SidePanel'
 import { Lightbox, PdfPeek } from './Overlays'
 import { CallLauncher, HeartButton, ThemeButton, useDismiss } from './Chrome'
 import { Icon } from './Icon'
+import { PaperText } from './PaperText'
 import type { Toast } from './App'
 
 const EXPLAIN = '请解释这段话：它在说什么、为什么这样说、在论文里起什么作用。涉及的符号和术语也一并说明。'
@@ -280,7 +281,7 @@ export function Reader(props: {
         <button className={`icon-btn no-drag ${toc ? 'active' : ''}`} title="目录（⌘\）" onClick={() => setToc((v) => !v)}>
           <Icon name="toc" />
         </button>
-        <div className="reader-title">{paper.titleZh || paper.title}</div>
+        <PaperText as="div" className="reader-title" text={paper.titleZh || paper.title} zh={!!paper.titleZh} />
         <div className="topbar-actions no-drag">
           <div className="seg">
             {(

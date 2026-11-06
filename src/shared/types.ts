@@ -40,6 +40,10 @@ export interface PaperMeta {
   suggestion?: { name: string; folderId?: string }
   /** When the owner hearted this paper */
   likedAt?: string
+  /** Marked 稍后再看 */
+  laterAt?: string
+  /** The conference listing it was imported from: "<conf>/<year>" and the paper's key there */
+  source?: { edition: string; key: string }
   /** Reading state */
   readPos?: { block: string; ratio: number }
   readAt?: string
@@ -200,3 +204,9 @@ export type ChatEvent =
   | { paper: string; kind: 'delta'; text: string }
   | { paper: string; kind: 'status'; text: string }
   | { paper: string; kind: 'done'; message: ChatMessage }
+
+/** The OpenReview account Shiori downloads through */
+export interface OpenReviewAccount {
+  /** Its email or profile id, as OpenReview gives it */
+  name: string
+}
