@@ -1,4 +1,5 @@
-import { openPdf, renderPage } from './lib/pdf'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { openPdf, openPdfData, renderPage } from './lib/pdf'
 import type { WorkerBridge } from '../../preload'
 
 declare global {
@@ -11,6 +12,17 @@ const toPng = (canvas: HTMLCanvasElement) =>
   new Promise<Uint8Array>((resolve, reject) =>
     canvas.toBlob((b) => (b ? b.arrayBuffer().then((a) => resolve(new Uint8Array(a))) : reject(new Error('encode failed'))), 'image/png')
   )
+
+async function pageText(doc: PDFDocumentProxy, p: number): Promise<string> {
+  const page = await doc.getPage(p)
+  const { items } = await page.getTextContent()
+  let text = ''
+  for (const it of items as { str?: string; hasEOL?: boolean }[]) {
+    text += it.str ?? ''
+    if (it.hasEOL) text += '\n'
+  }
+  return text.trim()
+}
 
 /** Overlay a 0..1000 coordinate grid so Claude can read off figure boxes. */
 function drawGrid(canvas: HTMLCanvasElement): void {
@@ -100,17 +112,23 @@ const methods: Record<string, (a: any) => Promise<unknown>> = {
   async text({ url }) {
     const doc = await openPdf(url)
     const out: string[] = []
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p)
-      const { items } = await page.getTextContent()
-      let text = ''
-      for (const it of items as { str?: string; hasEOL?: boolean }[]) {
-        text += it.str ?? ''
-        if (it.hasEOL) text += '\n'
-      }
-      out.push(`=== Page ${p} ===\n${text.trim()}`)
-    }
+    for (let p = 1; p <= doc.numPages; p++) out.push(`=== Page ${p} ===\n${await pageText(doc, p)}`)
     return out.join('\n\n') + '\n'
+  },
+  /** The text of a PDF's opening pages, given as bytes, up to about `chars` characters. */
+  async opening({ data, chars }) {
+    const task = openPdfData(data)
+    const doc = await task.promise
+    try {
+      const out: string[] = []
+      for (let p = 1, n = 0; p <= doc.numPages && n < chars; p++) {
+        out.push(`=== Page ${p} ===\n${await pageText(doc, p)}`)
+        n += out[out.length - 1].length
+      }
+      return out.join('\n\n') + '\n'
+    } finally {
+      void task.destroy()
+    }
   }
 }
 

@@ -15,6 +15,9 @@ export function openPdf(url: string): Promise<pdfjs.PDFDocumentProxy> {
   return d
 }
 
+/** A PDF given as bytes, opened once and not kept: destroy the task when done. */
+export const openPdfData = (data: Uint8Array) => pdfjs.getDocument({ data })
+
 /** Render a page to a new canvas, `width` CSS pixels wide (times devicePixelRatio when hidpi). */
 export async function renderPage(url: string, pageNo: number, width: number): Promise<HTMLCanvasElement> {
   const doc = await openPdf(url)

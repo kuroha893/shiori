@@ -1,5 +1,5 @@
 import { ipcMain, net, shell } from 'electron'
-import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PaperMeta } from '../../shared/types'
 import type {
@@ -27,6 +27,7 @@ import { LINKS_VERSION, PAIRS_VERSION, findAmbiguous, leftoversOf, mergeChannel,
 import * as T from './tasks'
 import { findArxiv } from './arxiv'
 import * as OR from '../openreview'
+import { workerCall } from '../worker'
 
 /*
  * Keeps every followed conference up to date. Whatever is due runs in two lanes, one for fetch scripts and one for
@@ -228,6 +229,7 @@ function planEdition(c: Conference, e: Edition, editions: Edition[], now: number
     for (const f of S.loadFollows()) if (!f.pending && !e.followsDone?.includes(f.id)) ai.add(`follow:${ref}:${f.id}`, () => tagFollow(e.conf, e.year, f.id))
   }
   if (S.loadPapers(e.conf, e.year).some((p) => p.leftovers?.length)) ai.add(`lookup:${ref}`, () => lookUp(e.conf, e.year))
+  else if (S.loadPapers(e.conf, e.year).some((p) => fullTextDue(p, now))) ai.add(`fulltext:${ref}`, () => readFull(e.conf, e.year))
 }
 
 function editedSince(file: string, since: string): boolean {
@@ -566,6 +568,67 @@ async function lookUp(conf: string, year: number): Promise<void> {
   const ref = editionRef(conf, year)
   await step(e, '归类', async () => {
     await T.lookUpLeftovers(e, { onProgress: (done, total) => busy(ref, { label: '归类', progress: done / total }) })
+  })
+}
+
+/** When the owner last signed in to OpenReview: papers it kept from Shiori before then are tried again at once. */
+let signedInAt = 0
+
+/** A macro nothing explained yet, in a paper Claude hasn't read: worth getting the paper, weekly or after a sign-in. */
+const fullTextDue = (p: ConfPaper, now: number) =>
+  !p.readFull && Object.values(p.fixes ?? {}).includes(null) && (ago(p.fullTried, now) >= 7 * DAY || Date.parse(p.fullTried!) < signedInAt)
+
+/** A paper's PDF from wherever it downloads now: direct links, OpenReview through the owner's session, arXiv. */
+async function paperPdf(e: Edition, p: ConfPaper): Promise<Buffer | undefined> {
+  for (const url of linksOf(p).filter((u) => !OR.isOpenReview(u))) {
+    const bytes = await download(url).catch(() => undefined)
+    if (bytes) return bytes
+  }
+  const gated = linksOf(p).find(OR.isOpenReview)
+  if (gated && OR.isSignedIn()) {
+    const bytes = await OR.fetchPdf(gated).catch(() => undefined)
+    if (bytes) return bytes
+  }
+  const arxiv = p.arxiv ?? (await findArxiv(p).catch(() => undefined))
+  if (!arxiv) return undefined
+  if (arxiv !== p.arxiv) markPaper(e, p.key, { arxiv }, true)
+  return download(`https://arxiv.org/pdf/${arxiv}`).catch(() => undefined)
+}
+
+/** Claude reads the papers whose macros nothing else explained; one Shiori can't get yet is tried again later. */
+async function readFull(conf: string, year: number): Promise<void> {
+  const e = S.readEdition(conf, year)
+  if (!e) return
+  const ref = editionRef(conf, year)
+  const dir = join(S.editionDir(conf, year), 'papers')
+  await step(e, '归类', async () => {
+    const due = S.loadPapers(conf, year)
+      .filter((p) => fullTextDue(p, Date.now()))
+      .slice(0, 25)
+    const got: { key: string; file: string }[] = []
+    const missing = new Set<string>()
+    mkdirSync(dir, { recursive: true })
+    try {
+      for (const [i, p] of due.entries()) {
+        busy(ref, { label: '归类', progress: i / due.length / 2 })
+        const bytes = await paperPdf(e, p)
+        // Its opening pages as text: Claude reading the PDF itself would cost many times more.
+        const text = bytes && (await workerCall<string>('opening', { data: bytes, chars: 24_000 }).catch(() => undefined))
+        if (!text?.trim()) missing.add(p.key)
+        else {
+          writeFileSync(join(dir, `${p.key}.txt`), text)
+          got.push({ key: p.key, file: `papers/${p.key}.txt` })
+        }
+      }
+      const list = S.loadPapers(conf, year)
+      const now = new Date().toISOString()
+      for (const p of list) if (missing.has(p.key)) p.fullTried = now
+      S.savePapers(conf, year, list)
+      busy(ref, { label: '归类', progress: 0.5 })
+      if (got.length) await T.readFullTexts(e, got)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 }
 
@@ -1102,7 +1165,10 @@ export function initConferences(o: { send: Send; paperChanged: (meta: PaperMeta)
   setTimeout(tidyStale, 1500)
   setTimeout(plan, 20_000)
   setInterval(plan, 30 * 60_000)
-  OR.onAccountChange(() => setTimeout(plan, 1000))
+  OR.onAccountChange(() => {
+    if (OR.isSignedIn()) signedInAt = Date.now()
+    setTimeout(plan, 1000)
+  })
 
   const handle = (channel: string, fn: (...args: any[]) => unknown) =>
     ipcMain.handle(channel, async (_e, ...args) => {

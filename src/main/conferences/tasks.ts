@@ -562,26 +562,66 @@ async function lookUpBatch(e: Edition, batch: ConfPaper[], model: string, signal
   const list = loadPapers(e.conf, e.year)
   const asked = new Set(batch.map((p) => p.key))
   let changed = 0
+  for (const p of list) if (p.leftovers?.length && asked.has(p.key) && settle(p, p.leftovers, answers[p.key] ?? {})) changed++
+  savePapers(e.conf, e.year, list)
+  return changed
+}
+
+/**
+ * Claude's answers for some of a paper's tokens, put in place in all its text. A token left unanswered is null until
+ * Claude has read the paper itself, and so is anything an answer brought in. Returns whether the text changed.
+ */
+function settle(p: ConfPaper, tokens: string[], got: Record<string, unknown>): boolean {
+  const fixes = { ...p.fixes }
+  for (const t of tokens) {
+    const v = got[t]
+    fixes[t] = typeof v === 'string' && v.length <= 160 && !/[\n\r]/.test(v) ? v : null
+  }
+  const fix = (s: string) => applyFixes(s, fixes)
+  const before = [p.title, p.abstract]
+  p.fixes = fixes
+  p.title = fix(p.title)
+  if (p.abstract) p.abstract = fix(p.abstract)
+  if (p.titleZh) p.titleZh = fix(p.titleZh)
+  if (p.abstractZh) p.abstractZh = fix(p.abstractZh)
+  for (const t of leftoversOf(p) ?? []) fixes[t] = null
+  p.leftovers = undefined
+  return p.title !== before[0] || p.abstract !== before[1]
+}
+
+/** Claude reads the papers themselves, PDFs Shiori downloaded into the edition's folder, for the tokens still unexplained. */
+export async function readFullTexts(e: Edition, items: { key: string; file: string }[], signal?: AbortSignal): Promise<number> {
+  const dir = editionDir(e.conf, e.year)
+  const byKey = new Map(loadPapers(e.conf, e.year).map((p) => [p.key, p]))
+  const unknown = (p: ConfPaper) => Object.keys(p.fixes ?? {}).filter((t) => p.fixes![t] === null)
+  const todo = items.filter((i) => byKey.has(i.key))
+  const input = 'unexplained.json'
+  const out = 'answers.json'
+  writeFileSync(
+    join(dir, input),
+    JSON.stringify(
+      todo.map(({ key, file }) => {
+        const p = byKey.get(key)!
+        return { key, title: p.title, abstract: p.abstract, tokens: unknown(p), paper: file }
+      }),
+      null,
+      1
+    )
+  )
+  rmSync(join(dir, out), { force: true })
+  const r = await runAgent({ cwd: dir, prompt: P.fullTextPrompt({ edition: e.name, count: todo.length, input, out }), model: await processModel(), effort: 'medium', write: true, signal })
+  rmSync(join(dir, input), { force: true })
+  if (r.isError) throw new Error(r.text || 'Claude 出错了')
+  const answers = take<Record<string, Record<string, unknown>>>(join(dir, out))
+  if (!answers || typeof answers !== 'object') throw new Error('没有写出结果')
+  const list = loadPapers(e.conf, e.year)
+  const read = new Set(todo.map((i) => i.key))
+  const now = new Date().toISOString()
+  let changed = 0
   for (const p of list) {
-    if (!p.leftovers?.length || !asked.has(p.key)) continue
-    const got = answers[p.key] ?? {}
-    const fixes = { ...p.fixes }
-    // A token left unanswered counts as asked: it isn't asked again.
-    for (const t of p.leftovers) {
-      const v = got[t]
-      fixes[t] = typeof v === 'string' && v.length <= 160 && !/[\n\r]/.test(v) ? v : null
-    }
-    const fix = (s: string) => applyFixes(s, fixes)
-    const before = [p.title, p.abstract]
-    p.fixes = fixes
-    p.title = fix(p.title)
-    if (p.abstract) p.abstract = fix(p.abstract)
-    if (p.titleZh) p.titleZh = fix(p.titleZh)
-    if (p.abstractZh) p.abstractZh = fix(p.abstractZh)
-    // Nor is anything an answer brought in.
-    for (const t of leftoversOf(p) ?? []) fixes[t] = null
-    p.leftovers = undefined
-    if (p.title !== before[0] || p.abstract !== before[1]) changed++
+    if (!read.has(p.key)) continue
+    if (settle(p, unknown(p), answers[p.key] ?? {})) changed++
+    p.readFull = now
   }
   savePapers(e.conf, e.year, list)
   return changed

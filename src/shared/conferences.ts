@@ -119,6 +119,10 @@ export interface ConfPaper {
   fixes?: Record<string, string | null>
   /** What no rule could read in its title and abstract (\ours, $\tilde$) and Claude hasn't been asked about */
   leftovers?: string[]
+  /** When Claude read the paper itself for the macros its abstract and the web left unexplained; nothing is asked after that */
+  readFull?: string
+  /** When Shiori last tried to get the paper for that and couldn't */
+  fullTried?: string
 }
 
 export interface ThemeBranch {

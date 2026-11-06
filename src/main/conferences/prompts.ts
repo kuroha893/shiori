@@ -233,10 +233,29 @@ Search: ${text}`
 
 export function abstractPrompt(o: { title: string; abstract: string; glossary: string }): string {
   return `Translate the abstract of the paper "${o.title}" into fluent Chinese for a researcher. The title is there for
-context only: don't translate it or start with it. Keep model and method names, acronyms, $...$ formulas and
-**bold** or *italic* marks as they are. Reply with the translated abstract and nothing else.
+context only: don't translate it or start with it. Keep model and method names, acronyms, $...$ formulas,
+**bold** or *italic* marks and LaTeX commands such as \\algname as they are. Reply with the translated abstract and
+nothing else.
 ${o.glossary}
 ${o.abstract}`
+}
+
+/** The same, from the papers themselves, for what the abstract and the web left unexplained. */
+export function fullTextPrompt(o: { edition: string; count: number; input: string; out: string }): string {
+  return `Some titles and abstracts of ${o.edition} hold LaTeX macros the authors defined for themselves (\\algname,
+\\method) that neither the abstract nor the web explained. ${o.input} lists these ${o.count} papers: key, title,
+abstract, the tokens to explain, and a file in this folder with the text of the paper's opening pages, taken from
+its PDF, where the macros show as what they print.
+
+Read each paper's file (the name is almost always in its abstract or introduction) and find what each token stands
+for:
+- the paper's own name for its method, model, dataset or benchmark, as the paper writes it;
+- notation: what it prints, as TeX in $...$;
+- nothing, or a mark left from the authors' editing: "";
+- not in the paper either: null.
+
+Write ${o.out}: {"<key>": {"<token>": "<what it stands for>", ...}, ...}, covering every listed key and token.
+Write nothing else, then reply with the single word DONE.`
 }
 
 /** What the authors' own macros and broken formulas stand for, paper by paper. */
