@@ -476,7 +476,7 @@ export function initCall(hangUp: () => void): void {
     const contact = person()
     return {
       state,
-      contact: { name: contact.name, avatar: contact.avatar, portrait: contact.portrait, accent: contactAccent(contact) },
+      contact: { name: contact.name, avatar: contact.avatar, portrait: contact.portrait, frame: contact.frame, accent: contactAccent(contact) },
       past: pastCalls(),
       mood: getSettings().callMood,
       uiFont: getSettings().uiFont

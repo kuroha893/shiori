@@ -300,9 +300,13 @@ body,
 .call-backdrop {
   position: absolute;
   inset: -12px;
-  background-position: 40% 30%;
-  background-size: cover;
   filter: blur(3px) saturate(1.1);
+}
+.call-backdrop img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 .call-veil {
   position: absolute;

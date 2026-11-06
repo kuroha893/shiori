@@ -64,7 +64,7 @@ const api = {
   deleteContact: (id: string): Promise<Contact[]> => ipcRenderer.invoke('contacts:delete', id),
   contactRomaji: (name: string): Promise<string> => ipcRenderer.invoke('contacts:romaji', name),
   pickPortrait: (): Promise<string | undefined> => ipcRenderer.invoke('contacts:pickPortrait'),
-  contactPortrait: (id: string): Promise<string | undefined> => ipcRenderer.invoke('contacts:portrait', id),
+  contactPicture: (id: string, name: 'portrait.jpg' | 'avatar-source.jpg'): Promise<string | undefined> => ipcRenderer.invoke('contacts:picture', id, name),
   onContactsChanged: (fn: (list: Contact[]) => void) => on('contacts:changed', fn),
   onPetChanged: (fn: (s: PetState) => void) => on('pet:changed', fn),
 

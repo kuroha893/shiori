@@ -13,11 +13,31 @@ export const BUILTIN = [
 
 export type CallLanguage = 'ja' | 'zh'
 
-/** A square on the portrait: x and size as fractions of its width, y of its height. */
+/** A square on a picture: x and size as fractions of its width, y of its height. */
 export interface AvatarCrop {
   x: number
   y: number
   size: number
+  /** Which picture it is on: the background (also when left out, as older crops were) or the avatar's own */
+  from?: 'portrait' | 'own'
+}
+
+/** How the background sits in the call screen: where it is moved to, 0 to 1 each way as CSS positions it, and how far it is zoomed in. */
+export interface BackdropFrame {
+  x: number
+  y: number
+  zoom: number
+}
+
+/** Where the call screen showed every background before it could be framed. */
+export const OLD_FRAME: BackdropFrame = { x: 0.4, y: 0.3, zoom: 1 }
+
+/** Where a picture of width × height goes in a box to cover it, framed. */
+export function frameRect(width: number, height: number, box: { width: number; height: number }, frame: BackdropFrame) {
+  const scale = Math.max(box.width / width, box.height / height) * frame.zoom
+  const w = width * scale
+  const h = height * scale
+  return { left: (box.width - w) * frame.x, top: (box.height - h) * frame.y, width: w, height: h }
 }
 
 export interface Contact {
@@ -27,7 +47,11 @@ export interface Contact {
   avatar?: string
   /** Image URL of the full picture behind the call screen */
   portrait?: string
-  /** Where on the portrait the avatar was cut from */
+  /** How the portrait sits behind the call screen */
+  frame?: BackdropFrame
+  /** Image URL of a picture of the avatar's own, when it isn't cut from the portrait */
+  avatarSource?: string
+  /** Where the avatar was cut */
   crop?: AvatarCrop
   /** Who they are and how they talk: the text of <library>/<id>/persona.md */
   persona: string
@@ -53,5 +77,7 @@ export interface ContactDraft {
   /** A new picture as a data URL, or null to remove the one there is; left out to keep it */
   avatar?: string | null
   portrait?: string | null
+  frame?: BackdropFrame
+  avatarSource?: string | null
   crop?: AvatarCrop
 }

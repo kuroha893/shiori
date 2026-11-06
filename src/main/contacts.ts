@@ -2,7 +2,7 @@ import { dialog, ipcMain, nativeImage, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { BUILTIN, YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../shared/contacts'
+import { BUILTIN, OLD_FRAME, YACHIYO, type AvatarCrop, type BackdropFrame, type Contact, type ContactDraft } from '../shared/contacts'
 import { root } from './library'
 import { shippedFile } from './shippedContacts'
 import { closePet, petState } from './pet'
@@ -25,6 +25,8 @@ export const contactDir = (id: string) => join(root(), id)
 const avatarFile = (id: string) => join(contactDir(id), 'avatar.png')
 const portraitFile = (id: string) => join(contactDir(id), 'portrait.jpg')
 const cropFile = (id: string) => join(contactDir(id), 'avatar-crop.json')
+const frameFile = (id: string) => join(contactDir(id), 'backdrop.json')
+const sourceFile = (id: string) => join(contactDir(id), 'avatar-source.jpg')
 const personaFile = (id: string) => join(contactDir(id), 'persona.md')
 
 let changed: (list: Contact[]) => void = () => {}
@@ -34,9 +36,9 @@ function assetUrl(id: string, name: string, own: string): string | undefined {
   return existsSync(own) ? `shiori://contact/${id}/${name}?v=${statSync(own).mtimeMs}` : undefined
 }
 
-function readCrop(id: string): AvatarCrop | undefined {
+function readJson<T>(path: string): T | undefined {
   try {
-    return JSON.parse(readFileSync(cropFile(id), 'utf8'))
+    return JSON.parse(readFileSync(path, 'utf8'))
   } catch {
     return undefined
   }
@@ -76,7 +78,7 @@ function shippedVoice(id: string): Partial<Pick<Stored, 'voice' | 'language'>> {
 
 /** Copy an app's contact's files where the library lacks them. */
 function copyShipped(id: string): void {
-  for (const name of ['persona.md', 'avatar.png', 'portrait.jpg', 'avatar-crop.json']) {
+  for (const name of ['persona.md', 'avatar.png', 'portrait.jpg', 'backdrop.json', 'avatar-source.jpg', 'avatar-crop.json']) {
     const shipped = shippedFile(id, name)
     const own = join(contactDir(id), name)
     if (!existsSync(shipped) || existsSync(own)) continue
@@ -151,7 +153,9 @@ export function loadContacts(): Contact[] {
       persona: readPersona(c),
       avatar: assetUrl(c.id, 'avatar.png', avatarFile(c.id)),
       portrait: assetUrl(c.id, 'portrait.jpg', portraitFile(c.id)),
-      crop: readCrop(c.id),
+      frame: readJson<BackdropFrame>(frameFile(c.id)) ?? OLD_FRAME,
+      avatarSource: assetUrl(c.id, 'avatar-source.jpg', sourceFile(c.id)),
+      crop: readJson<AvatarCrop>(cropFile(c.id)),
       hue: pictureHue(c.id) ?? nameHue(c.name),
       calls: callCount(c.id),
       remembers: remembers(c.id)
@@ -171,21 +175,27 @@ export function saveContact(draft: ContactDraft): Contact[] {
   // The prefix keeps a contact's folder from ever colliding with "papers" and the like.
   const id = before?.id ?? `c-${randomUUID()}`
   mkdirSync(contactDir(id), { recursive: true })
-  if (draft.avatar === null) rmSync(avatarFile(id), { force: true })
-  else if (draft.avatar) {
-    const png = draft.avatar.match(/^data:image\/png;base64,(.+)$/)
-    if (!png) throw new Error('头像格式不对')
-    writeFileSync(avatarFile(id), Buffer.from(png[1], 'base64'))
-  }
+  // The background and the avatar are kept apart: Settings has already moved a picture the avatar was cut from
+  // to the avatar's own before the background changes or goes.
   if (draft.portrait === null) {
     rmSync(portraitFile(id), { force: true })
+    rmSync(frameFile(id), { force: true })
+  } else if (draft.portrait) writeFileSync(portraitFile(id), jpegBytes(draft.portrait))
+  if (draft.frame && draft.portrait !== null) writeFileSync(frameFile(id), JSON.stringify(draft.frame))
+  if (draft.avatar === null) {
+    rmSync(avatarFile(id), { force: true })
+    rmSync(sourceFile(id), { force: true })
     rmSync(cropFile(id), { force: true })
-  } else if (draft.portrait) {
-    const jpeg = draft.portrait.match(/^data:image\/jpeg;base64,(.+)$/)
-    if (!jpeg) throw new Error('图片格式不对')
-    writeFileSync(portraitFile(id), Buffer.from(jpeg[1], 'base64'))
+  } else {
+    if (draft.avatar) {
+      const png = draft.avatar.match(/^data:image\/png;base64,(.+)$/)
+      if (!png) throw new Error('头像格式不对')
+      writeFileSync(avatarFile(id), Buffer.from(png[1], 'base64'))
+    }
+    if (draft.avatarSource === null) rmSync(sourceFile(id), { force: true })
+    else if (draft.avatarSource) writeFileSync(sourceFile(id), jpegBytes(draft.avatarSource))
+    if (draft.crop) writeFileSync(cropFile(id), JSON.stringify(draft.crop))
   }
-  if (draft.crop && draft.portrait !== null) writeFileSync(cropFile(id), JSON.stringify(draft.crop))
   const persona = draft.persona.trim()
   writeFileSync(personaFile(id), persona)
   // A reading left as it was belongs to the old name, so a renamed contact gets a new one.
@@ -237,6 +247,12 @@ async function deleteContact(id: string): Promise<Contact[]> {
   writeStored(readStored().filter((c) => c.id !== id))
   if (existsSync(contactDir(id))) await shell.trashItem(contactDir(id))
   return loadContacts()
+}
+
+function jpegBytes(url: string): Buffer {
+  const jpeg = url.match(/^data:image\/jpeg;base64,(.+)$/)
+  if (!jpeg) throw new Error('图片格式不对')
+  return Buffer.from(jpeg[1], 'base64')
 }
 
 const jpegUrl = (bytes: Buffer) => `data:image/jpeg;base64,${bytes.toString('base64')}`
@@ -301,6 +317,7 @@ export function contactAsset(id: string, rel: string): string | undefined {
   if (!getContact(id)) return undefined
   if (rel === 'avatar.png') return existsSync(avatarFile(id)) ? avatarFile(id) : undefined
   if (rel === 'portrait.jpg') return existsSync(portraitFile(id)) ? portraitFile(id) : undefined
+  if (rel === 'avatar-source.jpg') return existsSync(sourceFile(id)) ? sourceFile(id) : undefined
   if (!rel.startsWith('pet/')) return undefined
   try {
     const file = shippedFile(id, rel)
@@ -326,8 +343,8 @@ export function initContacts(onChange: (list: Contact[]) => void): void {
   })
   ipcMain.handle('contacts:pickPortrait', () => pickPortrait())
   // Settings cuts the avatar on a canvas, which only reads pictures it is handed directly.
-  ipcMain.handle('contacts:portrait', (_e, id: string) => {
-    const path = contactAsset(id, 'portrait.jpg')
+  ipcMain.handle('contacts:picture', (_e, id: string, name: 'portrait.jpg' | 'avatar-source.jpg') => {
+    const path = contactAsset(id, name)
     return path ? jpegUrl(readFileSync(path)) : undefined
   })
 }

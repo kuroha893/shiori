@@ -1,6 +1,6 @@
 // Types shared by the main process, the preload bridge and the renderer.
 
-import type { CallLanguage } from './contacts'
+import type { BackdropFrame, CallLanguage } from './contacts'
 
 export type PaperStatus = 'new' | 'queued' | 'processing' | 'ready' | 'error'
 
@@ -91,7 +91,7 @@ export interface PastCall {
 
 export interface CallInit {
   state: CallState
-  contact: { name: string; avatar?: string; portrait?: string; accent: string }
+  contact: { name: string; avatar?: string; portrait?: string; frame?: BackdropFrame; accent: string }
   past: PastCall[]
   mood: CallMood
   uiFont: string

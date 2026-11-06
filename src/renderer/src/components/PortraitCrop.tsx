@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { AvatarCrop } from '../../../shared/contacts'
 
 const AVATAR_SIZE = 256
-const STAGE_HEIGHT = 300
+const STAGE_HEIGHT = 340
+// Between the picture and what sits beside it.
+const ASIDE_GAP = 18
 // The smallest circle, as a fraction of the room there is.
 const SMALLEST = 0.2
 
@@ -34,12 +36,18 @@ export function fitPortrait(src: string): Promise<string> {
 }
 
 /**
- * Where the avatar is cut from the portrait: drag the circle, and pinch (or ⌘ and the wheel) to change its size.
+ * Where the avatar is cut from a picture: drag the circle, and pinch (or ⌘ and the wheel) to change its size.
  * Plain scrolling goes on scrolling the page, so passing over the picture never changes the crop.
+ * A picture just switched to (`recut`) makes the avatar again from the crop it had there.
+ * The picture is shown whole, as large as fits beside `children` and no taller than the stage: anything cut off
+ * would put the circle somewhere other than where the avatar is cut.
  */
-export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: AvatarCrop; onChange: (crop: AvatarCrop, avatar: string) => void }) {
+export function PortraitCrop({ src, crop, recut, onChange, children }: { src: string; crop?: AvatarCrop; recut?: boolean; onChange: (crop: AvatarCrop, avatar: string) => void; children?: React.ReactNode }) {
   const image = useRef<HTMLImageElement>(null)
   const [ratio, setRatio] = useState<number>() // height / width
+  const room = useRef<HTMLDivElement>(null)
+  const aside = useRef<HTMLDivElement>(null)
+  const [roomWidth, setRoomWidth] = useState<number>()
   const grip = useRef<{ x: number; y: number; from: AvatarCrop }>(undefined)
   const stage = useRef<HTMLDivElement>(null)
   // Wheel events come faster than the crop returns through the parent, so each builds on the one before.
@@ -73,7 +81,7 @@ export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: Avat
     if (!crop) {
       const size = largest(r) * 0.8
       apply({ size, x: (1 - size) / 2, y: 0 })
-    }
+    } else if (recut) apply(fit(crop, r))
   }
 
   // A picture from memory can be ready before onLoad is listening.
@@ -82,7 +90,17 @@ export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: Avat
     else setRatio(undefined)
   }, [src])
 
-  const stageWidth = ratio ? STAGE_HEIGHT / ratio : undefined
+  useEffect(() => {
+    const el = room.current
+    if (!el) return
+    const measure = () => setRoomWidth(el.clientWidth - (aside.current ? aside.current.offsetWidth + ASIDE_GAP : 0))
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const stageHeight = ratio && roomWidth ? Math.min(STAGE_HEIGHT, roomWidth * ratio) : undefined
+  const stageWidth = ratio && stageHeight ? stageHeight / ratio : undefined
   const shown = ratio && crop ? fit(crop, ratio) : undefined
   latest.current = shown
 
@@ -113,12 +131,12 @@ export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: Avat
   }
   const move = (e: React.PointerEvent) => {
     const g = grip.current
-    if (!g || !ratio || !stageWidth) return
-    apply(fit({ ...g.from, x: g.from.x + (e.clientX - g.x) / stageWidth, y: g.from.y + (e.clientY - g.y) / STAGE_HEIGHT }, ratio))
+    if (!g || !ratio || !stageWidth || !stageHeight) return
+    apply(fit({ ...g.from, x: g.from.x + (e.clientX - g.x) / stageWidth, y: g.from.y + (e.clientY - g.y) / stageHeight }, ratio))
   }
   return (
-    <div className="set-crop">
-      <div className="set-crop-stage" ref={stage} style={{ height: STAGE_HEIGHT, width: stageWidth }}>
+    <div className="set-crop" ref={room}>
+      <div className="set-crop-stage" ref={stage} style={stageWidth ? { height: stageHeight, width: stageWidth } : { height: STAGE_HEIGHT, width: 0 }}>
         <img ref={image} src={src} alt="" draggable={false} onLoad={loaded} />
         {shown && (
           <div
@@ -131,6 +149,11 @@ export function PortraitCrop({ src, crop, onChange }: { src: string; crop?: Avat
           />
         )}
       </div>
+      {children && (
+        <div className="set-crop-aside" ref={aside}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }

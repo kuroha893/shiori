@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { frameRect, type BackdropFrame } from '../../shared/contacts'
 import type { CallLine, CallMood, CallState, PastCall } from '../../shared/types'
 import type { CallBridge } from '../../preload/call'
 import { Icon } from './components/Icon'
@@ -101,10 +102,27 @@ function buildRows(past: PastCall[], startedAt: number | undefined, live: Entry[
   return rows
 }
 
+/** The picture behind the call screen, framed as it was in Settings; without a frame (the avatar standing in) it is centred. */
+function Backdrop({ picture, frame }: { picture?: string; frame?: BackdropFrame }) {
+  const [rect, setRect] = useState<React.CSSProperties>({ opacity: 0 })
+  const box = useRef<HTMLDivElement>(null)
+  if (!picture) return <div className="call-backdrop" />
+  const place = (img: HTMLImageElement) => {
+    const el = box.current
+    if (!el) return
+    setRect(frameRect(img.naturalWidth, img.naturalHeight, { width: el.offsetWidth, height: el.offsetHeight }, frame ?? { x: 0.5, y: 0.5, zoom: 1 }))
+  }
+  return (
+    <div className="call-backdrop" ref={box}>
+      <img src={picture} alt="" draggable={false} style={rect} onLoad={(e) => place(e.currentTarget)} />
+    </div>
+  )
+}
+
 function Call() {
   const [state, setState] = useState<CallState>({ active: true, thinking: false })
   const [now, setNow] = useState(Date.now())
-  const [contact, setContact] = useState<{ name: string; avatar?: string; portrait?: string }>({ name: '' })
+  const [contact, setContact] = useState<{ name: string; avatar?: string; portrait?: string; frame?: BackdropFrame }>({ name: '' })
   const [past, setPast] = useState<PastCall[]>([])
   const [raised, setRaised] = useState(false)
   const [tall, setTall] = useState(true)
@@ -330,14 +348,13 @@ function Call() {
       <Icon name="hangUp" size={15} />
     </button>
   )
-  const picture = contact.portrait ?? contact.avatar
   const rows = showHistory ? buildRows(past, state.startedAt, history) : []
   if (showHistory)
     return (
       <div className="call">
         <audio ref={audio} onEnded={playNext} onError={playNext} />
         <div className={`call-screen hit ${raised || !tall ? 'raised' : ''}`} onPointerDown={onScreenDown} onPointerMove={onCapsuleMove} onPointerUp={onScreenUp}>
-          <div className="call-backdrop" style={picture ? { backgroundImage: `url("${picture}")` } : undefined} />
+          <Backdrop picture={contact.portrait ?? contact.avatar} frame={contact.portrait ? contact.frame : undefined} />
           <div className="call-veil" />
           <button className="call-close" title="收起通话界面" aria-label="收起通话界面" onClick={() => setShowHistory(false)}>
             <Icon name="x" size={14} />

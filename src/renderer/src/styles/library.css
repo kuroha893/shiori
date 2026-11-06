@@ -631,26 +631,186 @@ input.bare::placeholder {
   width: 100%;
   box-sizing: border-box;
 }
-.set-contact-picture {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
+/* 背景 and 头像: a bar of controls on the label's line, the picture beneath, both pictures as tall */
+.set-contact-form .set-row.set-pic-row {
+  margin: 6px 0;
 }
-.set-crop {
+.set-contact-form .set-pic-row > label {
+  padding-top: 0;
+  line-height: 32px;
+}
+.set-pic {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   align-items: flex-start;
+  gap: 10px;
+}
+.set-pic-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+}
+.set-pic-bar .btn.sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+.seg button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.set-contact-pic.set-pic-preview {
+  width: 64px;
+  height: 64px;
+  margin-top: 4px;
+}
+.set-pic-preview.ringed {
+  outline-width: 2px;
+  outline-offset: 3px;
+}
+.set-pic-preview .contact-avatar.letter {
+  font-size: 26px;
+}
+
+/* The call screen at half size, numbers halved from call.css */
+.call-preview {
+  position: relative;
+  flex: none;
+  width: 190px;
+  height: 340px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #141228;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  user-select: none;
+  touch-action: none;
+}
+.call-preview.framing {
+  cursor: grab;
+}
+.call-preview.framing:active {
+  cursor: grabbing;
+}
+.call-preview > * {
+  pointer-events: none;
+}
+.call-preview-back {
+  position: absolute;
+  inset: -6px;
+  filter: blur(1.5px) saturate(1.1);
+}
+.call-preview-back img {
+  position: absolute;
+  max-width: none;
+}
+.call-preview-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(18, 16, 34, 0.26) 0, rgba(18, 16, 34, 0.24) 40%, rgba(18, 16, 34, 0.58) 62%, rgba(14, 13, 30, 0.84) 100%);
+}
+.call-preview-avatar {
+  position: absolute;
+  left: 57.5px;
+  top: 22px;
+  box-sizing: border-box;
+  width: 75px;
+  height: 75px;
+  padding: 1.5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.14);
+}
+.call-preview-avatar img,
+.call-preview-avatar b {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.call-preview-avatar b {
+  background: #3b3660;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 500;
+}
+.call-preview-name {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 108px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 15.5px;
+  font-weight: 600;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+.call-preview-time {
+  position: absolute;
+  left: 50%;
+  top: 136px;
+  width: 36px;
+  height: 13px;
+  transform: translateX(-50%);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.call-preview-lines {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.call-preview-lines i {
+  display: block;
+  height: 15px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.call-preview-lines i.you {
+  align-self: flex-end;
+  background: rgba(169, 211, 255, 0.26);
+}
+.call-preview-capsule {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 8px;
+  height: 24px;
+  border-radius: 99px;
+  background: rgba(14, 13, 30, 0.85);
+}
+.set-crop {
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.set-crop-stage,
+.set-crop-aside {
+  flex: none;
+}
+.set-crop-aside {
+  display: flex;
 }
 .set-crop-stage {
   position: relative;
   max-width: 100%;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 14px;
   background: hsl(var(--muted));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 .set-crop-stage img {
   display: block;
@@ -670,10 +830,6 @@ input.bare::placeholder {
 }
 .set-crop-ring:active {
   cursor: grabbing;
-}
-.set-contact-picture .set-contact-pic {
-  width: 44px;
-  height: 44px;
 }
 .set-contact-actions {
   display: flex;

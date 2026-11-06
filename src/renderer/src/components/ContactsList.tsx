@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
-import { YACHIYO, type AvatarCrop, type Contact, type ContactDraft } from '../../../shared/contacts'
+import { YACHIYO, type AvatarCrop, type BackdropFrame, type Contact, type ContactDraft } from '../../../shared/contacts'
 import { api } from '../api'
+import { CallPreview } from './CallPreview'
 import { ContactAvatar, ringStyle, useContacts } from './Chrome'
 import { errorText } from './Folders'
 import { Icon } from './Icon'
@@ -10,11 +11,42 @@ import { fitPortrait, PortraitCrop } from './PortraitCrop'
 const EGG_CLICKS = 8
 const EGG_WINDOW = 4000
 
-type Form = ContactDraft & { avatarShown?: string; portraitShown?: string }
+type Source = 'portrait' | 'own'
 
-const NEW: Form = { name: '', persona: '', voice: '', language: 'zh' }
+/**
+ * What Settings holds while a contact is edited. The pictures shown are data URLs, since the crop cuts on a canvas;
+ * the avatar remembers its crop on each picture, so switching between them and back loses nothing.
+ */
+type Form = Omit<ContactDraft, 'crop'> & {
+  avatarShown?: string
+  portraitShown?: string
+  sourceShown?: string
+  from?: Source
+  crops: Partial<Record<Source, AvatarCrop>>
+  /** The avatar was switched to another picture and is cut again from it */
+  recut?: boolean
+}
 
-const toForm = (c: Contact): Form => ({ id: c.id, name: c.name, romaji: c.romaji ?? '', persona: c.persona, voice: c.voice, language: c.language, avatarShown: c.avatar, crop: c.crop })
+const NEW: Form = { name: '', persona: '', voice: '', language: 'zh', crops: {} }
+
+// A background picked anew sits centred across and a little above the middle, where faces usually are.
+const NEW_FRAME: BackdropFrame = { x: 0.5, y: 0.3, zoom: 1 }
+
+function toForm(c: Contact): Form {
+  const from = c.crop ? (c.crop.from ?? 'portrait') : undefined
+  return {
+    id: c.id,
+    name: c.name,
+    romaji: c.romaji ?? '',
+    persona: c.persona,
+    voice: c.voice,
+    language: c.language,
+    avatarShown: c.avatar,
+    frame: c.frame,
+    from: c.avatar ? from : undefined,
+    crops: from && c.crop ? { [from]: c.crop } : {}
+  }
+}
 
 /**
  * Deleting someone asks twice; once you have talked, a third time, by typing their name, since their memory of
@@ -84,37 +116,67 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
     setForm(next)
     setError(undefined)
     setDeleting(false)
-    if (next?.id && contacts.find((c) => c.id === next.id)?.portrait) {
-      api.contactPortrait(next.id).then((portraitShown) => setForm((f) => (f && f.id === next.id ? { ...f, portraitShown } : f)))
-    }
+    const c = next?.id ? contacts.find((x) => x.id === next.id) : undefined
+    if (c?.portrait) api.contactPicture(c.id, 'portrait.jpg').then((portraitShown) => setForm((f) => (f && f.id === c.id ? { ...f, portraitShown } : f)))
+    if (c?.avatarSource) api.contactPicture(c.id, 'avatar-source.jpg').then((sourceShown) => setForm((f) => (f && f.id === c.id ? { ...f, sourceShown } : f)))
   }
   const patch = (p: Partial<Form>) => setForm((f) => f && { ...f, ...p })
 
-  const pick = async () => {
+  const choose = async (): Promise<string | undefined> => {
     try {
       const file = await api.pickPortrait()
-      if (!file) return
-      const portrait = await fitPortrait(file)
+      if (!file) return undefined
       setError(undefined)
-      // No crop yet: the picture opens with a default one, which also makes the avatar.
-      patch({ portrait, portraitShown: portrait, crop: undefined })
+      return await fitPortrait(file)
     } catch (e) {
       setError(errorText(e))
+      return undefined
     }
   }
 
+  /**
+   * The background changes or goes, and the avatar stays as it is: a background it was cut from becomes its own picture.
+   * Without an avatar yet, a new background gives it one.
+   */
+  const setBackground = (f: Form, portrait: string | null): Form => {
+    const next: Form = { ...f, portrait, portraitShown: portrait ?? undefined, frame: portrait ? NEW_FRAME : undefined, recut: false }
+    if (f.from === 'portrait' && f.portraitShown) {
+      next.avatarSource = next.sourceShown = f.portraitShown
+      next.crops = { own: f.crops.portrait }
+      next.from = 'own'
+    } else next.crops = { ...f.crops, portrait: undefined }
+    const hasAvatar = f.avatar !== null && !!f.avatarShown
+    if (portrait && !next.from && !hasAvatar) next.from = 'portrait'
+    return next
+  }
+
+  const pickBackground = async () => {
+    const portrait = await choose()
+    if (portrait) setForm((f) => f && setBackground(f, portrait))
+  }
+
+  const cutFrom = (from: Source) => patch({ from, recut: true })
+
+  const pickOwn = async () => {
+    const source = await choose()
+    if (source) patch({ avatarSource: source, sourceShown: source, from: 'own', crops: { ...form?.crops, own: undefined }, recut: false })
+  }
+
+  const removeAvatar = () => patch({ avatar: null, avatarShown: undefined, avatarSource: null, sourceShown: undefined, from: undefined, crops: {}, recut: false })
+
   const save = async () => {
     if (!form) return
-    const { avatarShown: _shown, portraitShown: _portrait, ...draft } = form
+    const { avatarShown: _shown, portraitShown: _portrait, sourceShown: _source, from, crops, recut: _recut, ...rest } = form
+    const crop = from && crops[from] && rest.avatar !== null ? { ...crops[from], from } : undefined
     try {
-      await api.saveContact(draft)
+      await api.saveContact({ ...rest, crop })
       edit(undefined)
     } catch (e) {
       setError(errorText(e))
     }
   }
 
-  const cropped = (crop: AvatarCrop, avatar: string) => patch({ crop, avatar, avatarShown: avatar })
+  const cropped = (crop: AvatarCrop, avatar: string) => setForm((f) => f && f.from && { ...f, crops: { ...f.crops, [f.from]: crop }, avatar, avatarShown: avatar })
 
   const regenerate = async () => {
     if (!form?.name.trim()) return
@@ -140,8 +202,17 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
     toast(petShown ? '八千代回去了' : '八千代要到桌面上来了')
   }
 
-  const body = (original?: Contact) =>
-    form && (
+  const body = (original?: Contact) => {
+    if (!form) return undefined
+    const background = form.portrait === null ? undefined : form.portraitShown
+    const avatar = form.avatar === null ? undefined : form.avatarShown
+    const cropSource = form.from === 'portrait' ? form.portraitShown : form.from === 'own' ? form.sourceShown : undefined
+    const preview = (
+      <span className="set-contact-pic ringed set-pic-preview" style={original && ringStyle(original)}>
+        <ContactAvatar contact={{ name: form.name }} src={avatar ?? null} />
+      </span>
+    )
+    return (
       <div className="set-contact-form">
         <div className="set-row">
           <label>名字</label>
@@ -156,25 +227,51 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
             </button>
           </div>
         </div>
-        {form.portraitShown && (
-          <div className="set-row">
-            <label>立绘</label>
-            <PortraitCrop src={form.portraitShown} crop={form.crop} onChange={cropped} />
-          </div>
-        )}
-        <div className="set-row">
-          <label>头像</label>
-          <div className="set-contact-picture">
-            <span className="set-contact-pic">
-              <ContactAvatar contact={{ name: form.name }} src={form.avatar === null ? null : form.avatarShown} />
-            </span>
-            <button className="btn sm" onClick={pick}>
-              选择图片
-            </button>
-            {form.avatar !== null && (form.avatar || form.portrait || form.avatarShown) && (
-              <button className="btn ghost sm" onClick={() => patch({ avatar: null, portrait: null, avatarShown: undefined, portraitShown: undefined, crop: undefined })}>
-                移除
+        <div className="set-row set-pic-row">
+          <label>背景</label>
+          <div className="set-pic">
+            <div className="set-pic-bar">
+              <button className="btn sm" onClick={pickBackground}>
+                {background ? '更换' : '选择图片'}
               </button>
+              {background && (
+                <button className="btn sm" onClick={() => setForm((f) => f && setBackground(f, null))}>
+                  移除
+                </button>
+              )}
+            </div>
+            <CallPreview name={form.name} avatar={avatar} portrait={background} frame={form.frame} onFrame={(frame) => patch({ frame })} />
+          </div>
+        </div>
+        <div className="set-row set-pic-row">
+          <label>头像</label>
+          <div className="set-pic">
+            <div className="set-pic-bar">
+              <div className="seg">
+                <button className={avatar && form.from === 'portrait' ? 'on' : ''} disabled={!form.portraitShown} onClick={() => cutFrom('portrait')}>
+                  从背景截
+                </button>
+                <button className={avatar && form.from === 'own' ? 'on' : ''} onClick={() => (form.sourceShown ? cutFrom('own') : pickOwn())}>
+                  另选图片
+                </button>
+              </div>
+              {avatar && form.from === 'own' && (
+                <button className="btn sm" onClick={pickOwn}>
+                  更换
+                </button>
+              )}
+              {avatar && (
+                <button className="btn sm" onClick={removeAvatar}>
+                  移除
+                </button>
+              )}
+            </div>
+            {cropSource ? (
+              <PortraitCrop key={cropSource} src={cropSource} crop={form.from && form.crops[form.from]} recut={form.recut} onChange={cropped}>
+                {preview}
+              </PortraitCrop>
+            ) : (
+              preview
             )}
           </div>
         </div>
@@ -230,6 +327,7 @@ export function ContactsList({ petShown, onPetShown, toast }: { petShown: boolea
         )}
       </div>
     )
+  }
 
   return (
     <div className="set-contacts">
