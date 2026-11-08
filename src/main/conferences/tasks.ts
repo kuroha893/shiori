@@ -234,49 +234,72 @@ export async function patrol(e: Edition, o: LoopOptions & { search: boolean }): 
 export async function makeThemes(e: Edition, signal?: AbortSignal): Promise<Theme[]> {
   const dir = editionDir(e.conf, e.year)
   const papers = loadPapers(e.conf, e.year)
-  writeFileSync(join(dir, 'titles.txt'), papers.map((p) => [p.key, p.title, [p.track, p.kind].filter(Boolean).join(' ')].join('\t')).join('\n'))
-  const file = join(dir, 'themes.json')
-  const r = await runAgent({
-    cwd: dir,
-    prompt: P.themesPrompt({ edition: e.name, count: papers.length, glossary: glossary() }),
-    model: await processModel(),
-    effort: 'medium',
-    write: true,
-    signal
-  })
-  rmSync(join(dir, 'titles.txt'), { force: true })
-  if (r.isError) throw new Error(r.text || 'Claude 出错了')
-  let raw: any
+  const titles = join(dir, 'titles.txt')
+  const diagnostic = join(dir, 'themes-error.json')
+  let response = ''
+  let model: string | undefined
   try {
-    raw = JSON.parse(readFileSync(file, 'utf8'))
-  } catch {
-    throw new Error('没有写出主题')
-  }
-  const themes: Theme[] = (Array.isArray(raw) ? raw : [])
-    .map((t: any, i: number) => {
-      const id = `t${i + 1}`
-      return {
-        id,
-        name: String(t?.name ?? '').slice(0, 40),
-        note: String(t?.note ?? '').slice(0, 200),
-        branches: (Array.isArray(t?.branches) ? t.branches : []).map((b: any, j: number) => ({
-          id: `${id}.${j + 1}`,
-          name: String(b?.name ?? '').slice(0, 40),
-          note: String(b?.note ?? '').slice(0, 200),
-          keywords: (Array.isArray(b?.keywords) ? b.keywords : []).map(String).slice(0, 12)
-        }))
-      }
+    if (signal?.aborted) throw new Error('已取消')
+    model = await processModel()
+    writeFileSync(titles, papers.map((p) => [p.key, p.title, [p.track, p.kind].filter(Boolean).join(' ')].join('\t')).join('\n'))
+    const r = await runAgent({
+      cwd: dir,
+      prompt: P.themesPrompt({ edition: e.name, count: papers.length, glossary: glossary() }),
+      model,
+      effort: 'medium',
+      write: false,
+      signal
     })
-    .filter((t: Theme) => t.name && t.branches.length)
-  if (themes.length < 3) throw new Error('主题归纳得不完整')
-  saveThemes(e.conf, e.year, themes)
-  // A new map: every paper is sorted again.
-  savePapers(
-    e.conf,
-    e.year,
-    papers.map(({ branch: _, ...p }) => p)
-  )
-  return themes
+    response = r.text
+    if (signal?.aborted) throw new Error('已取消')
+    if (r.isError) throw new Error(r.text || '模型出错了')
+    // Shiori owns persistence: a completed turn must supply the data, not merely say DONE.
+    const json = response.trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i, '$1')
+    let raw: unknown
+    try {
+      raw = JSON.parse(json)
+    } catch (cause) {
+      throw new Error('模型未返回有效的主题 JSON', { cause })
+    }
+    if (!Array.isArray(raw)) throw new Error('主题结果必须是 JSON 数组')
+    const themes: Theme[] = raw
+      .map((t: any, i: number) => {
+        const id = `t${i + 1}`
+        return {
+          id,
+          name: typeof t?.name === 'string' ? t.name.trim().slice(0, 40) : '',
+          note: String(t?.note ?? '').slice(0, 200),
+          branches: (Array.isArray(t?.branches) ? t.branches : [])
+            .map((b: any, j: number) => ({
+              id: `${id}.${j + 1}`,
+              name: typeof b?.name === 'string' ? b.name.trim().slice(0, 40) : '',
+              note: String(b?.note ?? '').slice(0, 200),
+              keywords: (Array.isArray(b?.keywords) ? b.keywords : []).map(String).slice(0, 12)
+            }))
+            .filter((b: { name: string }) => b.name)
+        }
+      })
+      .filter((t: Theme) => t.name && t.branches.length)
+    if (themes.length < 3) throw new Error('主题归纳得不完整')
+    saveThemes(e.conf, e.year, themes)
+    // A validated new map is required before discarding the previous assignments.
+    savePapers(e.conf, e.year, papers.map(({ branch: _, ...p }) => p))
+    rmSync(diagnostic, { force: true })
+    return themes
+  } catch (cause) {
+    if (signal?.aborted) throw cause
+    const error = cause instanceof Error ? cause.message : String(cause)
+    let saved = false
+    try {
+      writeFileSync(diagnostic, JSON.stringify({ at: new Date().toISOString(), model, error, response }, null, 2))
+      saved = true
+    } catch {
+      // An unwritable diagnostic must not replace the original failure.
+    }
+    throw new Error(`归纳主题失败：${error}${saved ? '（详情见 themes-error.json）' : ''}`, { cause })
+  } finally {
+    rmSync(titles, { force: true })
+  }
 }
 
 const BATCH = 250

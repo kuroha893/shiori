@@ -160,11 +160,11 @@ ${SCRIPTS(o.edition)}`
 /** The theme map of an edition, from all its titles. */
 export function themesPrompt(o: { edition: string; count: number; glossary: string }): string {
   return `${o.edition} accepted ${o.count} papers. titles.txt lists them, one per line: key<TAB>title<TAB>track and type.
-Read all of it, in parts (it is long), before writing anything.
+Read all of it, in parts (it is long), before forming the map.
 
-Write themes.json, the map of this edition for a Chinese researcher who wants to see what the field is working on
-and find their own way in: 20 to 30 themes (主题) that cover every paper, each with 2 to 7 branches (分支), the
-distinct lines of work inside the theme.
+Return the map of this edition as a JSON array in your final reply, for a Chinese researcher who wants to see
+what the field is working on and find their own way in: 20 to 30 themes (主题) that cover every paper, each with
+2 to 7 branches (分支), the distinct lines of work inside the theme. Shiori will validate and save the array.
 
 [{"id": "t1", "name": "视频生成", "note": "一句话：这一主题的论文在做什么",
   "branches": [{"id": "t1.1", "name": "长视频与时序一致性", "note": "超过一分钟的视频怎么保持人物和场景不漂",
@@ -178,7 +178,7 @@ distinct lines of work inside the theme.
 - Every paper must fit some branch: add a branch "其他" inside a theme where needed, and a last theme "其他" for what
   fits nowhere.
 ${o.glossary}
-Write nothing else, then reply with the single word DONE.`
+Return only the JSON array, without Markdown fences, commentary or DONE. Do not write output files.`
 }
 
 /** Sorting a batch of papers into the theme map and the owner's directions, with Chinese titles. */
