@@ -50,6 +50,40 @@ export interface PaperMeta {
   finished?: boolean
 }
 
+/**
+ * The owner's own AI tasks, done one at a time in their order (see main/tasks.ts). A paper's guide is the last stage
+ * of processing it; a guide task alone is a rewrite, a venue task the owner asking where a paper was published.
+ */
+export type TaskKind = 'process' | 'guide' | 'venue'
+
+export interface Task {
+  key: string
+  paper: string
+  kind: TaskKind
+  /** Why it failed, on a failed task */
+  error?: string
+}
+
+export interface TaskList {
+  running?: Task & { stage?: string; progress?: number }
+  queue: Task[]
+  failed: Task[]
+  /** Nothing new starts until the owner resumes */
+  paused: boolean
+  /** Pause once the running task is done */
+  stopAfter: boolean
+}
+
+export type TaskAction =
+  | { type: 'stopNow' }
+  | { type: 'stopAfter'; on: boolean }
+  | { type: 'resume' }
+  | { type: 'clear' }
+  | { type: 'remove'; key: string }
+  | { type: 'top'; key: string }
+  | { type: 'retry'; key: string }
+  | { type: 'order'; keys: string[] }
+
 export interface Folder {
   id: string
   name: string

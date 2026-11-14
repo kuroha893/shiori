@@ -97,6 +97,7 @@ export function App() {
         <Reader
           key={paper.id}
           paper={paper}
+          papers={papers}
           settings={settings}
           services={services}
           onSettings={updateSettings}

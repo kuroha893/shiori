@@ -8,6 +8,7 @@ import { COLORS, NotePopover, SelectionMenu, type Selected } from './Annotate'
 import { SidePanel, useChat, type Quote, type Tab } from './SidePanel'
 import { Lightbox, PdfPeek } from './Overlays'
 import { CallLauncher, HeartButton, ThemeButton, useDismiss } from './Chrome'
+import { TaskButton } from './Tasks'
 import { Icon } from './Icon'
 import { PaperText } from './PaperText'
 import type { Toast } from './App'
@@ -16,6 +17,7 @@ const EXPLAIN = '请解释这段话：它在说什么、为什么这样说、在
 const TRANSLATE = '把这段翻译成中文，并解释其中不好懂的术语。'
 
 export function Reader(props: {
+  papers: PaperMeta[]
   paper: PaperMeta
   settings: Settings
   services?: ServiceStatus
@@ -302,6 +304,7 @@ export function Reader(props: {
             </button>
             {typo && <TypoPanel settings={settings} onChange={props.onSettings} onClose={() => setTypo(false)} />}
           </div>
+          <TaskButton papers={props.papers} />
           <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
           <button
             className="icon-btn bordered"

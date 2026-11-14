@@ -1,6 +1,6 @@
 import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, Folder, GlossaryEntry, OpenReviewAccount, PaperMeta, PetState, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, Folder, GlossaryEntry, OpenReviewAccount, PaperMeta, PetState, Settings, TaskAction, TaskList } from '../shared/types'
 import type { ServiceStatus } from '../shared/models'
 import type { ConfOverview, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../shared/conferences'
 
@@ -48,6 +48,10 @@ const api = {
   loadNote: (id: string): Promise<object | null> => ipcRenderer.invoke('papers:note', id),
   saveNote: (id: string, doc: object) => ipcRenderer.invoke('papers:saveNote', id, doc),
   saveNoteImage: (id: string, ext: string, bytes: ArrayBuffer): Promise<string> => ipcRenderer.invoke('papers:saveNoteImage', id, ext, bytes),
+
+  tasks: (): Promise<TaskList> => ipcRenderer.invoke('tasks:list'),
+  taskAct: (a: TaskAction) => ipcRenderer.invoke('tasks:act', a),
+  onTasksChanged: (fn: (list: TaskList) => void) => on('tasks:changed', fn),
 
   ask: (id: string, input: { text: string; quote?: { block: string; text: string }; model?: string; effort?: string }) =>
     ipcRenderer.invoke('chat:ask', id, input),

@@ -1,0 +1,498 @@
+/* ---------- task list (top bar) ---------- */
+
+.tq {
+  position: relative;
+}
+.tq-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px 0 5px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+  font-size: 13px;
+  position: relative;
+  cursor: default;
+}
+.tq-btn:hover,
+.tq-btn.on {
+  background: hsl(var(--accent));
+}
+/* the ring is the running task's progress, the middle the list's state */
+.tq-st {
+  position: relative;
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.tq-ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.tq-ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+.tq-ring .bg {
+  stroke: hsl(var(--border));
+}
+.tq-ring .fg {
+  stroke: hsl(var(--primary));
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s;
+}
+/* while it runs, a glint circles the ring */
+.tq-ring .glint {
+  stroke: hsl(var(--primary));
+  stroke-linecap: round;
+  opacity: 0.55;
+  animation: tq-glint 2.4s linear infinite;
+}
+.tq-ring .glint.alone {
+  opacity: 0.9;
+}
+@keyframes tq-glint {
+  to {
+    stroke-dashoffset: -59.69;
+  }
+}
+.tq-st.halting .fg {
+  stroke: hsl(var(--faint-foreground));
+}
+.tq-st.failed .bg {
+  stroke: hsl(var(--destructive));
+}
+.tq-mid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: hsl(var(--muted-foreground));
+}
+.tq-mid > svg:not(.hg) {
+  stroke-width: 2.8;
+}
+.tq-st.failed .tq-mid {
+  color: hsl(var(--destructive));
+  font: bold 12px/1 var(--font-ui);
+}
+.tq-nred {
+  color: hsl(var(--destructive));
+}
+.tq-red {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--destructive));
+}
+
+.tq-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 400px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  transform-origin: top right;
+  animation: popIn 0.14s ease-out both;
+}
+.tq-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 10px 0 18px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.tq-head b {
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+.tq-count {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: hsl(var(--faint-foreground));
+}
+.tq-head .spacer {
+  flex: 1;
+}
+.tq-list {
+  position: relative;
+  padding: 6px;
+  max-height: min(560px, calc(100vh - 150px));
+  overflow: auto;
+}
+.tq-sep {
+  height: 1px;
+  margin: 6px 12px;
+  background: hsl(var(--border));
+}
+
+.tq-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 54px;
+  padding: 0 8px 0 4px;
+  border-radius: calc(var(--radius) - 2px);
+  user-select: none;
+}
+.tq-row.q {
+  touch-action: none;
+}
+.tq-row.q:hover,
+.tq-row.err:hover {
+  background: hsl(var(--accent));
+}
+.tq-grip {
+  flex: none;
+  display: flex;
+  width: 14px;
+  color: hsl(var(--faint-foreground));
+  opacity: 0;
+}
+.tq-row.q:hover .tq-grip {
+  opacity: 1;
+}
+.tq-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 39px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  background: var(--figure-bg);
+  color: hsl(var(--faint-foreground));
+}
+.tq-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  pointer-events: none;
+}
+.tq-main {
+  flex: 1;
+  min-width: 0;
+}
+.tq-title {
+  overflow: hidden;
+  font-size: 13.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tq-row.run .tq-title {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+.tq-row.err .tq-title {
+  color: hsl(var(--muted-foreground));
+}
+.tq-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: hsl(var(--faint-foreground));
+  white-space: nowrap;
+}
+.tq-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tq-stage {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tq-err {
+  color: hsl(var(--destructive));
+}
+.tq-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.tq-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  animation: tq-dot 1.2s ease-in-out infinite;
+}
+.tq-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.tq-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes tq-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+.tq-bar {
+  position: relative;
+  height: 2px;
+  margin: -2px 12px 4px 58px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: hsl(var(--border));
+}
+.tq-bar i {
+  display: block;
+  height: 100%;
+  background: hsl(var(--primary));
+  transition: width 0.3s linear;
+}
+.tq-run.halting .tq-bar i,
+.tq-run.halting .tq-dots i {
+  background: hsl(var(--faint-foreground));
+}
+
+.tq-acts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tq-row.q .tq-acts,
+.tq-row.err .tq-acts {
+  opacity: 0;
+}
+.tq-row.q:hover .tq-acts,
+.tq-row.err:hover .tq-acts {
+  opacity: 1;
+}
+.tq-ib {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+.tq-head .tq-ib {
+  width: 30px;
+  height: 30px;
+}
+.tq-ib:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+.tq-row:hover .tq-ib:hover {
+  background: hsl(var(--border) / 0.6);
+}
+
+/* stop now: a small red disc with a white square */
+.tq-stop {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: hsl(var(--destructive));
+  cursor: default;
+}
+.tq-stop i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: #fff;
+}
+.tq-stop:hover {
+  filter: brightness(1.08);
+}
+
+/* pause once this one is done */
+.tq-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px 0 7px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: default;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+.tq-cap svg {
+  color: hsl(var(--muted-foreground));
+}
+.tq-cap:hover {
+  background: hsl(var(--accent));
+}
+.tq-cap.on {
+  border-color: hsl(var(--primary) / 0.5);
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+.tq-cap.on svg {
+  color: hsl(var(--primary));
+}
+/* 继续's play mark is filled */
+.tq-cap > svg:not(.hg) {
+  fill: currentColor;
+}
+
+/* hourglass: idle upright with the sand below; on: turn over, the sand runs down, turn over again */
+.hg .hg-turn {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+}
+.hg rect {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0.55;
+}
+.hg .hg-sand-top {
+  transform: translateY(9px);
+}
+.hg .hg-sand-bot {
+  transform: translateY(0);
+}
+.hg .hg-stream {
+  stroke-width: 1.2;
+  stroke-dasharray: 1.4 1.4;
+  opacity: 0;
+}
+.hg.run .hg-turn {
+  animation: hg-turn 3.6s infinite;
+}
+.hg.run .hg-sand-top {
+  animation: hg-top 3.6s infinite;
+}
+.hg.run .hg-sand-bot {
+  animation: hg-bot 3.6s infinite;
+}
+.hg.run .hg-stream {
+  animation:
+    hg-stream 3.6s infinite,
+    hg-flow 0.35s linear infinite;
+}
+@keyframes hg-turn {
+  0% {
+    transform: rotate(0);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.3, 1);
+  }
+  14% {
+    transform: rotate(180deg);
+  }
+  14.01%,
+  100% {
+    transform: rotate(0);
+  }
+}
+@keyframes hg-top {
+  0%,
+  14% {
+    transform: translateY(9px);
+  }
+  14.01% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
+  }
+  92%,
+  100% {
+    transform: translateY(9px);
+  }
+}
+@keyframes hg-bot {
+  0%,
+  14% {
+    transform: translateY(0);
+  }
+  14.01% {
+    transform: translateY(9px);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
+  }
+  92%,
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes hg-stream {
+  0%,
+  16% {
+    opacity: 0;
+  }
+  18%,
+  90% {
+    opacity: 0.9;
+  }
+  93%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hg-flow {
+  to {
+    stroke-dashoffset: -2.8;
+  }
+}
+
+/* dragging a queued row */
+.tq-list.dragging .tq-row.q {
+  transition: transform 0.16s ease;
+}
+.tq-list.dragging .tq-row.q:hover {
+  background: transparent;
+}
+.tq-list.dragging .tq-row.q:hover .tq-acts,
+.tq-list.dragging .tq-row.q:hover .tq-grip {
+  opacity: 0;
+}
+.tq-row.lifted {
+  z-index: 5;
+  transition: none !important;
+  background: hsl(var(--popover)) !important;
+  box-shadow: 0 2px 4px hsl(240 10% 4% / 0.06), 0 10px 24px -8px hsl(240 10% 4% / 0.25);
+}
+:root[data-theme='dark'] .tq-row.lifted {
+  box-shadow: 0 2px 4px hsl(0 0% 0% / 0.3), 0 12px 28px -8px hsl(0 0% 0% / 0.7);
+}
+.tq-row.lifted .tq-grip {
+  opacity: 1 !important;
+}
+.tq-row.lifted .tq-acts {
+  opacity: 0 !important;
+}
+.tq-list.dragging,
+.tq-list.dragging * {
+  cursor: grabbing !important;
+}

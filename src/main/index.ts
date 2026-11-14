@@ -1,15 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings } from '../shared/types'
+import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings, TaskAction } from '../shared/types'
 import * as lib from './library'
 import { getSettings, saveSettings } from './settings'
 import { inTerminal, openLogin } from './claude'
 import { closeCodex, openCodexLogin } from './codex'
 import { checkDeepseekKey, serviceStatus } from './ai'
 import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
-import { cancel, enqueue, initJobs, prepare, startGuide } from './jobs'
-import { findVenue, initVenues } from './venue'
+import { cancel, enqueue, initJobs, pendingFromPapers, prepare, startGuide } from './jobs'
+import { addTask, forgetPaper, initTasks, loadTasks, taskAction, taskList } from './tasks'
+import { initVenues } from './venue'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
 import { destroyWorker } from './worker'
@@ -77,6 +78,8 @@ const paperChanged = (meta: PaperMeta) => {
   watchPaper(meta)
 }
 const foldersChanged = () => send('folders:changed', loadFolders())
+/** The task list of the library now in use */
+const reloadTasks = () => loadTasks(pendingFromPapers(), (id) => !!lib.readMeta(id))
 
 async function addPdf(path: string): Promise<PaperMeta> {
   const meta = lib.importPdf(path)
@@ -93,6 +96,7 @@ function registerIpc(): void {
     if (patch.libraryPath) {
       lib.ensureLibrary()
       loadGlossary()
+      reloadTasks()
     }
     return s
   })
@@ -102,6 +106,7 @@ function registerIpc(): void {
     const s = saveSettings({ libraryPath: r.filePaths[0] })
     lib.ensureLibrary()
     loadGlossary()
+    reloadTasks()
     return s
   })
 
@@ -168,10 +173,10 @@ function registerIpc(): void {
   })
   ipcMain.handle('papers:process', (_e, id: string) => enqueue(id))
   ipcMain.handle('papers:guide', (_e, id: string) => startGuide(id))
-  ipcMain.handle('papers:findVenue', async (_e, id: string) => ({ changed: await findVenue(id, true), meta: lib.readMeta(id) }))
+  ipcMain.handle('papers:findVenue', async (_e, id: string) => ({ changed: !!(await addTask(id, 'venue')), meta: lib.readMeta(id) }))
   ipcMain.handle('papers:cancel', (_e, id: string) => cancel(id))
   ipcMain.handle('papers:trash', async (_e, id: string) => {
-    cancel(id)
+    forgetPaper(id)
     await lib.trashPaper(id)
     send('paper:removed', id)
   })
@@ -183,6 +188,9 @@ function registerIpc(): void {
   ipcMain.handle('papers:note', (_e, id: string) => lib.loadNote(id))
   ipcMain.handle('papers:saveNote', (_e, id: string, doc: object) => lib.saveNote(id, doc))
   ipcMain.handle('papers:saveNoteImage', (_e, id: string, ext: string, bytes: ArrayBuffer) => lib.saveNoteImage(id, ext, bytes))
+
+  ipcMain.handle('tasks:list', () => taskList())
+  ipcMain.handle('tasks:act', (_e, a: TaskAction) => taskAction(a))
 
   ipcMain.handle('chat:ask', (_e, id: string, input) => ask(id, input, (ev: ChatEvent) => send('chat:event', ev)))
   ipcMain.handle('chat:stop', (_e, id: string) => stopAsking(id))
@@ -232,6 +240,8 @@ app.whenReady().then(() => {
   createWindow()
   initJobs(paperChanged)
   initVenues(paperChanged)
+  initTasks((list) => send('tasks:changed', list))
+  reloadTasks()
   initOpenReview({ send, window: () => main })
   initConferences({ send, paperChanged })
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))

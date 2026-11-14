@@ -11,32 +11,52 @@ import { guidePrompt, processPrompt, verifyPrompt, type Source } from './prompts
 import { getSettings } from './settings'
 import { workerCall } from './worker'
 import { applyFoundVenue, awaitingVenue, checkVenue, isPreprint } from './venue'
+import { addTask, cancelTasks, registerRunner, TaskError, type TaskContext } from './tasks'
 
 type Notify = (meta: PaperMeta) => void
 
 let notify: Notify = () => {}
-let running: { id: string; abort: AbortController } | undefined
-const queue: string[] = []
-const guides = new Map<string, AbortController>()
+/** The paper being processed now, and how to tell the task list what it is doing */
+let current: { id: string; ctx: TaskContext } | undefined
 
 export function initJobs(onChange: Notify): void {
   notify = onChange
-  // A job interrupted by quitting starts over.
+  registerRunner('process', {
+    run: processTask,
+    queued: (id) => set(id, { status: 'queued', stage: '等待处理', progress: 0, error: undefined }),
+    stopped: (id) => set(id, { status: 'queued', stage: '等待处理', progress: 0 }),
+    dropped: (id) => unqueue(id)
+  })
+  registerRunner('guide', {
+    run: guideTask,
+    queued: (id) => set(id, { guideWriting: true, guideError: undefined }),
+    // also a paper stopped after processing, in its guide stage: readable, only the guide waits
+    stopped: (id) => set(id, { guideWriting: true }),
+    dropped: (id) => set(id, { guideWriting: undefined })
+  })
+}
+
+/** The tasks the papers say are waiting, for a library from before the task list. */
+export function pendingFromPapers(): { paper: string; kind: 'process' | 'guide' }[] {
+  const out: { paper: string; kind: 'process' | 'guide' }[] = []
   for (const p of listPapers()) {
-    if (p.status === 'processing' || p.status === 'queued') {
-      set(p.id, { status: 'queued', stage: '等待处理', progress: 0 })
-      queue.push(p.id)
-    } else if (p.guideWriting) {
-      set(p.id, { guideWriting: undefined })
-      startGuide(p.id)
-    }
+    if (p.status === 'processing' || p.status === 'queued') out.push({ paper: p.id, kind: 'process' })
+    else if (p.guideWriting) out.push({ paper: p.id, kind: 'guide' })
   }
-  pump()
+  return out
 }
 
 function set(id: string, patch: Partial<PaperMeta>): void {
   const meta = updateMeta(id, patch)
   if (meta) notify(meta)
+  if (current?.id === id && patch.stage && meta?.status === 'processing') current.ctx.report(patch.stage, patch.progress)
+}
+
+/** Back to how it was before it was queued. */
+function unqueue(id: string): void {
+  const meta = readMeta(id)
+  if (meta && meta.status !== 'ready') set(id, { status: meta.processedAt ? 'ready' : 'new', stage: undefined, progress: undefined })
+  if (meta?.guideWriting) set(id, { guideWriting: undefined })
 }
 
 export const pdfUrl = (id: string) => `shiori://paper/${encodeURIComponent(id)}/paper.pdf`
@@ -59,37 +79,57 @@ export async function prepare(id: string): Promise<void> {
   set(id, { pages })
 }
 
-export function enqueue(id: string): void {
-  if (running?.id === id || queue.includes(id)) return
-  guides.get(id)?.abort()
-  queue.push(id)
-  set(id, { status: 'queued', stage: '等待处理', progress: 0, error: undefined })
-  pump()
-}
+/** Process a paper: queued at the end of the owner's task list. */
+export const enqueue = (id: string) => void addTask(id, 'process')
 
+/** Write the guide again: next in the task list. */
+export const startGuide = (id: string) => void addTask(id, 'guide')
+
+/** The owner cancelled processing from the paper itself. */
 export function cancel(id: string): void {
-  const i = queue.indexOf(id)
-  if (i >= 0) queue.splice(i, 1)
-  if (running?.id === id) running.abort.abort()
-  guides.get(id)?.abort()
-  const meta = readMeta(id)
-  if (meta && meta.status !== 'ready') set(id, { status: meta.processedAt ? 'ready' : 'new', stage: undefined, progress: undefined })
+  cancelTasks(id)
+  unqueue(id)
 }
 
-function pump(): void {
-  if (running || !queue.length) return
-  const id = queue.shift()!
-  const abort = new AbortController()
-  running = { id, abort }
-  runJob(id, abort.signal)
-    .catch((e) => {
-      if (abort.signal.aborted) return
-      set(id, { status: 'error', stage: undefined, error: String(e?.message || e) })
-    })
-    .finally(() => {
-      running = undefined
-      pump()
-    })
+/** Processing, then where it was published, then the guide, as one task. */
+async function processTask(id: string, ctx: TaskContext): Promise<void> {
+  current = { id, ctx }
+  try {
+    await runJob(id, ctx.signal)
+  } catch (e: any) {
+    // Stopped or cancelled: whoever stopped it has set the paper's state.
+    if (!ctx.signal.aborted) set(id, { status: 'error', stage: undefined, error: String(e?.message || e) })
+    throw e
+  } finally {
+    current = undefined
+  }
+  ctx.requeueAs('guide')
+  // A paper still only a preprint is looked up first, so the guide run searches the web only if that found nothing.
+  ctx.report('正在查找发表信息', 0.95)
+  await checkVenue(id)
+  if (ctx.signal.aborted) throw new Error('已停止')
+  ctx.report('正在写导读', 0.96)
+  set(id, { guideWriting: true, guideError: undefined })
+  await guideStage(id, ctx, true)
+}
+
+/** Rewrite the guide; the paper stays readable, and an old guide stays until the new one is done. */
+async function guideTask(id: string, ctx: TaskContext): Promise<void> {
+  ctx.report('正在写导读')
+  await guideStage(id, ctx, false)
+}
+
+async function guideStage(id: string, ctx: TaskContext, inProcessing: boolean): Promise<void> {
+  try {
+    await writeGuide(id, ctx.signal)
+    set(id, { guideWriting: undefined })
+  } catch (e: any) {
+    // Stopped: it waits in the queue as a guide task, still marked as being written.
+    if (ctx.signal.aborted) throw e
+    const msg = String(e?.message || e)
+    set(id, { guideWriting: undefined, guideError: msg })
+    throw inProcessing ? new TaskError(msg, 'guide') : e
+  }
 }
 
 async function cropAll(id: string): Promise<string[]> {
@@ -189,8 +229,6 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     })
     if (!check.isError && !/^\s*NONE\s*$/i.test(check.text)) await cropAll(id)
   })
-  // A paper still only a preprint is looked up first, so the guide run searches the web only if that found nothing.
-  void checkVenue(id).finally(() => startGuide(id))
 }
 
 async function finish(id: string, dir: string, figs: string[], verify?: () => Promise<void>): Promise<void> {
@@ -217,18 +255,6 @@ async function finish(id: string, dir: string, figs: string[], verify?: () => Pr
     }
   }
   set(id, { ...patch, status: 'ready', stage: undefined, progress: 1, processedAt: new Date().toISOString() })
-}
-
-/** Write or rewrite the guide in the background; the paper stays readable, and an old guide stays until the new one is done. */
-export function startGuide(id: string): void {
-  if (guides.has(id)) return
-  const abort = new AbortController()
-  guides.set(id, abort)
-  set(id, { guideWriting: true, guideError: undefined })
-  writeGuide(id, abort.signal)
-    .then(() => set(id, { guideWriting: undefined }))
-    .catch((e) => set(id, { guideWriting: undefined, guideError: abort.signal.aborted ? undefined : String(e?.message || e) }))
-    .finally(() => guides.delete(id))
 }
 
 async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
@@ -276,4 +302,3 @@ function applySuggestion(id: string, file: string): void {
   rmSync(file, { force: true })
 }
 
-export const isRunning = (id: string) => running?.id === id

@@ -6,6 +6,7 @@ import './styles/base.css'
 import './styles/library.css'
 import './styles/reader.css'
 import './styles/conferences.css'
+import './styles/tasks.css'
 import { App } from './components/App'
 
 createRoot(document.getElementById('root')!).render(<App />)

@@ -7,6 +7,7 @@ import { venueTag } from '../shared/venue'
 import { modelFor, runAgent } from './ai'
 import { listPapers, paperDir, readMeta, updateMeta } from './library'
 import { venueSearchPrompt } from './prompts'
+import { registerRunner } from './tasks'
 import { getSettings } from './settings'
 
 /*
@@ -97,7 +98,7 @@ function readFound(file: string): Found | undefined {
 }
 
 /** Claude searching the web for the paper, with the model that processes papers. Throws when it couldn't run. */
-async function searchWeb(m: PaperMeta): Promise<Found | undefined> {
+async function searchWeb(m: PaperMeta, signal?: AbortSignal): Promise<Found | undefined> {
   if (!m.title) throw new Unavailable()
   const model = await modelFor(getSettings().processModel, 'process')
   const file = join(paperDir(m.id), 'venue-search.json')
@@ -109,7 +110,8 @@ async function searchWeb(m: PaperMeta): Promise<Found | undefined> {
     effort: 'medium',
     write: true,
     search: true,
-    files: ['venue-search.json']
+    files: ['venue-search.json'],
+    signal
   })
   if (r.isError) {
     rmSync(file, { force: true })
@@ -157,12 +159,13 @@ const finding = new Set<string>()
  * owner asking: it runs for any paper and may correct a venue that isn't a preprint. Resolves with whether the
  * venue changed.
  */
-export async function findVenue(id: string, force = false): Promise<boolean> {
+export async function findVenue(id: string, force = false, signal?: AbortSignal): Promise<boolean> {
   const m = readMeta(id)
   if (!m || finding.has(id) || (!force && !awaitingVenue(m))) return false
   finding.add(id)
   try {
-    const [s2, web] = await Promise.allSettled([semanticScholar(m), searchWeb(m)])
+    const [s2, web] = await Promise.allSettled([semanticScholar(m), searchWeb(m, signal)])
+    if (signal?.aborted) return false
     const found = (s2.status === 'fulfilled' && s2.value) || (web.status === 'fulfilled' && web.value) || undefined
     const before = readMeta(id)?.venue
     return apply(id, found, force, s2.status === 'fulfilled' || web.status === 'fulfilled')?.venue !== before
@@ -203,6 +206,13 @@ async function round(): Promise<void> {
 
 export function initVenues(onChange: Notify): void {
   notify = onChange
+  // The owner asking for one paper goes through the task list; the scheduled looks below don't.
+  registerRunner('venue', {
+    run: (id, ctx) => {
+      ctx.report('正在查找发表信息')
+      return findVenue(id, true, ctx.signal)
+    }
+  })
   setTimeout(round, 60_000)
   setInterval(round, 6 * 3600_000)
 }
