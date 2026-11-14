@@ -3,6 +3,7 @@ import type { ChatEvent, ChatMessage } from '../shared/types'
 import { parseModel } from '../shared/models'
 import { loadChat, paperDir, readMeta, saveChat } from './library'
 import { modelFor, runAgent } from './ai'
+import { codexThreadLive } from './codex'
 import { ensurePaperText, sourceFor } from './jobs'
 import { chatSystemPrompt } from './prompts'
 import { glossaryPrompt } from './glossary'
@@ -20,10 +21,10 @@ function history(messages: ChatMessage[]): string {
 }
 
 /**
- * One question = one headless agent turn. With Claude Code the paper keeps one session, so follow-ups
- * ("and the second term?") keep their context; the session lives in Claude Code's own transcript store,
- * and chat.json keeps what the reader sees. Codex threads aren't kept, and a change of service can't continue
- * a session, so those start a new one from the messages so far.
+ * One question = one headless agent turn. The paper keeps one session, so follow-ups ("and the second term?")
+ * keep their context; Claude Code's sessions live in its own transcript store, Codex threads only while its
+ * app-server runs, and chat.json keeps what the reader sees. A thread that is gone, or a change of service or of
+ * ChatGPT model, can't continue, so those start a new session from the messages so far.
  */
 export async function ask(
   paper: string,
@@ -59,7 +60,7 @@ export async function ask(
   try {
     model = await modelFor(model, 'chat')
     const { provider } = parseModel(model)
-    resume = !!chat.sessionId && (chat.sessionProvider ?? 'claude') === provider && provider !== 'openai'
+    resume = !!chat.sessionId && (chat.sessionProvider ?? 'claude') === provider && (provider !== 'openai' || codexThreadLive(chat.sessionId, parseModel(model).model))
     if (!resume) prompt = history(earlier) + prompt
     const source = sourceFor(model)
     if (source === 'pages') await ensurePaperText(paper)
@@ -70,6 +71,7 @@ export async function ask(
       effort: input.effort ?? getSettings().chatEffort,
       write: false,
       session: resume ? chat.sessionId : undefined,
+      keep: true,
       instructions: chatSystemPrompt({ glossary: glossaryPrompt(), title: meta.titleZh || meta.title, source }),
       signal: abort.signal,
       onText: (text) => {
@@ -79,9 +81,7 @@ export async function ask(
       onActivity: (a) =>
         emit({ paper, kind: 'status', text: a.kind === 'read' ? '正在翻阅论文…' : a.kind === 'find' ? '正在查找…' : a.kind === 'search' ? '正在搜索…' : '正在思考…' })
     })
-    if (provider === 'openai') {
-      chat.sessionId = chat.sessionProvider = undefined
-    } else if (!result.isError || resume) {
+    if (!result.isError || resume) {
       chat.sessionId = result.session
       chat.sessionProvider = provider
     }

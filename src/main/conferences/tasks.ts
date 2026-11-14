@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join, resolve, sep } from 'node:path'
 import type { Channel, ConfPaper, Conference, Edition, Follow, Theme } from '../../shared/conferences'
 import { editionRef } from '../../shared/conferences'
+import { parseModel } from '../../shared/models'
 import { applyFixes, plainText, tidyTex } from '../../shared/tex'
 import { modelFor, runAgent } from '../ai'
 import { glossaryPrompt } from '../glossary'
@@ -23,6 +24,8 @@ const glossary = () => {
 
 const processModel = () => modelFor(getSettings().processModel, 'process')
 const chatModel = () => modelFor(getSettings().chatModel, 'chat')
+/** Whether ChatGPT does the processing work, whose tools go by other names */
+const byGPT = async () => parseModel(await processModel()).provider === 'openai'
 
 /** A JSON file the run was asked to write; removed once read. */
 function take<T>(file: string): T | undefined {
@@ -139,7 +142,7 @@ export async function setupConference(c: Conference, signal?: AbortSignal): Prom
   const dir = confDir(c.id)
   mkdirSync(dir, { recursive: true })
   rmSync(join(dir, 'setup.json'), { force: true })
-  const r = await runAgent({ cwd: dir, prompt: P.setupPrompt(c.name), model: await processModel(), effort: 'low', write: true, search: true, fetch: true, signal })
+  const r = await runAgent({ cwd: dir, prompt: P.setupPrompt(c.name), model: await processModel(), effort: 'low', write: true, search: true, fetch: true, files: ['setup.json'], signal })
   if (r.isError) throw new Error(r.text || 'Claude 出错了')
   const out = take<any>(join(dir, 'setup.json'))
   if (!out) throw new Error('没有查到这个会议的信息')
@@ -178,6 +181,7 @@ export async function checkDate(e: Edition, fullName: string | undefined, signal
     write: true,
     search: true,
     fetch: true,
+    files: ['date.json'],
     signal
   })
   if (r.isError) throw new Error(r.text || 'Claude 出错了')
@@ -198,7 +202,7 @@ export async function discover(e: Edition, fullName: string | undefined, o: Loop
   mkdirSync(join(dir, 'channels'), { recursive: true })
   const existing = e.channels.map((c) => `- ${c.id} (${c.name}, ${c.url ?? ''}): ${c.error ? `failing: ${c.error.slice(0, 160)}` : `${c.count ?? 0} papers`}`).join('\n')
   writeFileSync(join(dir, 'channels.json'), JSON.stringify(e.channels.map(({ id, name, url, kind, provides, note }) => ({ id, name, url, kind, provides, note })), null, 1))
-  await scriptLoop(dir, P.discoverPrompt({ edition: e.name, fullName, releaseDate: e.releaseDate, past: e.past, existing }), o)
+  await scriptLoop(dir, P.discoverPrompt({ edition: e.name, fullName, releaseDate: e.releaseDate, past: e.past, existing, gpt: await byGPT() }), o)
   return readChannels(e)
 }
 
@@ -220,7 +224,7 @@ export async function patrol(e: Edition, o: LoopOptions & { search: boolean }): 
   const file = join(dir, 'patrol.json')
   rmSync(file, { force: true })
   writeFileSync(join(dir, 'channels.json'), JSON.stringify(e.channels.map(({ id, name, url, kind, provides, note }) => ({ id, name, url, kind, provides, note })), null, 1))
-  await scriptLoop(dir, P.patrolPrompt({ edition: e.name, state, failing, search: o.search }), o)
+  await scriptLoop(dir, P.patrolPrompt({ edition: e.name, state, failing, search: o.search, gpt: await byGPT() }), o)
   const out = take<any>(file) ?? {}
   return {
     channels: readChannels(e),
@@ -242,6 +246,7 @@ export async function makeThemes(e: Edition, signal?: AbortSignal): Promise<Them
     model: await processModel(),
     effort: 'medium',
     write: true,
+    files: ['themes.json'],
     signal
   })
   rmSync(join(dir, 'titles.txt'), { force: true })
@@ -315,6 +320,7 @@ export async function assignPapers(e: Edition, o: { signal?: AbortSignal; onProg
       model,
       effort: 'low',
       write: true,
+      files: [out],
       signal: o.signal
     })
     const result = new Map<string, { branch: string; follows: string[]; zh?: string }>()
@@ -398,6 +404,7 @@ export async function tagFollow(e: Edition, f: Follow, signal?: AbortSignal): Pr
         model,
         effort: 'low',
         write: true,
+        files: [out],
         signal
       })
       rmSync(join(dir, input), { force: true })
@@ -493,6 +500,7 @@ export async function decideSame(e: Edition, pairs: [string, string][], signal?:
     write: true,
     search: true,
     fetch: true,
+    files: [out],
     signal
   })
   rmSync(join(dir, input), { force: true })
@@ -552,6 +560,7 @@ async function lookUpBatch(e: Edition, batch: ConfPaper[], model: string, signal
     write: true,
     search: true,
     fetch: true,
+    files: [out],
     signal
   })
   rmSync(join(dir, input), { force: true })
@@ -609,7 +618,7 @@ export async function readFullTexts(e: Edition, items: { key: string; file: stri
     )
   )
   rmSync(join(dir, out), { force: true })
-  const r = await runAgent({ cwd: dir, prompt: P.fullTextPrompt({ edition: e.name, count: todo.length, input, out }), model: await processModel(), effort: 'medium', write: true, signal })
+  const r = await runAgent({ cwd: dir, prompt: P.fullTextPrompt({ edition: e.name, count: todo.length, input, out }), model: await processModel(), effort: 'medium', write: true, files: [out], signal })
   rmSync(join(dir, input), { force: true })
   if (r.isError) throw new Error(r.text || 'Claude 出错了')
   const answers = take<Record<string, Record<string, unknown>>>(join(dir, out))

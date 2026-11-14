@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { net } from 'electron'
 import { CLAUDE_EFFORTS, CLAUDE_MODELS, DEEPSEEK_EFFORTS, DEEPSEEK_MODELS, parseModel, pickEffort, pickModel, type ModelOption, type ModelUse, type Provider, type ServiceStatus } from '../shared/models'
 import { claudeStatus, openConversation, runClaude, type Conversation } from './claude'
@@ -41,13 +43,16 @@ let status: ServiceStatus | undefined
 let checkedAt = 0
 let checking: Promise<ServiceStatus> | undefined
 
-/** Codex lists older generations too; offer the newest one, as the ChatGPT app does. */
+/** Codex lists older generations too; offer the newest of each line (Sol, Terra, Luna, ...), as the ChatGPT app does. */
 function codexOptions(models: CodexModel[]): ModelOption[] {
   const shown = models.filter((m) => !m.hidden)
   const gen = (id: string) => parseFloat(id.match(/^gpt-(\d+(?:\.\d+)?)/)?.[1] ?? '0')
-  const newest = Math.max(0, ...shown.map((m) => gen(m.id)))
+  const line = (id: string) => id.replace(/^gpt-\d+(?:\.\d+)?-?/, '') || id
+  const newest = new Map<string, number>()
+  for (const m of shown) newest.set(line(m.id), Math.max(newest.get(line(m.id)) ?? 0, gen(m.id)))
   return shown
-    .filter((m) => !newest || gen(m.id) === newest)
+    .filter((m) => gen(m.id) === newest.get(line(m.id)))
+    .sort((a, b) => gen(b.id) - gen(a.id))
     .map((m) => ({
       value: `openai:${m.id}`,
       provider: 'openai',
@@ -149,6 +154,11 @@ export interface AgentRun {
   session?: string
   /** Keep the session for a later run */
   keep?: boolean
+  /**
+   * The files the instructions ask it to write, relative to cwd. Claude writes them itself; ChatGPT hands them in
+   * with its final answer and Shiori writes them, so the files are there either way.
+   */
+  files?: string[]
   /** The reply as it is written, with a blank line between messages */
   onText?: (delta: string) => void
   onActivity?: (a: Activity) => void
@@ -183,6 +193,7 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
     if (streamed && !streamed.endsWith('\n\n')) text(streamed.endsWith('\n') ? '\n' : '\n\n')
   }
 
+  if (provider === 'openai' && r.files?.length) return handIn(r, model, effort)
   if (provider === 'openai') {
     const res = await runCodex({
       cwd: r.cwd,
@@ -237,6 +248,66 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
     }
   })
   return { text: res.text, session: res.sessionId, isError: res.isError }
+}
+
+/** ChatGPT's final answer when it hands files in, and what it is told about it. */
+const HANDED_IN = (files: string[]) => ({
+  type: 'object',
+  properties: {
+    files: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { name: { type: 'string', enum: files }, content: { type: 'string' } },
+        required: ['name', 'content'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['files'],
+  additionalProperties: false
+})
+
+const handInNote = (files: string[]) => `
+
+## Handing in your work
+
+In this task you can read files and search, but you cannot write files. Wherever the instructions above say to
+write a file, put its full contents in your final answer instead, as an entry of "files" with its name and contents.
+Leave a file out where the instructions say not to write it, or to leave it alone. Your final answer takes the place
+of the word DONE. Files you may hand in: ${files.join(', ')}.`
+
+/** A ChatGPT run that answers with the files it was asked for; Shiori writes them where Claude would have. */
+async function handIn(r: AgentRun, model: string, effort: string | undefined): Promise<AgentResult> {
+  const res = await runCodex({
+    cwd: r.cwd,
+    prompt: r.prompt + handInNote(r.files!),
+    model,
+    effort,
+    write: false,
+    search: r.search,
+    instructions: r.instructions,
+    thread: r.session,
+    keep: r.keep,
+    outputSchema: HANDED_IN(r.files!),
+    onActivity: r.onActivity,
+    signal: r.signal
+  })
+  if (res.isError) return { text: res.text, session: res.thread, isError: true }
+  let got: { name: string; content: string }[]
+  try {
+    got = JSON.parse(res.text).files
+    if (!Array.isArray(got)) throw new Error()
+  } catch {
+    return { text: 'ChatGPT 没有按要求交回结果', session: res.thread, isError: true }
+  }
+  for (const f of got) {
+    if (!r.files!.includes(f?.name) || typeof f.content !== 'string') continue
+    const file = join(r.cwd, f.name)
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, f.content)
+  }
+  return { text: 'DONE', session: res.thread, isError: false }
 }
 
 /** A conversation kept open across turns, for calls. */

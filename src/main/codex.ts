@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import { getSettings } from './settings'
 import { inTerminal, quote, withProxy } from './claude'
 
@@ -39,9 +39,16 @@ export async function findCodex(): Promise<string | undefined> {
 
 export const isDesktopCodex = (path: string) => path.includes('ChatGPT.app/')
 
-/** Sign in from Terminal; Codex opens the browser itself. */
+/** Sign in with ChatGPT in the browser, started from here; from Terminal only when this Codex can't do that. */
 export async function openCodexLogin(): Promise<void> {
-  await inTerminal(`${quote((await findCodex()) || 'codex')} login`)
+  try {
+    const c = await connect()
+    const r = await c.request('account/login/start', { type: 'chatgpt' })
+    if (!r?.authUrl) throw new Error('no sign-in link')
+    await shell.openExternal(r.authUrl)
+  } catch {
+    await inTerminal(`${quote((await findCodex()) || 'codex')} login`)
+  }
 }
 
 type Listener = (method: string, params: any) => void
@@ -133,6 +140,12 @@ class Client {
 
 let client: Promise<Client> | undefined
 
+/** Threads kept loaded after their turn, by id, with their model; they last as long as the app-server does. */
+const live = new Map<string, string>()
+
+/** Whether a kept thread can take another turn with this model. */
+export const codexThreadLive = (id: string, model: string) => live.get(id) === model
+
 /** One app-server for everything; started on first use and again after it exits. */
 async function connect(): Promise<Client> {
   const current = client && (await client.catch(() => undefined))
@@ -141,6 +154,7 @@ async function connect(): Promise<Client> {
     const path = await findCodex()
     if (!path) throw new Error('没有找到 Codex，请先在设置里接入 ChatGPT')
     const c = new Client(path)
+    c.listen((method) => method === 'shiori/closed' && live.clear())
     await c.request('initialize', { clientInfo: { name: 'shiori', title: 'Shiori', version: app.getVersion() }, capabilities: null })
     c.notify('initialized')
     return c
@@ -152,6 +166,8 @@ async function connect(): Promise<Client> {
 export function closeCodex(): void {
   client?.then((c) => c.close()).catch(() => {})
   client = undefined
+  live.clear()
+  kept.length = 0
 }
 
 export interface CodexModel {
@@ -190,7 +206,10 @@ export interface CodexRun {
   effort?: string
   /** Keep the thread loaded after the turn, to continue it with `thread` */
   keep?: boolean
+  /** Continue this thread when it is still loaded; otherwise a new one starts */
   thread?: string
+  /** A JSON Schema the final answer must follow */
+  outputSchema?: object
   onText?: (delta: string) => void
   onMessage?: () => void
   onActivity?: (a: Activity) => void
@@ -215,6 +234,32 @@ function activities(item: any): Activity[] {
   }
 }
 
+/** In place of Codex's own instructions, which are written for programming work. */
+const SHIORI_BASE = `You work inside Shiori, a paper reader on its owner's Mac, on one task Shiori hands you. Nobody watches you
+work, so don't say what you are about to do or report progress along the way: do the task, then give the final answer
+it asks for.
+
+Your tools: the shell, for reading and searching files in the current folder (rg, sed, head, ls and the like);
+view_image, for looking at an image file; apply_patch, for creating and editing files when the task lets you write;
+web search when it is on, which can also open a page and find text in it. The shell has no network, and it is not for
+writing files: never create or change a file with a shell command, a heredoc or a script. Use apply_patch.`
+
+/** Threads kept for later turns, oldest first; beyond this many the oldest are let go. */
+const KEEP = 8
+const kept: string[] = []
+
+function release(c: Client, id: string): void {
+  live.delete(id)
+  c.request('thread/unsubscribe', { threadId: id }).catch(() => {})
+}
+
+function keepThread(c: Client, id: string): void {
+  const i = kept.indexOf(id)
+  if (i >= 0) kept.splice(i, 1)
+  kept.push(id)
+  while (kept.length > KEEP) release(c, kept.shift()!)
+}
+
 async function startThread(c: Client, o: { cwd: string; model: string; write: boolean; search?: boolean; instructions?: string; base?: string }): Promise<string> {
   const { thread } = await c.request('thread/start', {
     model: o.model,
@@ -222,39 +267,47 @@ async function startThread(c: Client, o: { cwd: string; model: string; write: bo
     approvalPolicy: 'never',
     sandbox: o.write ? 'workspace-write' : 'read-only',
     config: { web_search: o.search ? 'live' : 'disabled' },
-    baseInstructions: o.base ?? null,
+    baseInstructions: o.base ?? SHIORI_BASE,
     developerInstructions: o.instructions ?? null,
     // Not kept in the user's own Codex history.
     ephemeral: true,
     serviceName: 'Shiori'
   })
+  live.set(thread.id, o.model)
   return thread.id
 }
 
-/** One turn on a thread; resolves with the turn's last message once it completes. */
+/** One turn on a thread; resolves with the turn's answer once it completes. */
 function turn(
   c: Client,
   thread: string,
   text: string,
-  o: { effort?: string; onText?: (d: string) => void; onMessage?: () => void; onActivity?: (a: Activity) => void; signal?: AbortSignal }
+  o: { effort?: string; outputSchema?: object; onText?: (d: string) => void; onMessage?: () => void; onActivity?: (a: Activity) => void; signal?: AbortSignal }
 ): Promise<{ text: string; isError: boolean }> {
   return new Promise((resolve, reject) => {
     let turnId: string | undefined
-    let last = ''
+    let answer = ''
     let failure = ''
     const seen = new Set<string>()
+    // A message saying what it is about to do shows as activity, not as part of the answer.
+    const asides = new Set<string>()
     const off = c.listen((method, p) => {
       if (method === 'shiori/closed') {
         off()
         return reject(new Error(p.message))
       }
       if (p?.threadId !== thread) return
-      if (method === 'item/agentMessage/delta') o.onText?.(p.delta)
-      else if (method === 'item/started' || method === 'item/completed') {
+      if (method === 'item/agentMessage/delta') {
+        if (!asides.has(p.itemId)) o.onText?.(p.delta)
+      } else if (method === 'item/started' || method === 'item/completed') {
         const item = p.item
         if (item?.type === 'agentMessage') {
-          if (method === 'item/started') o.onMessage?.()
-          else last = item.text ?? last
+          const aside = item.phase === 'commentary'
+          if (aside) asides.add(item.id)
+          if (method === 'item/started') {
+            if (aside) o.onActivity?.({ kind: 'think' })
+            else o.onMessage?.()
+          } else if (!aside) answer = item.text ?? answer
         }
         // Commands and images show up when they start, file changes once they are written.
         if ((method === 'item/started') !== (item?.type === 'fileChange') && !seen.has(item?.id)) {
@@ -268,12 +321,17 @@ function turn(
         const status = p.turn?.status
         if (status === 'interrupted') return reject(new Error('已取消'))
         if (status === 'failed') return resolve({ text: p.turn?.error?.message || failure || 'Codex 出错了', isError: true })
-        resolve({ text: last, isError: false })
+        resolve({ text: answer, isError: false })
       }
     })
     const abort = () => turnId && c.request('turn/interrupt', { threadId: thread, turnId }).catch(() => {})
     o.signal?.addEventListener('abort', abort)
-    c.request('turn/start', { threadId: thread, input: [{ type: 'text', text, text_elements: [] }], ...(o.effort ? { effort: o.effort } : {}) })
+    c.request('turn/start', {
+      threadId: thread,
+      input: [{ type: 'text', text, text_elements: [] }],
+      ...(o.effort ? { effort: o.effort } : {}),
+      ...(o.outputSchema ? { outputSchema: o.outputSchema } : {})
+    })
       .then((r) => {
         turnId = r?.turn?.id
         if (o.signal?.aborted) abort()
@@ -285,16 +343,21 @@ function turn(
   })
 }
 
-/** Run one headless turn, in a new thread or one kept from before. */
+/** Run one headless turn, on the thread given while it is still loaded, else on a new one. */
 export async function runCodex(o: CodexRun): Promise<{ text: string; thread: string; isError: boolean }> {
   if (o.signal?.aborted) throw new Error('已取消')
   const c = await connect()
-  const thread = o.thread ?? (await startThread(c, o))
+  const thread = o.thread && codexThreadLive(o.thread, o.model) ? o.thread : await startThread(c, o)
   try {
     const r = await turn(c, thread, o.prompt, o)
     return { ...r, thread }
   } finally {
-    if (!o.keep) c.request('thread/unsubscribe', { threadId: thread }).catch(() => {})
+    if (o.keep) keepThread(c, thread)
+    else {
+      const i = kept.indexOf(thread)
+      if (i >= 0) kept.splice(i, 1)
+      release(c, thread)
+    }
   }
 }
 
@@ -315,7 +378,7 @@ export async function openCodexConversation(o: { cwd: string; model: string; sys
     close: () => {
       open = false
       off()
-      c.request('thread/unsubscribe', { threadId: thread }).catch(() => {})
+      release(c, thread)
     }
   }
 }

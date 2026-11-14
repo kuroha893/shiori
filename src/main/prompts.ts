@@ -257,10 +257,11 @@ the ACL Anthology, DBLP or the authors' own pages. Only if a page you actually r
 Write nothing else, then reply with the single word DONE.`
 }
 
-export const verifyPrompt = (ids: string[]) =>
+/** `edit`: the tool that edits files, by the name the model knows it */
+export const verifyPrompt = (ids: string[], edit = 'Edit') =>
   `I cropped every figure and table using your bbox values; the crops are figures/<id>.png for: ${ids.join(', ')}.
 Read each crop. If one cuts off part of the graphic, or includes the caption or body text from outside it, fix
-that block's bbox in the doc files with Edit (compare against the page image in pages/ again). Reply with the ids
+that block's bbox in the doc files with ${edit} (compare against the page image in pages/ again). Reply with the ids
 you changed separated by commas, or NONE.`
 
 export function chatSystemPrompt(o: { glossary: string; title: string; source: Source }): string {

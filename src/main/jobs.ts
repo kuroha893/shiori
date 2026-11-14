@@ -180,7 +180,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
   await finish(id, dir, figs, async () => {
     const check = await runAgent({
       cwd: dir,
-      prompt: verifyPrompt(figs),
+      prompt: verifyPrompt(figs, parseModel(model).provider === 'openai' ? 'apply_patch' : undefined),
       model,
       effort: getSettings().processEffort,
       write: true,
@@ -255,6 +255,7 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
     effort: getSettings().processEffort,
     write: true,
     search: true,
+    files: ['summary.next.md', 'suggestion.json', 'venue.json'],
     signal
   })
   if (result.isError) throw new Error(result.text || '处理失败')

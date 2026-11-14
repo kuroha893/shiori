@@ -4,8 +4,8 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 export const MAX_ROUNDS = 14
 
-/** How fetch scripts are written and tested; every task that writes scripts gets this. */
-const SCRIPTS = (edition: string) => `
+/** How fetch scripts are written and tested; every task that writes scripts gets this. `gpt`: run by ChatGPT, whose web tools differ. */
+const SCRIPTS = (edition: string, gpt?: boolean) => `
 ## Fetch scripts
 
 A channel's script is channels/<id>.js (id: short, lowercase, letters and dashes) and defines
@@ -42,7 +42,7 @@ You cannot run code; Shiori runs it for you. End a reply with a line
     RUN: channels/a.js probe.js
 naming any .js files in this folder (scratch files like probe.js are fine, e.g. one that only logs part of a raw
 page or API response) and Shiori answers with what each returned: the count, how many papers have each field,
-samples, the error if it failed, and the log. WebFetch shows you a summary of a page, not its raw HTML or JSON;
+samples, the error if it failed, and the log. ${gpt ? 'Web search shows you a page as text' : 'WebFetch shows you a summary of a page'}, not its raw HTML or JSON;
 probe with a script before writing a parser for it. Sites that refuse scripts are common: test before relying on
 one, and drop it if it refuses. You have up to ${MAX_ROUNDS} rounds; when you are finished, end with a line DONE.
 
@@ -111,7 +111,7 @@ under, when same>"}, ...], covering every pair. Write nothing else, then reply w
 }
 
 /** Finding where an edition's papers are listed, and writing a script for each place. */
-export function discoverPrompt(o: { edition: string; fullName?: string; releaseDate?: string; past?: boolean; existing?: string }): string {
+export function discoverPrompt(o: { edition: string; fullName?: string; releaseDate?: string; past?: boolean; existing?: string; gpt?: boolean }): string {
   return `Shiori, a paper reader, follows the accepted papers of ${o.edition}${o.fullName ? ` (${o.fullName})` : ''}. Today is ${today()}.${
     o.past ? ' This edition is in the past; its papers have long been published.' : o.releaseDate ? ` Decisions came out on ${o.releaseDate}.` : ''
   }
@@ -129,11 +129,11 @@ or after a human check, so direct PDF links elsewhere (proceedings, PMLR, the AC
 when another channel already gives OpenReview links.
 ${o.existing ? `\nChannels already kept, which you may improve or replace:\n${o.existing}\n` : ''}
 If no place lists the papers yet, write channels.json as [] and say why in one line before DONE.
-${SCRIPTS(o.edition)}`
+${SCRIPTS(o.edition, o.gpt)}`
 }
 
 /** The daily look while an edition is fresh: news, new channels, broken scripts, duplicates. */
-export function patrolPrompt(o: { edition: string; state: string; failing: string[]; search: boolean }): string {
+export function patrolPrompt(o: { edition: string; state: string; failing: string[]; search: boolean; gpt?: boolean }): string {
   const tasks = [
     o.search &&
       `- Search the web, briefly (a few searches are enough when nothing changed): how many papers the conference
@@ -154,7 +154,7 @@ ${tasks.join('\n')}
 Write patrol.json:
 {"officialCount": <number or null>, "note": "一句中文：今天有什么变化；没有就留空"}
 Then keep channels.json up to date with anything you added, changed or dropped.
-${SCRIPTS(o.edition)}`
+${SCRIPTS(o.edition, o.gpt)}`
 }
 
 /** The theme map of an edition, from all its titles. */

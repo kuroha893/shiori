@@ -467,7 +467,7 @@ function rememberCall(call: Record[]): void {
   const folder = dir()
   const prompt = memoryPrompt(person().name, readMemory(), call.map(transcriptLine).join('\n'))
   modelFor(getSettings().callModel, 'call')
-    .then((model) => runAgent({ cwd: folder, prompt, model, effort: getSettings().callEffort, write: true }))
+    .then((model) => runAgent({ cwd: folder, prompt, model, effort: getSettings().callEffort, write: true, files: ['memory.md'] }))
     .catch(() => {})
 }
 

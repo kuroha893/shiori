@@ -108,7 +108,8 @@ async function searchWeb(m: PaperMeta): Promise<Found | undefined> {
     model,
     effort: 'medium',
     write: true,
-    search: true
+    search: true,
+    files: ['venue-search.json']
   })
   if (r.isError) {
     rmSync(file, { force: true })
