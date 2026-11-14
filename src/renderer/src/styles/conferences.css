@@ -588,6 +588,9 @@
 }
 .cf-section {
   position: relative;
+  /* A column, so the margin the stuck header gets never collapses into the divider below it */
+  display: flex;
+  flex-direction: column;
 }
 /* Each section's header sticks while you are inside it, as a frosted bar naming the part you are in. */
 .cf-th {

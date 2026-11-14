@@ -786,7 +786,13 @@ function Stream(props: Props & { sections: Section[]; defaults?: { kind?: string
         const h = s.querySelector<HTMLElement>(':scope > .cf-th')!
         const r = s.getBoundingClientRect()
         const stuck = r.top < top + 1 && r.bottom > top
-        h.classList.toggle('stuck', stuck)
+        if (stuck !== h.classList.contains('stuck')) {
+          // The stuck bar is shorter. Make up the difference below it, or the papers move, the browser shifts the scroll
+          // to keep them in place, and right at a section's top that unsticks the header again, over and over.
+          const before = h.getBoundingClientRect().height
+          h.classList.toggle('stuck', stuck)
+          h.style.marginBottom = stuck ? `${before - h.getBoundingClientRect().height}px` : ''
+        }
         if (r.top < top + h.offsetHeight + 4) current = s
         let label = ''
         if (stuck) {
