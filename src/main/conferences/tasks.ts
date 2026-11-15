@@ -142,7 +142,7 @@ export async function setupConference(c: Conference, signal?: AbortSignal): Prom
   const dir = confDir(c.id)
   mkdirSync(dir, { recursive: true })
   rmSync(join(dir, 'setup.json'), { force: true })
-  const r = await runAgent({ cwd: dir, prompt: P.setupPrompt(c.name), model: await processModel(), effort: 'low', write: true, search: true, fetch: true, files: ['setup.json'], signal })
+  const r = await runAgent({ cwd: dir, prompt: P.setupPrompt(c.fullName ? `${c.name} (${c.fullName})` : c.name), model: await processModel(), effort: 'low', write: true, search: true, fetch: true, files: ['setup.json'], signal })
   if (r.isError) throw new Error(r.text || 'Claude 出错了')
   const out = take<any>(join(dir, 'setup.json'))
   if (!out) throw new Error('没有查到这个会议的信息')
@@ -163,6 +163,7 @@ export async function setupConference(c: Conference, signal?: AbortSignal): Prom
 export interface DateResult {
   released: boolean
   releaseDate?: string
+  estimated: boolean
   source?: string
   note?: string
   nextYear?: number
@@ -190,6 +191,7 @@ export async function checkDate(e: Edition, fullName: string | undefined, signal
   return {
     released: out.released === true,
     releaseDate: typeof out.releaseDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(out.releaseDate) ? out.releaseDate : undefined,
+    estimated: out.estimated === true,
     source: typeof out.source === 'string' ? out.source : undefined,
     note: typeof out.note === 'string' ? out.note.slice(0, 200) : undefined,
     nextYear: Number.isInteger(out.nextYear) && out.nextYear > e.year ? out.nextYear : undefined
@@ -434,22 +436,6 @@ export async function describeFollow(name: string, titles?: string[]): Promise<{
   const keywords = (Array.isArray(out.keywords) ? out.keywords : []).map((k: unknown) => String(k).trim()).filter(Boolean).slice(0, 20)
   if (!keywords.length) throw new Error('没有生成关键词')
   return { name: String(out.name || name).trim().slice(0, 40), note: out.note ? String(out.note).slice(0, 200) : undefined, keywords }
-}
-
-/** "KV cache 压缩" → "kv cache compression | kv cache eviction | kv cache quantization" */
-export async function queryKeywords(text: string): Promise<string> {
-  mkdirSync(confRoot(), { recursive: true })
-  const r = await runAgent({ cwd: confRoot(), prompt: P.queryPrompt(text), model: await chatModel(), effort: 'low', write: false })
-  if (r.isError) throw new Error(r.text || 'Claude 出错了')
-  return r.text
-    .trim()
-    .split('\n')
-    .pop()!
-    .replace(/^["'`]|["'`]$/g, '')
-    .split('|')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join(' | ')
 }
 
 /** A title line before the translation, which translations used to begin with: "标题：…", "**标题：…**". */

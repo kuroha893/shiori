@@ -71,7 +71,7 @@ Search the web and find:
 Write setup.json:
 {"name": "NeurIPS", "fullName": "Conference on Neural Information Processing Systems",
  "latest": {"year": 2026, "releaseDate": "YYYY-MM-DD", "source": "<URL>"},
- "next": {"year": 2027, "releaseDate": "YYYY-MM-DD" or null, "estimated": true, "source": "<URL>"},
+ "next": {"year": 2027, "releaseDate": "YYYY-MM-DD" or null, "estimated": true or false, "source": "<URL>"},
  "mark": "<URL of the mark>" or null}
 The year is the edition's own (ICLR 2027 decides in early 2027). If "${typed}" is not an academic conference you
 can identify, write {"error": "一句中文原因"} instead.
@@ -85,8 +85,10 @@ export function datePrompt(o: { name: string; fullName?: string; year: number; k
 
 Search the official site (important dates, call for papers, news), OpenReview and recent announcements. Write
 date.json:
-{"released": true or false, "releaseDate": "YYYY-MM-DD" or null, "source": "<URL>", "note": "一句中文"}
+{"released": true or false, "releaseDate": "YYYY-MM-DD" or null, "estimated": true or false, "source": "<URL>", "note": "一句中文"}
 - releaseDate: the day decisions were or will be sent; the expected day when they are not out yet.
+- estimated: true when the conference hasn't announced that day for this year and you worked it out from earlier
+  years; false when its own dates for ${o.year} give it. If you can't even estimate it, releaseDate is null.
 - released: true only if the accepted papers are known today (decision notifications sent, or a list published).
 - If ${o.name} has no ${o.year} edition (some run every other year), add "nextYear": <the year of the next one>.
 
@@ -221,14 +223,6 @@ Reply with JSON only, no code fence:
  "keywords": ["8 to 15 English words or phrases that papers in this direction use in their titles and abstracts"]}
 Keywords should find the direction's papers without dragging in neighbours: prefer specific phrases
 ("kv cache compression") over broad words ("efficiency").`
-}
-
-/** A Chinese search turned into English phrases the local search can match. */
-export function queryPrompt(text: string): string {
-  return `Turn this search for conference papers into English phrases that paper titles and abstracts would use.
-Reply with 2 to 6 phrases separated by " | " and nothing else. Each phrase is a few words that must all appear.
-
-Search: ${text}`
 }
 
 export function abstractPrompt(o: { title: string; abstract: string; glossary: string }): string {

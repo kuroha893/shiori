@@ -1,6 +1,6 @@
-import { ipcMain, net, shell } from 'electron'
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { BrowserWindow, dialog, ipcMain, net, shell } from 'electron'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import type { PaperMeta } from '../../shared/types'
 import type {
   Activity,
@@ -16,7 +16,7 @@ import type {
   PaperQuery,
   Phase
 } from '../../shared/conferences'
-import { editionRef, normTitle, searchScore } from '../../shared/conferences'
+import { SEARCH_MODEL, editionRef, normTitle, searchScore } from '../../shared/conferences'
 import { TIDY_VERSION, applyFixes, tidyTex } from '../../shared/tex'
 import { importDownloaded, listPapers as libraryPapers, readMeta, updateMeta } from '../library'
 import { loadFolders } from '../folders'
@@ -25,6 +25,7 @@ import { prepare } from '../jobs'
 import * as S from './store'
 import { LINKS_VERSION, PAIRS_VERSION, authorList, findAmbiguous, leftoversOf, mergeChannel, mergeSame, runChannel, scriptFile } from './scripts'
 import * as T from './tasks'
+import * as F from './finding'
 import { findArxiv } from './arxiv'
 import * as OR from '../openreview'
 import { workerCall } from '../worker'
@@ -89,6 +90,8 @@ const ai = new Lane()
 const fetcher = new Lane()
 /** Asking OpenReview and arXiv where a paper can be downloaded, slowly, so fetches don't wait on it */
 const looker = new Lane()
+/** Embedding papers for search, on the CPU, apart from everything else */
+const indexer = new Lane()
 
 let changedTimer: NodeJS.Timeout | undefined
 /** The renderer reloads what it shows; at most once a second. */
@@ -191,6 +194,44 @@ export function plan(): void {
   }
   // Directions still waiting for their keywords.
   for (const f of S.loadFollows()) if (f.pending) ai.add(`describe:${f.id}`, () => describe(f.id))
+  planSearch()
+}
+
+/* ---------- search ---------- */
+
+/** Each edition's papers.json as the search process last read it */
+const papersSeen = new Map<string, number>()
+
+/** Every edition, followed or not, is searchable: changed papers are read again and embedded. */
+function planSearch(): void {
+  const refs = new Set<string>()
+  for (const c of S.loadConferences() ?? [])
+    for (const e of S.listEditions(c.id)) {
+      const ref = editionRef(e.conf, e.year)
+      const at = S.papersChangedAt(e.conf, e.year)
+      if (at === undefined) continue
+      refs.add(ref)
+      if (papersSeen.has(ref) && papersSeen.get(ref) !== at) F.reload(ref)
+      papersSeen.set(ref, at)
+      if (F.modelReady() && (e.indexed !== at || e.indexModel !== SEARCH_MODEL)) indexer.add(`index:${ref}`, () => indexEdition(e.conf, e.year, at))
+    }
+  for (const ref of papersSeen.keys())
+    if (!refs.has(ref)) {
+      papersSeen.delete(ref)
+      F.reload(ref)
+    }
+  if (refs.size && !F.modelReady()) indexer.add('model', F.ensureModel)
+  if (refs.size) F.warm()
+}
+
+async function indexEdition(conf: string, year: number, at: number): Promise<void> {
+  const ref = editionRef(conf, year)
+  try {
+    await F.indexEdition(ref, (done, total) => busy(ref, { label: '索引', progress: done / total }))
+    S.updateEdition(conf, year, { indexed: at, indexModel: SEARCH_MODEL })
+  } finally {
+    busy(ref, undefined)
+  }
 }
 
 function planEdition(c: Conference, e: Edition, editions: Edition[], now: number): void {
@@ -200,8 +241,11 @@ function planEdition(c: Conference, e: Edition, editions: Edition[], now: number
   const count = S.loadPapers(e.conf, e.year).length
 
   if (!archived && ph === 'waiting') {
-    const expected = e.releaseDate && Date.parse(e.releaseDate) <= now + DAY
-    if (ago(e.checkedDateAt, now) >= (expected ? DAY : 7 * DAY)) ai.add(`date:${ref}`, () => checkDate(e.conf, e.year))
+    // Weekly, then daily from a month before the expected day (an estimate can be weeks out) until decisions are out.
+    const close = e.releaseDate && Date.parse(e.releaseDate) <= now + 30 * DAY
+    // An expected day not yet marked announced or estimated is looked at again once, straight away.
+    const unsure = e.releaseDate && e.releaseEstimated === undefined
+    if (unsure || ago(e.checkedDateAt, now) >= (close ? DAY : 7 * DAY)) ai.add(`date:${ref}`, () => checkDate(e.conf, e.year))
     return
   }
   if (!e.released) return
@@ -251,14 +295,14 @@ async function setup(id: string): Promise<void> {
     const list = S.loadConferences() ?? []
     // The name Claude found may be the usual spelling of what was typed.
     S.saveConferences(list.map((x) => (x.id === id ? { ...x, name: r.name || x.name, fullName: r.fullName, setupAt: new Date().toISOString(), setupError: undefined } : x)))
-    if (r.mark) await saveMark(id, r.mark).catch(() => {})
+    if (r.mark && !conference(id)?.markSet) await saveMark(id, r.mark).catch(() => {})
     const name = r.name || c.name
     if (r.latest) {
       const e = S.createEdition(id, name, r.latest.year, { released: true, releaseDate: r.latest.releaseDate, releaseSource: r.latest.source, checkedDateAt: new Date().toISOString() })
       S.logEdition(e.conf, e.year, r.latest.releaseDate ? `录用结果在 ${r.latest.releaseDate} 公布` : '录用结果已公布')
     }
     if (r.next) {
-      S.createEdition(id, name, r.next.year, { releaseDate: r.next.releaseDate, releaseSource: r.next.source, checkedDateAt: new Date().toISOString() })
+      S.createEdition(id, name, r.next.year, { releaseDate: r.next.releaseDate, releaseEstimated: r.next.estimated, releaseSource: r.next.source, checkedDateAt: new Date().toISOString() })
       if (r.next.releaseDate) S.logEdition(id, r.next.year, `${r.next.estimated ? '预计' : ''}${r.next.releaseDate} 公布录用结果`)
     }
   } catch (e) {
@@ -282,7 +326,31 @@ async function saveMark(id: string, url: string): Promise<void> {
   const dir = S.confDir(id)
   for (const f of readdirSync(dir)) if (f.startsWith('mark.')) rmSync(join(dir, f), { force: true })
   writeFileSync(join(dir, `mark.${ext}`), bytes)
-  S.updateConference(id, { mark: `mark.${ext}` })
+  S.updateConference(id, { mark: `mark.${ext}`, markAt: new Date().toISOString() })
+}
+
+const dropMarks = (id: string) => {
+  const dir = S.confDir(id)
+  if (existsSync(dir)) for (const f of readdirSync(dir)) if (f.startsWith('mark.')) rmSync(join(dir, f), { force: true })
+}
+
+/** The owner picks a picture for a conference's mark; it replaces whatever Shiori had. */
+async function chooseMark(id: string): Promise<void> {
+  const win = BrowserWindow.getFocusedWindow()
+  const opts: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: '图片', extensions: ['svg', 'png', 'webp', 'jpg', 'jpeg'] }] }
+  const r = await (win ? dialog.showOpenDialog(win, opts) : dialog.showOpenDialog(opts))
+  if (r.canceled || !r.filePaths[0]) return
+  const ext = extname(r.filePaths[0]).slice(1).toLowerCase().replace('jpeg', 'jpg')
+  if (statSync(r.filePaths[0]).size > 2_000_000) throw new Error('图片太大了，换一张 2 MB 以内的')
+  mkdirSync(S.confDir(id), { recursive: true })
+  dropMarks(id)
+  copyFileSync(r.filePaths[0], join(S.confDir(id), `mark.${ext}`))
+  S.updateConference(id, { mark: `mark.${ext}`, markSet: true, markAt: new Date().toISOString() })
+}
+
+function clearMark(id: string): void {
+  dropMarks(id)
+  S.updateConference(id, { mark: undefined, markSet: true, markAt: new Date().toISOString() })
 }
 
 /** The downloaded mark of a conference, for shiori://conf/<id>/mark. */
@@ -305,7 +373,13 @@ async function checkDate(conf: string, year: number): Promise<void> {
       return
     }
     const before = e.releaseDate
-    S.updateEdition(conf, year, { released: r.released, releaseDate: r.releaseDate ?? e.releaseDate, releaseSource: r.source ?? e.releaseSource, checkedDateAt: new Date().toISOString() })
+    S.updateEdition(conf, year, {
+      released: r.released,
+      releaseDate: r.releaseDate ?? e.releaseDate,
+      releaseEstimated: r.released ? false : r.releaseDate ? r.estimated : e.releaseEstimated ?? true,
+      releaseSource: r.source ?? e.releaseSource,
+      checkedDateAt: new Date().toISOString()
+    })
     if (r.released) S.logEdition(conf, year, `录用结果已公布${r.releaseDate ? `（${r.releaseDate}）` : ''}`)
     else if (r.releaseDate && r.releaseDate !== before) S.logEdition(conf, year, `预计 ${r.releaseDate} 公布录用结果${r.note ? `：${r.note}` : ''}`)
   })
@@ -706,6 +780,7 @@ function summarize(e: Edition, editions: Edition[]): EditionSummary {
     archived,
     past: e.past,
     releaseDate: e.releaseDate,
+    releaseEstimated: e.releaseEstimated,
     released: e.released,
     count: papers.length,
     officialCount: e.officialCount,
@@ -803,7 +878,7 @@ function libraryIndex() {
   return (ref: string, title: string) => bySource.get(ref) ?? byTitle.get(normTitle(title))
 }
 
-function queryPapers(q: PaperQuery): ListedPaper[] {
+async function queryPapers(q: PaperQuery): Promise<ListedPaper[]> {
   const confs = S.loadConferences() ?? []
   const editions = q.edition
     ? [S.readEdition(q.edition.split('/')[0], +q.edition.split('/')[1])].filter((e): e is Edition => !!e)
@@ -811,6 +886,9 @@ function queryPapers(q: PaperQuery): ListedPaper[] {
   const inLibrary = libraryIndex()
   const later = new Set(S.loadLater().map((i) => i.ref))
   const search = q.search?.trim()
+  // The search process ranks; without it, plain word matching does.
+  const hits = search ? await F.search(search, q.edition) : undefined
+  const rank = hits && new Map(hits.map((id, i) => [id, hits.length - i]))
   const out: (ListedPaper & { score: number })[] = []
   for (const e of editions) {
     const ref = editionRef(e.conf, e.year)
@@ -824,9 +902,9 @@ function queryPapers(q: PaperQuery): ListedPaper[] {
       if (g?.type === 'follow' && !p.follows?.includes(g.id)) continue
       if (q.track && p.track !== q.track) continue
       if (q.kind && p.kind !== q.kind) continue
-      const score = search ? searchScore(search, p) : 1
-      if (!score) continue
       const pref = `${ref}/${p.key}`
+      const score = !search ? 1 : rank ? (rank.get(pref) ?? 0) : searchScore(search, p)
+      if (!score) continue
       const lib = inLibrary(pref, p.title)
       const { abstract, abstractZh, pdfs: _, ...bare } = p
       out.push({
@@ -1104,7 +1182,8 @@ function start(): void {
   plan()
 }
 
-function addConference(name: string): Conference {
+/** Typed, or picked from the catalogue with its full name. */
+function addConference(name: string, fullName?: string): Conference {
   const clean = name.trim()
   if (!clean) throw new Error('请输入会议名称')
   const list = S.loadConferences() ?? []
@@ -1115,7 +1194,7 @@ function addConference(name: string): Conference {
     plan()
     return same
   }
-  const c: Conference = { id, name: clean, tracking: true, addedAt: new Date().toISOString() }
+  const c: Conference = { id, name: clean, ...(fullName ? { fullName } : {}), tracking: true, addedAt: new Date().toISOString() }
   S.saveConferences([...list, c])
   plan()
   return c
@@ -1129,6 +1208,7 @@ async function deleteConference(id: string): Promise<void> {
   S.saveConferences((S.loadConferences() ?? []).filter((c) => c.id !== id))
   S.saveLater(S.loadLater().filter((i) => !i.ref.startsWith(`${id}/`)))
   send('later:changed')
+  planSearch()
 }
 
 function addPast(id: string, year: number): void {
@@ -1147,6 +1227,7 @@ async function deleteEdition(conf: string, year: number): Promise<void> {
   S.forgetEdition(conf, year)
   S.saveLater(S.loadLater().filter((i) => !i.ref.startsWith(`${conf}/${year}/`)))
   send('later:changed')
+  planSearch()
 }
 
 /** The owner asked: fetch now, and while papers are still coming, have Claude look around too. */
@@ -1189,6 +1270,8 @@ export function initConferences(o: { send: Send; paperChanged: (meta: PaperMeta)
     }
   })
   handle('conf:delete', deleteConference)
+  handle('conf:chooseMark', chooseMark)
+  handle('conf:clearMark', clearMark)
   handle('conf:retry', (id: string) => {
     failedAt.forEach((_, k) => k.includes(id) && failedAt.delete(k))
     S.updateConference(id, { setupError: undefined })
@@ -1201,7 +1284,6 @@ export function initConferences(o: { send: Send; paperChanged: (meta: PaperMeta)
   ipcMain.handle('conf:papers', (_e, q: PaperQuery) => queryPapers(q))
   ipcMain.handle('conf:paper', (_e, ref: string) => listedPaper(ref))
   handle('conf:seen', (conf: string, year: number) => S.updateEdition(conf, year, { seenAt: new Date().toISOString() }) && undefined)
-  ipcMain.handle('conf:keywords', (_e, text: string) => T.queryKeywords(text))
   ipcMain.handle('conf:translate', async (_e, ref: string) => {
     const found = findPaper(ref)
     if (!found?.p.abstract) throw new Error('这篇还没有摘要')

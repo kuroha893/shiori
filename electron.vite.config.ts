@@ -9,7 +9,9 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           // Fetch scripts run in a utility process of their own, see src/main/conferences/scripts.ts
-          runner: resolve(__dirname, 'src/main/conferences/runner.ts')
+          runner: resolve(__dirname, 'src/main/conferences/runner.ts'),
+          // Paper search, with its model, in a utility process of its own, see src/main/conferences/finding.ts
+          finder: resolve(__dirname, 'src/main/conferences/finder.ts')
         }
       }
     }

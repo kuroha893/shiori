@@ -20,6 +20,10 @@ export interface Conference {
   setupError?: string
   /** Its graphic mark as downloaded into its folder, for conferences Shiori has none for */
   mark?: string
+  /** The owner chose the mark (mark set) or chose none (mark absent); either way it replaces Shiori's own */
+  markSet?: boolean
+  /** When the mark last changed, so a new picture under the same file name is seen */
+  markAt?: string
 }
 
 /** A place an edition's papers are listed: a script Shiori runs, or papers Claude wrote down once. */
@@ -50,6 +54,8 @@ export interface Edition {
   /** Whether decisions are out, and when they came (or are expected) */
   released?: boolean
   releaseDate?: string
+  /** The expected day is a guess from earlier years, not one the conference has announced */
+  releaseEstimated?: boolean
   releaseSource?: string
   /** How many papers the conference says it accepted, when it says */
   officialCount?: number
@@ -60,6 +66,9 @@ export interface Edition {
   channels: Channel[]
   createdAt: string
   checkedDateAt?: string
+  /** The papers.json (by its modification time) and model the search's vectors were last made from */
+  indexed?: number
+  indexModel?: string
   discoveredAt?: string
   fetchedAt?: string
   patrolledAt?: string
@@ -182,6 +191,7 @@ export interface EditionSummary {
   archived: boolean
   past?: boolean
   releaseDate?: string
+  releaseEstimated?: boolean
   released?: boolean
   count: number
   officialCount?: number
@@ -322,4 +332,82 @@ export function searchScore(query: string, p: { title: string; abstract?: string
   return best
 }
 
-export const hasCjk = (s: string) => /[㐀-鿿]/.test(s)
+
+/** The embedding model search uses; vectors made by another are made again */
+export const SEARCH_MODEL = 'multilingual-e5-small'
+
+/** Lower-case short name, also the conference's folder: "NeurIPS" → "neurips", "ACM MM" → "acm-mm" */
+export const confId = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'conf'
+
+/** The conferences offered when adding one, by field; dblp is its key in CCF's list, for the rank. */
+export const CATALOG: { group: string; confs: { name: string; full: string; dblp?: string }[] }[] = [
+  {
+    group: '机器学习',
+    confs: [
+      { name: 'NeurIPS', full: 'Conference on Neural Information Processing Systems', dblp: 'nips' },
+      { name: 'ICML', full: 'International Conference on Machine Learning', dblp: 'icml' },
+      { name: 'ICLR', full: 'International Conference on Learning Representations', dblp: 'iclr' },
+      { name: 'COLM', full: 'Conference on Language Modeling' },
+      { name: 'AISTATS', full: 'International Conference on Artificial Intelligence and Statistics', dblp: 'aistats' },
+      { name: 'UAI', full: 'Conference on Uncertainty in Artificial Intelligence', dblp: 'uai' },
+      { name: 'COLT', full: 'Conference on Learning Theory', dblp: 'colt' }
+    ]
+  },
+  {
+    group: '自然语言',
+    confs: [
+      { name: 'ACL', full: 'Annual Meeting of the Association for Computational Linguistics', dblp: 'acl' },
+      { name: 'EMNLP', full: 'Conference on Empirical Methods in Natural Language Processing', dblp: 'emnlp' },
+      { name: 'NAACL', full: 'Annual Conference of the North American Chapter of the Association for Computational Linguistics', dblp: 'naacl' },
+      { name: 'EACL', full: 'Conference of the European Chapter of the Association for Computational Linguistics' },
+      { name: 'COLING', full: 'International Conference on Computational Linguistics', dblp: 'coling' }
+    ]
+  },
+  {
+    group: '计算机视觉',
+    confs: [
+      { name: 'CVPR', full: 'IEEE/CVF Conference on Computer Vision and Pattern Recognition', dblp: 'cvpr' },
+      { name: 'ICCV', full: 'IEEE/CVF International Conference on Computer Vision', dblp: 'iccv' },
+      { name: 'ECCV', full: 'European Conference on Computer Vision', dblp: 'eccv' },
+      { name: 'WACV', full: 'IEEE/CVF Winter Conference on Applications of Computer Vision' }
+    ]
+  },
+  {
+    group: '人工智能综合',
+    confs: [
+      { name: 'AAAI', full: 'AAAI Conference on Artificial Intelligence', dblp: 'aaai' },
+      { name: 'IJCAI', full: 'International Joint Conference on Artificial Intelligence', dblp: 'ijcai' }
+    ]
+  },
+  {
+    group: '机器人',
+    confs: [
+      { name: 'CoRL', full: 'Conference on Robot Learning' },
+      { name: 'RSS', full: 'Robotics: Science and Systems' },
+      { name: 'ICRA', full: 'IEEE International Conference on Robotics and Automation', dblp: 'icra' },
+      { name: 'IROS', full: 'IEEE/RSJ International Conference on Intelligent Robots and Systems', dblp: 'iros' }
+    ]
+  },
+  {
+    group: '数据挖掘与检索',
+    confs: [
+      { name: 'KDD', full: 'ACM SIGKDD Conference on Knowledge Discovery and Data Mining', dblp: 'kdd' },
+      { name: 'WWW', full: 'The ACM Web Conference', dblp: 'www' },
+      { name: 'SIGIR', full: 'International ACM SIGIR Conference on Research and Development in Information Retrieval', dblp: 'sigir' },
+      { name: 'WSDM', full: 'ACM International Conference on Web Search and Data Mining', dblp: 'wsdm' }
+    ]
+  },
+  {
+    group: '语音与多媒体',
+    confs: [
+      { name: 'Interspeech', full: 'Annual Conference of the International Speech Communication Association', dblp: 'interspeech' },
+      { name: 'ICASSP', full: 'IEEE International Conference on Acoustics, Speech and Signal Processing', dblp: 'icassp' },
+      { name: 'ACM MM', full: 'ACM International Conference on Multimedia', dblp: 'mm' }
+    ]
+  }
+]

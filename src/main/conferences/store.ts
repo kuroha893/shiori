@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { ConfPaper, Conference, Edition, Follow, LaterItem, Theme } from '../../shared/conferences'
@@ -60,12 +60,7 @@ export function updateConference(id: string, patch: Partial<Conference>): Confer
   return list[i]
 }
 
-export const confId = (name: string) =>
-  name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'conf'
+export { confId } from '../../shared/conferences'
 
 /* ---------- editions ---------- */
 
@@ -113,6 +108,15 @@ export function createEdition(conf: string, name: string, year: number, patch: P
 /** Kept in memory by file, so another library never sees this one's papers. */
 const papersCache = new Map<string, ConfPaper[]>()
 const papersFile = (conf: string, year: number) => join(editionDir(conf, year), 'papers.json')
+
+/** When an edition's papers last changed; undefined when it has none */
+export function papersChangedAt(conf: string, year: number): number | undefined {
+  try {
+    return statSync(papersFile(conf, year)).mtimeMs
+  } catch {
+    return undefined
+  }
+}
 
 export function loadPapers(conf: string, year: number): ConfPaper[] {
   const file = papersFile(conf, year)

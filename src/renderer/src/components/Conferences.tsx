@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PaperMeta } from '../../../shared/types'
 import type { Activity, ConfOverview, Conference, ConferenceSummary, EditionSummary, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../../../shared/conferences'
-import { hasCjk } from '../../../shared/conferences'
+import { CATALOG, confId } from '../../../shared/conferences'
+import { CCF } from '../../../shared/ccf'
 import { api } from '../api'
 import { Icon } from './Icon'
 import { Menu, useDismiss, type MenuItem } from './Chrome'
@@ -78,11 +79,14 @@ const BUNDLED = import.meta.glob<string>('../assets/confs/*.svg', { query: '?raw
 // ACL's conferences carry the ACL mark.
 const ACL_FAMILY = ['acl', 'emnlp', 'naacl', 'eacl', 'aacl']
 
+const bundledMark = (c: Conference) => (c.markSet ? undefined : BUNDLED[`../assets/confs/${ACL_FAMILY.includes(c.id) ? 'acl' : c.id}.svg`])
+const hasMark = (c: Conference) => !!(c.mark || bundledMark(c))
+
 async function markBlob(c: Conference): Promise<Blob | undefined> {
-  const svg = BUNDLED[`../assets/confs/${ACL_FAMILY.includes(c.id) ? 'acl' : c.id}.svg`]
+  const svg = bundledMark(c)
   if (svg) return new Blob([svg], { type: 'image/svg+xml' })
   if (!c.mark) return undefined
-  const res = await fetch(`shiori://conf/${encodeURIComponent(c.id)}/mark?v=${encodeURIComponent(c.mark)}`)
+  const res = await fetch(`shiori://conf/${encodeURIComponent(c.id)}/mark?v=${encodeURIComponent(c.markAt ?? c.mark)}`)
   return res.ok ? res.blob() : undefined
 }
 
@@ -145,7 +149,7 @@ async function recolor(blob: Blob): Promise<{ light: string; dark: string }> {
 
 const marks = new Map<string, Promise<{ light: string; dark: string } | undefined>>()
 function useMark(c: Conference) {
-  const key = `${c.id}/${c.mark ?? ''}`
+  const key = `${c.id}/${c.mark ?? ''}/${c.markAt ?? ''}`
   const [mark, setMark] = useState<{ light: string; dark: string }>()
   useEffect(() => {
     if (!marks.has(key)) marks.set(key, markBlob(c).then((b) => (b ? recolor(b) : undefined)).catch(() => undefined))
@@ -159,15 +163,18 @@ function useMark(c: Conference) {
 }
 
 /** The conference's mark, its name and the year. */
-function ConfName({ c, year, big }: { c: Conference; year?: number; big?: boolean }) {
+function ConfName({ c, year, big, slot }: { c: Conference; year?: number; big?: boolean; slot?: boolean }) {
   const mark = useMark(c)
   return (
     <span className={`cf-name ${big ? 'big' : ''}`} title={c.fullName}>
-      {mark && (
+      {mark ? (
         <span className="cf-mark">
           <img className="on-light" src={mark.light} alt="" draggable={false} />
           <img className="on-dark" src={mark.dark} alt="" draggable={false} />
         </span>
+      ) : (
+        // In a list, an empty place keeps the names in line.
+        slot && <span className="cf-mark" />
       )}
       <b>{c.name}</b>
       {year && <span className="cf-name-year">{year}</span>}
@@ -251,46 +258,22 @@ const mainEdition = (c: ConferenceSummary) =>
 
 /* ---------- search ---------- */
 
-/** English is matched as it is typed. Chinese is turned into English phrases by Claude on Enter, shown as chips. */
+/** Searched as it is typed, in any language: the main process ranks by words and by meaning. */
 function useSearch() {
   const [text, setText] = useState('')
   const [query, setQuery] = useState('')
-  const [keywords, setKeywords] = useState<string[]>()
-  const [turning, setTurning] = useState(false)
-  const [error, setError] = useState<string>()
   useEffect(() => {
-    if (hasCjk(text)) return
-    setKeywords(undefined)
-    const t = window.setTimeout(() => setQuery(text.trim()), 220)
+    const t = window.setTimeout(() => setQuery(text.trim()), 250)
     return () => window.clearTimeout(t)
   }, [text])
-  const useKeywords = (list: string[]) => {
-    setKeywords(list)
-    setQuery([...list, text.trim()].filter(Boolean).join(' | '))
-  }
-  const submit = async () => {
-    if (!hasCjk(text) || turning) return
-    setTurning(true)
-    setError(undefined)
-    try {
-      useKeywords((await api.confKeywords(text.trim())).split('|').map((k) => k.trim()).filter(Boolean))
-    } catch (e) {
-      setError(errorText(e))
-    } finally {
-      setTurning(false)
-    }
-  }
   const clear = () => {
     setText('')
     setQuery('')
-    setKeywords(undefined)
-    setError(undefined)
   }
-  return { text, setText, query, keywords, turning, error, submit, clear, useKeywords }
+  return { text, setText, query, clear, now: () => setQuery(text.trim()) }
 }
 
 function SearchBar({ s }: { s: ReturnType<typeof useSearch> }) {
-  const [adding, setAdding] = useState('')
   return (
     <div className="cf-search-box">
       <div className="import-input">
@@ -301,41 +284,16 @@ function SearchBar({ s }: { s: ReturnType<typeof useSearch> }) {
           value={s.text}
           onChange={(e) => s.setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.nativeEvent.isComposing) s.submit()
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) s.now()
             if (e.key === 'Escape') s.clear()
           }}
         />
-        {s.turning && <Wave />}
-        {s.text && !s.turning && (
+        {s.text && (
           <button className="icon-btn" onClick={s.clear}>
             <Icon name="x" size={14} />
           </button>
         )}
       </div>
-      {s.error && <p className="cf-search-err">{s.error}</p>}
-      {s.keywords && (
-        <div className="cf-keywords">
-          {s.keywords.map((k) => (
-            <span key={k} className="cf-kw">
-              {k}
-              <button onClick={() => s.useKeywords(s.keywords!.filter((x) => x !== k))}>
-                <Icon name="x" size={11} />
-              </button>
-            </span>
-          ))}
-          <input
-            className="cf-kw add"
-            value={adding}
-            onChange={(e) => setAdding(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter' || e.nativeEvent.isComposing || !adding.trim()) return
-              s.useKeywords([...s.keywords!, adding.trim()])
-              setAdding('')
-            }}
-            placeholder="+"
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -347,20 +305,10 @@ function Home(props: Props & { overview: ConfOverview; onOpen: (e: EditionSummar
   const s = useSearch()
   const [open, setOpen] = useState<{ id: string; rename?: boolean }>()
   const follow = overview.follows.find((f) => f.id === open?.id)
-  const [adding, setAdding] = useState('')
+  const [adding, setAdding] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
   const [past, setPast] = useState<ConferenceSummary>()
   const [records, setRecords] = useState<EditionSummary>()
-
-  const add = async () => {
-    if (!adding.trim()) return
-    try {
-      await api.confAdd(adding)
-      setAdding('')
-    } catch (e) {
-      toast(errorText(e))
-    }
-  }
 
   const openMenu = (c: ConferenceSummary, x: number, y: number) => {
     const e = mainEdition(c)
@@ -400,16 +348,11 @@ function Home(props: Props & { overview: ConfOverview; onOpen: (e: EditionSummar
                   onRecords={(e) => setRecords(e)}
                 />
               ))}
-              <div className="cf-add">
+              <button className="cf-add" onClick={() => setAdding(!adding)}>
                 <Icon name="plus" size={15} />
-                <input
-                  className="bare"
-                  placeholder="添加会议"
-                  value={adding}
-                  onChange={(e) => setAdding(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && add()}
-                />
-              </div>
+                添加会议
+              </button>
+              {adding && <AddPicker confs={overview.conferences} onDone={() => setAdding(false)} toast={toast} />}
             </section>
           </>
         )}
@@ -421,11 +364,89 @@ function Home(props: Props & { overview: ConfOverview; onOpen: (e: EditionSummar
   )
 }
 
+const ccfRank = (dblp?: string) => (dblp ? CCF.find((r) => r[2] === 'C' && r[3] === dblp)?.[1] : undefined)
+
+/** Every conference Shiori knows, by field, to add with one click; a name it doesn't know is added as typed. */
+function AddPicker({ confs, onDone, toast }: { confs: ConferenceSummary[]; onDone: () => void; toast: Toast }) {
+  const [q, setQ] = useState('')
+  const t = q.trim().toLowerCase()
+  const have = (c: { name: string; full: string }) =>
+    confs.some((x) => x.id === confId(c.name) || x.name.toLowerCase() === c.name.toLowerCase() || x.fullName?.toLowerCase() === c.full.toLowerCase())
+  const groups = CATALOG.map((g) => ({
+    ...g,
+    confs: g.confs.filter((c) => !t || c.name.toLowerCase().includes(t) || c.full.toLowerCase().includes(t) || g.group.includes(t))
+  })).filter((g) => g.confs.length)
+  const add = async (name: string, full?: string) => {
+    try {
+      await api.confAdd(name, full)
+      onDone()
+    } catch (e) {
+      toast(errorText(e))
+    }
+  }
+  const enter = () => {
+    const open = groups.flatMap((g) => g.confs).filter((c) => !have(c))
+    if (!groups.length && q.trim()) add(q.trim())
+    else if (t && open.length === 1) add(open[0].name, open[0].full)
+  }
+  return (
+    <div className="cf-pick">
+      <label className="cf-pick-filter">
+        <Icon name="search" size={15} />
+        <input
+          className="bare"
+          autoFocus
+          placeholder="筛选"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return
+            if (e.key === 'Enter') enter()
+            if (e.key === 'Escape') onDone()
+          }}
+        />
+      </label>
+      {groups.length ? (
+        groups.map((g) => (
+          <div key={g.group} className="cf-pick-row">
+            <div className="cf-pick-group">{g.group}</div>
+            <div className="cf-pick-chips">
+              {g.confs.map((c) => {
+                const on = have(c)
+                const rank = ccfRank(c.dblp)
+                return (
+                  <button key={c.name} className={`cf-pick-chip ${on ? 'on' : ''}`} title={c.full} disabled={on} onClick={() => add(c.name, c.full)}>
+                    {on && <Icon name="check" size={13} />}
+                    {c.name}
+                    {!on && rank && <span className={`vt-chip ccf-${rank.toLowerCase()}`}>CCF {rank}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="cf-pick-row">
+          <div className="cf-pick-group" />
+          <div className="cf-pick-chips">
+            <button className="cf-pick-chip typed" onClick={() => add(q.trim())}>
+              <Icon name="plus" size={13} />
+              添加「{q.trim()}」
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** The actions on a conference, from its row or from an edition's sidebar. */
 function confMenu(c: ConferenceSummary, e: EditionSummary | undefined, o: { onPast: () => void; onRecords: () => void; toast: Toast; inEdition?: boolean; onDeleted?: () => void }): MenuItem[] {
   return [
     ...(c.tracking && e && !e.past && e.phase !== 'complete' ? [{ label: '立即检查', icon: 'refresh', onClick: () => api.confRefresh(e.conf, e.year) }] : []),
     { label: '补抓往届', icon: 'history', onClick: o.onPast },
+    { label: '更换图标', icon: 'image', onClick: () => api.confChooseMark(c.id).catch((err) => o.toast(errorText(err))) },
+    ...(hasMark(c) ? [{ label: '移除图标', icon: 'minus', onClick: () => api.confClearMark(c.id) }] : []),
     ...(e ? [{ label: '渠道与记录', icon: 'list', onClick: o.onRecords }] : []),
     c.tracking
       ? { label: '停止跟踪', icon: 'pause', onClick: () => api.confSetTracking(c.id, false) }
@@ -452,7 +473,8 @@ function confMenu(c: ConferenceSummary, e: EditionSummary | undefined, o: { onPa
 function ConfRow({ c, onOpen, onMenu, onRecords }: { c: ConferenceSummary; onOpen: (e: EditionSummary) => void; onMenu: (x: number, y: number) => void; onRecords: (e: EditionSummary) => void }) {
   const e = mainEdition(c)
   const next = c.editions.find((x) => e && x.year > e.year && x.phase === 'waiting')
-  const activity = c.activity ?? e?.activity ?? next?.activity
+  // A conference waiting its turn to be looked up reads the same as one being looked up.
+  const activity = c.activity ?? e?.activity ?? next?.activity ?? (c.tracking && !c.setupAt && !c.setupError ? { label: '查找会议' } : undefined)
   const error = c.setupError ?? e?.error
   const open = e && e.count > 0 ? () => onOpen(e) : undefined
   return (
@@ -465,7 +487,7 @@ function ConfRow({ c, onOpen, onMenu, onRecords }: { c: ConferenceSummary; onOpe
       }}
     >
       <div className="cf-conf-name">
-        <ConfName c={c} year={e?.year} />
+        <ConfName c={c} year={e?.year} slot />
       </div>
       <div className="cf-count">{e && e.count > 0 && <>{e.count}<small>篇</small></>}</div>
       <span className="spacer" />
@@ -485,13 +507,7 @@ function ConfRow({ c, onOpen, onMenu, onRecords }: { c: ConferenceSummary; onOpe
           {c.setupError ? '重试' : '出错'}
         </button>
       )}
-      {c.tracking && next?.releaseDate && (
-        <span className="cf-cap" title="下一届预计公布">
-          <Icon name="calendar" size={13} />
-          <s>{next.year}</s>
-          {day(next.releaseDate)}
-        </span>
-      )}
+      {e && !e.past && <Cycle c={c} e={e} next={c.tracking ? (next ?? { year: e.year + 1 }) : undefined} />}
       {!c.tracking && (
         <span className="cf-cap icon stopped" title="已停止跟踪">
           <Icon name="unlink" size={14} />
@@ -507,6 +523,60 @@ function ConfRow({ c, onOpen, onMenu, onRecords }: { c: ConferenceSummary; onOpe
       >
         <Icon name="more" />
       </button>
+    </div>
+  )
+}
+
+/** From the day this edition's decisions came out to the day the next one's are due, with today on the line. */
+function Cycle({ c, e, next }: { c: ConferenceSummary; e: EditionSummary; next?: { year: number; releaseDate?: string; releaseEstimated?: boolean } }) {
+  const at = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`)
+  const today = new Date(new Date().toDateString())
+  const from = e.released && e.releaseDate ? at(e.releaseDate) : undefined
+  const to = next?.releaseDate ? at(next.releaseDate) : undefined
+  const left = to ? Math.round((to.getTime() - today.getTime()) / 86_400_000) : undefined
+  // An announced day is counted down in its last weeks; an estimated one only ever gives its month.
+  const near = to && !next!.releaseEstimated && left! <= 45
+  const span = from && (to ?? new Date(from.getTime() + 365 * 86_400_000))
+  const p = from && span ? Math.max(0, Math.min(1, (today.getTime() - from.getTime()) / (span.getTime() - from.getTime()))) : 0
+  const state = !to ? 'tbd' : near ? 'near' : next!.releaseEstimated ? 'est' : ''
+  return (
+    <div className="cf-cycle">
+      <div className="end from" title={`${e.name}`}>
+        {from && (
+          <>
+            <s>{from.getFullYear()}</s>
+            <b>{day(e.releaseDate!)}</b>
+          </>
+        )}
+      </div>
+      {next && (
+        <>
+          <div className="track">
+            {from && <i className="past" style={{ width: `calc(${p} * (100% - 8px))` }} />}
+            {from && <i className="dot from" />}
+            <i className={`dot to ${state}`} />
+            {from && <i className="now" style={{ left: `calc(4px + ${p} * (100% - 8px))` }} />}
+          </div>
+          <div className={`end to ${state}`} title={`${c.name} ${next.year}`}>
+            {!to ? (
+              <>
+                <s>{next.year}</s>
+                <b>待定</b>
+              </>
+            ) : near ? (
+              <>
+                <s>{left! > 0 ? `${left} 天后` : left === 0 ? '今天' : `${-left!} 天前`}</s>
+                <b>{day(next.releaseDate!)}</b>
+              </>
+            ) : (
+              <>
+                <s>{to.getFullYear()}</s>
+                <b>{next.releaseEstimated ? `约 ${to.getMonth() + 1} 月` : day(next.releaseDate!)}</b>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -771,7 +841,7 @@ interface Section {
  * Sections one after another; each section's header sticks while you are inside it and names the subsection you are
  * in. The sticky state is set on the DOM directly, since it changes with every scroll.
  */
-function Stream(props: Props & { sections: Section[]; defaults?: { kind?: string; track?: string }; onPlace?: (section?: string, sub?: string) => void; showEdition?: boolean; empty?: ReactNode }) {
+function Stream(props: Props & { sections: Section[]; defaults?: { kind?: string; track?: string }; onPlace?: (section?: string, sub?: string) => void; showEdition?: boolean; ranked?: boolean; empty?: ReactNode }) {
   const { sections, onPlace } = props
   const root = useRef<HTMLDivElement>(null)
   const last = useRef('')
@@ -826,6 +896,15 @@ function Stream(props: Props & { sections: Section[]; defaults?: { kind?: string
   }, [sections, onPlace])
 
   if (!sections.some((s) => s.count)) return <>{props.empty === undefined ? <p className="cf-none"><Icon name="search" size={18} /></p> : props.empty}</>
+  // Search results: one list, best first, each paper naming its edition.
+  if (props.ranked)
+    return (
+      <div ref={root} className="cf-stream">
+        {sections.flatMap((s) => s.subs).map((b) => (
+          <SubBlock key={b.id} b={b} props={{ ...props, showEdition: true }} />
+        ))}
+      </div>
+    )
   return (
     <div ref={root} className="cf-stream">
       {sections
@@ -1035,6 +1114,7 @@ function Results(props: Props & { query: PaperQuery; head?: (n: number) => React
     }
   }, [key, live])
   const sections = useMemo(() => {
+    if (query.search) return [{ id: 'search', name: '', count: papers?.length ?? 0, subs: [{ id: 'search', name: '', papers: papers ?? [] }] }]
     const by = new Map<string, Section>()
     for (const p of papers ?? []) {
       let s = by.get(p.edition)
@@ -1043,7 +1123,7 @@ function Results(props: Props & { query: PaperQuery; head?: (n: number) => React
       s.subs[0].papers.push(p)
     }
     return [...by.values()].sort((a, b) => b.id.split('/')[1].localeCompare(a.id.split('/')[1]) || b.count - a.count)
-  }, [papers])
+  }, [papers, query.search])
   return (
     <>
       {head ? (
@@ -1053,7 +1133,7 @@ function Results(props: Props & { query: PaperQuery; head?: (n: number) => React
           <span className="n">{papers?.length ?? ''}</span>
         </div>
       )}
-      {!papers ? <Skeleton /> : <Stream {...props} sections={sections} defaults={{ kind: 'Poster', track: 'Main' }} empty={working ? <Skeleton /> : query.group ? null : undefined} />}
+      {!papers ? <Skeleton /> : <Stream {...props} sections={sections} ranked={!!query.search} defaults={{ kind: 'Poster', track: 'Main' }} empty={working ? <Skeleton /> : query.group ? null : undefined} />}
     </>
   )
 }
