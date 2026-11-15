@@ -188,6 +188,7 @@ function registerIpc(): void {
   ipcMain.handle('papers:note', (_e, id: string) => lib.loadNote(id))
   ipcMain.handle('papers:saveNote', (_e, id: string, doc: object) => lib.saveNote(id, doc))
   ipcMain.handle('papers:saveNoteImage', (_e, id: string, ext: string, bytes: ArrayBuffer) => lib.saveNoteImage(id, ext, bytes))
+  ipcMain.handle('chat:saveImage', (_e, id: string, ext: string, bytes: ArrayBuffer) => lib.saveChatImage(id, ext, bytes))
 
   ipcMain.handle('tasks:list', () => taskList())
   ipcMain.handle('tasks:act', (_e, a: TaskAction) => taskAction(a))

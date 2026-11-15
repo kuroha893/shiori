@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import { rmSync } from 'node:fs'
 import type { ChatEvent, ChatMessage } from '../shared/types'
 import { parseModel } from '../shared/models'
-import { loadChat, paperDir, readMeta, saveChat } from './library'
-import { modelFor, runAgent } from './ai'
+import { loadChat, paperDir, paperFile, readMeta, saveChat } from './library'
+import { modelFor, runAgent, serviceStatus } from './ai'
 import { codexThreadLive } from './codex'
 import { ensurePaperText, sourceFor } from './jobs'
 import { chatSystemPrompt } from './prompts'
@@ -16,7 +17,10 @@ function history(messages: ChatMessage[]): string {
   const lines = messages
     .filter((m) => !m.error)
     .slice(-20)
-    .map((m) => `${m.role === 'user' ? 'Reader' : 'You'}: ${m.quote ? `(about the passage "${m.quote.text}") ` : ''}${m.text}`)
+    .map(
+      (m) =>
+        `${m.role === 'user' ? 'Reader' : 'You'}: ${m.quote ? `(about the passage "${m.quote.text}") ` : ''}${m.images?.length ? `(with the images ${m.images.join(', ')}) ` : ''}${m.text}`
+    )
   return lines.length ? `Earlier in this conversation:\n<history>\n${lines.join('\n\n')}\n</history>\n\n` : ''
 }
 
@@ -28,12 +32,13 @@ function history(messages: ChatMessage[]): string {
  */
 export async function ask(
   paper: string,
-  input: { text: string; quote?: { block: string; text: string }; model?: string; effort?: string },
+  input: { text: string; quote?: { block: string; text: string }; images?: string[]; model?: string; effort?: string },
   emit: (e: ChatEvent) => void
 ): Promise<ChatMessage> {
   const meta = readMeta(paper)
   if (!meta) throw new Error('论文不存在')
   if (active.has(paper)) throw new Error('上一个问题还在回答中')
+  const images = (input.images ?? []).filter((p) => /^chat-media\/[\w-]+\.\w+$/.test(p))
 
   const chat = await loadChat(paper)
   const earlier = chat.messages.slice()
@@ -42,6 +47,7 @@ export async function ask(
     role: 'user',
     text: input.text,
     quote: input.quote,
+    images: images.length ? images : undefined,
     createdAt: new Date().toISOString()
   }
   chat.messages.push(userMsg)
@@ -50,6 +56,8 @@ export async function ask(
   let prompt = input.quote
     ? `The reader selected this passage (block ${input.quote.block}):\n<selection>\n${input.quote.text}\n</selection>\n\n${input.text}`
     : input.text
+  if (images.length)
+    prompt = `The reader attached ${images.length === 1 ? 'an image' : `${images.length} images`} to this question. Look at ${images.length === 1 ? 'it' : 'each of them'} before answering:\n${images.map((p) => paperFile(paper, p)).join('\n')}\n\n${prompt}`
 
   const abort = new AbortController()
   active.set(paper, abort)
@@ -59,6 +67,12 @@ export async function ask(
   let resume = false
   try {
     model = await modelFor(model, 'chat')
+    // Every model offered today reads images; should a ChatGPT one not, ask one that does.
+    if (images.length) {
+      const options = (await serviceStatus()).models
+      if (options.find((m) => m.value === model)?.process === false && model.startsWith('openai:'))
+        model = options.find((m) => m.provider === 'openai' && m.process)?.value ?? model
+    }
     const { provider } = parseModel(model)
     resume = !!chat.sessionId && (chat.sessionProvider ?? 'claude') === provider && (provider !== 'openai' || codexThreadLive(chat.sessionId, parseModel(model).model))
     if (!resume) prompt = history(earlier) + prompt
@@ -117,4 +131,5 @@ export function stopAsking(paper: string): void {
 
 export async function resetChat(paper: string): Promise<void> {
   await saveChat(paper, { messages: [] })
+  rmSync(paperFile(paper, 'chat-media'), { recursive: true, force: true })
 }

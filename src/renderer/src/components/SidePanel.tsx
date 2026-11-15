@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Annotation, Block, ChatMessage, PaperMeta } from '../../../shared/types'
 import { api } from '../api'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 import { modelLabel, pickModel, type ModelOption } from '../../../shared/models'
 import { ModelPicker } from './ModelPicker'
-import { NoteEditor } from './NoteEditor'
+import { IMAGE_EXT, NoteEditor } from './NoteEditor'
 
 // 'notes' are the annotations (批注), 'memo' is the free-form note (笔记).
 export type Tab = 'guide' | 'chat' | 'notes' | 'memo'
@@ -16,7 +16,7 @@ export interface ChatApi {
   streaming: string | undefined
   status: string | undefined
   busy: boolean
-  send: (text: string, quote?: Quote, model?: string, effort?: string) => void
+  send: (text: string, quote?: Quote, model?: string, effort?: string, images?: string[]) => void
   stop: () => void
   reset: () => void
 }
@@ -45,14 +45,14 @@ export function useChat(paperId: string): ChatApi {
   }, [paperId])
 
   const send = useCallback(
-    (text: string, quote?: Quote, model?: string, effort?: string) => {
-      if (busy || !text.trim()) return
-      const msg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text, quote, createdAt: new Date().toISOString() }
+    (text: string, quote?: Quote, model?: string, effort?: string, images?: string[]) => {
+      if (busy || (!text.trim() && !images?.length)) return
+      const msg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text, quote, images, createdAt: new Date().toISOString() }
       setMessages((m) => [...m, msg])
       setBusy(true)
       setStreaming('')
       setStatus('正在思考…')
-      api.ask(paperId, { text, quote: quote && { block: quote.block, text: quote.text }, model, effort }).catch((e: Error) => {
+      api.ask(paperId, { text, quote: quote && { block: quote.block, text: quote.text }, images, model, effort }).catch((e: Error) => {
         setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'assistant', text: `出错了：${e.message}`, createdAt: new Date().toISOString(), error: true }])
         setStreaming(undefined)
         setStatus(undefined)
@@ -99,6 +99,8 @@ interface Props {
   onEditAnnotation: (a: Annotation, patch: Partial<Annotation>) => void
   onDeleteAnnotation: (a: Annotation) => void
   onSaveAsNote: (quote: Quote, text: string) => void
+  /** Opens an image in the reader's lightbox */
+  onZoom: (src: string) => void
   focusComposer: number
   toast: (t: string) => void
 }
@@ -213,6 +215,9 @@ function Guide({ summary, paper, ready, onJump }: { summary?: string; paper: Pap
   )
 }
 
+// Within this distance of the bottom, the chat list counts as being at the bottom.
+const NEAR = 24
+
 const SUGGESTIONS = ['这篇论文最核心的贡献是什么？', '用直觉讲讲方法部分', '实验结果可信吗？有什么局限？', '读懂这篇需要哪些前置知识？']
 
 function Chat(p: Props) {
@@ -225,19 +230,90 @@ function Chat(p: Props) {
   const input = useRef<HTMLTextAreaElement>(null)
   const click = useRefLinks(p.onJump)
 
+  // Follow new text only while the reader is at the bottom. "At the bottom" is judged against the
+  // height before this render, so a scroll made between two chunks counts even if its scroll event
+  // hasn't fired yet. Asking something always returns to the bottom.
+  const follow = useRef(true)
+  // The list only exists once a model is known; until then the tab shows how to connect one.
+  const shown = !!model
+  const lastHeight = useRef(0)
+  const lastCount = useRef(0)
+  const [away, setAway] = useState(false)
+
+  const toBottom = () => {
+    const el = list.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    lastHeight.current = el.scrollHeight
+  }
+
+  useLayoutEffect(() => {
+    const el = list.current
+    if (!el) return
+    const { messages } = chat
+    const asked = messages.length > lastCount.current && messages[messages.length - 1].role === 'user'
+    lastCount.current = messages.length
+    follow.current = asked || lastHeight.current - el.scrollTop - el.clientHeight < NEAR
+    if (follow.current) toBottom()
+    lastHeight.current = el.scrollHeight
+    setAway(el.scrollHeight - el.scrollTop - el.clientHeight > NEAR)
+  }, [chat.messages, chat.streaming, chat.busy, shown])
+
+  // The composer growing or a quote chip appearing shrinks the list, and an image arriving lengthens it;
+  // keep the bottom in view.
   useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight })
-  }, [chat.messages.length, chat.streaming])
+    const el = list.current
+    if (!el) return
+    const keep = () => follow.current && toBottom()
+    const observer = new ResizeObserver(keep)
+    observer.observe(el)
+    el.addEventListener('load', keep, true)
+    return () => {
+      observer.disconnect()
+      el.removeEventListener('load', keep, true)
+    }
+  }, [shown])
+
+  const onScroll = () => {
+    const el = list.current
+    if (el) setAway(el.scrollHeight - el.scrollTop - el.clientHeight > NEAR)
+  }
 
   useEffect(() => {
     if (p.focusComposer) input.current?.focus()
   }, [p.focusComposer])
 
-  const submit = () => {
-    if (!text.trim() || chat.busy) return
-    chat.send(text.trim(), p.draftQuote, model, effort)
-    setText('')
-    p.clearDraftQuote()
+  // Images wait in the composer as local previews and are stored in the paper folder when the question is sent.
+  const [attached, setAttached] = useState<{ file: File; url: string; ext: string }[]>([])
+  const [dropping, setDropping] = useState(false)
+  const sending = useRef(false)
+  const imageSrc = (rel: string) => `shiori://paper/${encodeURIComponent(p.paper.id)}/${rel}`
+
+  const attach = (files: File[]) => {
+    const images = files.filter((f) => IMAGE_EXT[f.type])
+    if (images.length < files.length) p.toast('只能放 PNG、JPG、GIF 或 WebP 图片')
+    if (images.length) setAttached((a) => [...a, ...images.map((file) => ({ file, url: URL.createObjectURL(file), ext: IMAGE_EXT[file.type] }))])
+  }
+  const detach = (url: string) => {
+    URL.revokeObjectURL(url)
+    setAttached((a) => a.filter((x) => x.url !== url))
+  }
+
+  const submit = async () => {
+    if ((!text.trim() && !attached.length) || chat.busy || sending.current) return
+    sending.current = true
+    try {
+      const images = await Promise.all(attached.map(async (a) => api.saveChatImage(p.paper.id, a.ext, await a.file.arrayBuffer())))
+      chat.send(text.trim(), p.draftQuote, model, effort, images.length ? images : undefined)
+      attached.forEach((a) => URL.revokeObjectURL(a.url))
+      setAttached([])
+      setText('')
+      p.clearDraftQuote()
+    } catch {
+      p.toast('图片没有存成功')
+    } finally {
+      sending.current = false
+    }
   }
 
   if (!model)
@@ -252,48 +328,90 @@ function Chat(p: Props) {
 
   return (
     <>
-      <div className="side-scroll chat-list" ref={list} onClick={click}>
-        {chat.messages.length === 0 && !chat.busy && (
-          <div className="chat-hello">
-            <p className="faint">选中正文里的任意文字可以直接提问。也可以从这里开始：</p>
-            {SUGGESTIONS.map((s) => (
-              <button key={s} className="suggest" onClick={() => chat.send(s, undefined, model, effort)}>
-                {s}
-              </button>
+      <div className="chat-wrap">
+        <div className="side-scroll chat-list" ref={list} onClick={click} onScroll={onScroll}>
+          {chat.messages.length === 0 && !chat.busy && (
+            <div className="chat-hello">
+              <p className="faint">选中正文里的任意文字可以直接提问。也可以从这里开始：</p>
+              {SUGGESTIONS.map((s) => (
+                <button key={s} className="suggest" onClick={() => chat.send(s, undefined, model, effort)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {chat.messages.map((m, i) => (
+            <Message
+              key={m.id}
+              m={m}
+              onJump={p.onJump}
+              onSave={
+                m.role === 'assistant' && !m.error && chat.messages[i - 1]?.quote
+                  ? () => p.onSaveAsNote(chat.messages[i - 1].quote as Quote, m.text)
+                  : undefined
+              }
+              toast={p.toast}
+              imageSrc={imageSrc}
+              onZoom={p.onZoom}
+            />
+          ))}
+          {chat.busy && (
+            <div className="msg assistant">
+              {chat.streaming ? (
+                <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(chat.streaming) }} />
+              ) : (
+                <div className="thinking faint">
+                  <span className="dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  {chat.status}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          className={away ? 'icon-btn to-latest show' : 'icon-btn to-latest'}
+          title="回到最新"
+          onClick={() => {
+            follow.current = true
+            toBottom()
+            setAway(false)
+          }}
+        >
+          <Icon name="arrowDown" size={15} />
+        </button>
+      </div>
+      <div
+        className={dropping ? 'composer dropping' : 'composer'}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          setDropping(true)
+        }}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropping(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return
+          e.preventDefault()
+          e.stopPropagation()
+          setDropping(false)
+          attach([...e.dataTransfer.files])
+        }}
+      >
+        {attached.length > 0 && (
+          <div className="attach-row">
+            {attached.map((a) => (
+              <div key={a.url} className="attach">
+                <img src={a.url} alt="" onClick={() => p.onZoom(a.url)} />
+                <button className="attach-remove" onClick={() => detach(a.url)}>
+                  <Icon name="x" size={11} />
+                </button>
+              </div>
             ))}
           </div>
         )}
-        {chat.messages.map((m, i) => (
-          <Message
-            key={m.id}
-            m={m}
-            onJump={p.onJump}
-            onSave={
-              m.role === 'assistant' && !m.error && chat.messages[i - 1]?.quote
-                ? () => p.onSaveAsNote(chat.messages[i - 1].quote as Quote, m.text)
-                : undefined
-            }
-            toast={p.toast}
-          />
-        ))}
-        {chat.busy && (
-          <div className="msg assistant">
-            {chat.streaming ? (
-              <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(chat.streaming) }} />
-            ) : (
-              <div className="thinking faint">
-                <span className="dots">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                {chat.status}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      <div className="composer">
         {p.draftQuote && (
           <div className="quote-chip">
             <span>{p.draftQuote.text}</span>
@@ -313,6 +431,12 @@ function Chat(p: Props) {
             e.target.style.height = 'auto'
             e.target.style.height = Math.min(160, e.target.scrollHeight) + 'px'
           }}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files]
+            if (!files.length) return
+            e.preventDefault()
+            attach(files)
+          }}
           onKeyDown={(e) => {
             e.stopPropagation()
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -329,7 +453,7 @@ function Chat(p: Props) {
               <Icon name="stop" size={14} />
             </button>
           ) : (
-            <button className="icon-btn send" disabled={!text.trim()} onClick={submit} title="发送">
+            <button className="icon-btn send" disabled={!text.trim() && !attached.length} onClick={submit} title="发送">
               <Icon name="send" size={15} />
             </button>
           )}
@@ -339,7 +463,21 @@ function Chat(p: Props) {
   )
 }
 
-function Message({ m, onJump, onSave, toast }: { m: ChatMessage; onJump: (id: string) => void; onSave?: () => void; toast: (t: string) => void }) {
+function Message({
+  m,
+  onJump,
+  onSave,
+  toast,
+  imageSrc,
+  onZoom
+}: {
+  m: ChatMessage
+  onJump: (id: string) => void
+  onSave?: () => void
+  toast: (t: string) => void
+  imageSrc: (rel: string) => string
+  onZoom: (src: string) => void
+}) {
   if (m.role === 'user')
     return (
       <div className="msg user">
@@ -348,7 +486,14 @@ function Message({ m, onJump, onSave, toast }: { m: ChatMessage; onJump: (id: st
             {m.quote.text}
           </button>
         )}
-        <div className="bubble">{m.text}</div>
+        {m.images && (
+          <div className={m.images.length === 1 ? 'msg-images one' : 'msg-images'}>
+            {m.images.map((rel) => (
+              <img key={rel} src={imageSrc(rel)} alt="" onClick={() => onZoom(imageSrc(rel))} />
+            ))}
+          </div>
+        )}
+        {m.text && <div className="bubble">{m.text}</div>}
       </div>
     )
   return (

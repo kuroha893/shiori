@@ -51,7 +51,7 @@ interface MathDraft {
   y: number
 }
 
-const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
+export const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
 
 export function NoteEditor({ paperId, active, toast }: { paperId: string; active: boolean; toast: (t: string) => void }) {
   const [initial, setInitial] = useState<object | null>()

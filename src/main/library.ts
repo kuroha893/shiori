@@ -214,17 +214,20 @@ export function saveNote(id: string, doc: object): void {
   renameSync(file + '.tmp', file)
 }
 
-const NOTE_IMAGE_TYPES = ['png', 'jpg', 'jpeg', 'gif', 'webp']
+const IMAGE_TYPES = ['png', 'jpg', 'jpeg', 'gif', 'webp']
 
-/** Stores an image pasted into the note and returns its path inside the paper folder. */
-export function saveNoteImage(id: string, ext: string, bytes: ArrayBuffer): string {
+/** Stores an image the owner put into the note or the chat and returns its path inside the paper folder. */
+function saveImage(id: string, dir: 'note-media' | 'chat-media', ext: string, bytes: ArrayBuffer): string {
   const type = ext.toLowerCase()
-  if (!NOTE_IMAGE_TYPES.includes(type)) throw new Error('unsupported image type')
-  const rel = `note-media/${randomUUID()}.${type}`
-  mkdirSync(paperFile(id, 'note-media'), { recursive: true })
+  if (!IMAGE_TYPES.includes(type)) throw new Error('unsupported image type')
+  const rel = `${dir}/${randomUUID()}.${type}`
+  mkdirSync(paperFile(id, dir), { recursive: true })
   writeFileSync(paperFile(id, rel), Buffer.from(bytes))
   return rel
 }
+
+export const saveNoteImage = (id: string, ext: string, bytes: ArrayBuffer): string => saveImage(id, 'note-media', ext, bytes)
+export const saveChatImage = (id: string, ext: string, bytes: ArrayBuffer): string => saveImage(id, 'chat-media', ext, bytes)
 
 export function fileExists(id: string, rel: string): boolean {
   try {

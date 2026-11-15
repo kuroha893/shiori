@@ -389,6 +389,7 @@ export function Reader(props: {
             onJumpAnnotation={(a) => jump(a.block)}
             onEditAnnotation={editAnnotation}
             onDeleteAnnotation={(a) => saveAnnotations(annotations.filter((x) => x.id !== a.id))}
+            onZoom={setZoom}
             onSaveAsNote={(q, text) => {
               const existing = annotations.find((a) => a.block === q.block && a.start === q.start && a.end === q.end && a.lang === q.lang)
               if (existing) editAnnotation(existing, { note: [existing.note, text].filter(Boolean).join('\n\n') })

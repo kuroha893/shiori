@@ -165,6 +165,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   quote?: { block: string; text: string }
+  /** Images the owner attached, as paths inside the paper folder (chat-media/...) */
+  images?: string[]
   createdAt: string
   model?: string
   error?: boolean
