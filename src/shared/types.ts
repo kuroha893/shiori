@@ -84,6 +84,33 @@ export type TaskAction =
   | { type: 'retry'; key: string }
   | { type: 'order'; keys: string[] }
 
+/** How much of a service's allowance is left (see main/quota.ts). */
+export interface QuotaWindow {
+  /** The window's length in minutes: 300 for five hours, 10080 for a week */
+  minutes: number
+  /** 0..1 */
+  left: number
+  /** When it resets, ms since the epoch */
+  resetsAt?: number
+}
+
+export interface ServiceQuota {
+  provider: 'claude' | 'openai' | 'deepseek'
+  /** Claude and ChatGPT: usage windows */
+  windows?: QuotaWindow[]
+  /** DeepSeek: money left on the account */
+  balance?: { amount: number; currency: string; usable: boolean }
+  /** Couldn't be read this time */
+  failed?: boolean
+}
+
+export interface QuotaView {
+  services: ServiceQuota[]
+  /** Services Shiori runs on now: those picked for processing, chat or calls */
+  inUse: ServiceQuota['provider'][]
+  checkedAt?: number
+}
+
 export interface Folder {
   id: string
   name: string

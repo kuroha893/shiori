@@ -7,8 +7,8 @@ import { Article } from './Article'
 import { COLORS, NotePopover, SelectionMenu, type Selected } from './Annotate'
 import { SidePanel, useChat, type Quote, type Tab } from './SidePanel'
 import { Lightbox, PdfPeek } from './Overlays'
-import { CallLauncher, HeartButton, ThemeButton, useDismiss } from './Chrome'
-import { TaskButton } from './Tasks'
+import { CallLauncher, HeartButton, themeOptions, useDismiss } from './Chrome'
+import { StatusBlock } from './Quota'
 import { Icon } from './Icon'
 import { PaperText } from './PaperText'
 import type { Toast } from './App'
@@ -298,14 +298,13 @@ export function Reader(props: {
               </button>
             ))}
           </div>
+          <StatusBlock papers={props.papers} />
           <div style={{ position: 'relative' }}>
             <button className={`icon-btn bordered ${typo ? 'active' : ''}`} title="排版" onClick={() => setTypo((v) => !v)}>
               <span className="aa">Aa</span>
             </button>
             {typo && <TypoPanel settings={settings} onChange={props.onSettings} onClose={() => setTypo(false)} />}
           </div>
-          <TaskButton papers={props.papers} />
-          <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
           <button
             className="icon-btn bordered"
             title="原文 PDF"
@@ -452,6 +451,16 @@ function TypoPanel({ settings, onChange, onClose }: { settings: Settings; onChan
   useDismiss(ref, onClose)
   return (
     <div ref={ref} className="popover typo">
+      <div className="typo-row">
+        <span className="faint">主题</span>
+        <div className="seg">
+          {themeOptions.map((t) => (
+            <button key={t.id} className={settings.theme === t.id ? 'on' : ''} onClick={() => onChange({ theme: t.id })}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="typo-row">
         <span className="faint">字体</span>
         <div className="seg">

@@ -1,6 +1,6 @@
 import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, Folder, GlossaryEntry, OpenReviewAccount, PaperMeta, PetState, Settings, TaskAction, TaskList } from '../shared/types'
+import type { Annotation, ChatEvent, Folder, GlossaryEntry, OpenReviewAccount, PaperMeta, PetState, Settings, TaskAction, TaskList, QuotaView } from '../shared/types'
 import type { ServiceStatus } from '../shared/models'
 import type { ConfOverview, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../shared/conferences'
 
@@ -53,6 +53,9 @@ const api = {
   tasks: (): Promise<TaskList> => ipcRenderer.invoke('tasks:list'),
   taskAct: (a: TaskAction) => ipcRenderer.invoke('tasks:act', a),
   onTasksChanged: (fn: (list: TaskList) => void) => on('tasks:changed', fn),
+  quota: (): Promise<QuotaView> => ipcRenderer.invoke('quota:get'),
+  readQuota: (): Promise<QuotaView> => ipcRenderer.invoke('quota:read'),
+  onQuotaChanged: (fn: (v: QuotaView) => void) => on('quota:changed', fn),
 
   ask: (id: string, input: { text: string; quote?: { block: string; text: string }; images?: string[]; model?: string; effort?: string }) =>
     ipcRenderer.invoke('chat:ask', id, input),

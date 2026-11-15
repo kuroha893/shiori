@@ -155,6 +155,7 @@ async function connect(): Promise<Client> {
     if (!path) throw new Error('没有找到 Codex，请先在设置里接入 ChatGPT')
     const c = new Client(path)
     c.listen((method) => method === 'shiori/closed' && live.clear())
+    c.listen((method) => method === 'account/rateLimits/updated' && rateWatchers.forEach((fn) => fn()))
     await c.request('initialize', { clientInfo: { name: 'shiori', title: 'Shiori', version: app.getVersion() }, capabilities: null })
     c.notify('initialized')
     return c
@@ -168,6 +169,26 @@ export function closeCodex(): void {
   client = undefined
   live.clear()
   kept.length = 0
+}
+
+const rateWatchers = new Set<() => void>()
+
+/** Told when Codex says the account's rate limits changed. */
+export function onCodexRateLimits(fn: () => void): void {
+  rateWatchers.add(fn)
+}
+
+export interface CodexRateWindow {
+  usedPercent: number
+  windowDurationMins?: number | null
+  resetsAt?: number | null
+}
+
+/** The ChatGPT account's usage windows (short and weekly); nothing for an API key. Reading spends nothing. */
+export async function codexRateLimits(): Promise<{ primary?: CodexRateWindow | null; secondary?: CodexRateWindow | null } | undefined> {
+  const c = await connect()
+  const r = await c.request('account/rateLimits/read', null)
+  return r?.rateLimits ?? undefined
 }
 
 export interface CodexModel {

@@ -496,3 +496,229 @@
 .tq-list.dragging * {
   cursor: grabbing !important;
 }
+
+/* ---------- status block: tasks and allowance side by side ---------- */
+
+.sp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+}
+.sp:empty {
+  display: none;
+}
+/* the halves' lists open under the block, at its right edge */
+.sp .tq,
+.sp .qb {
+  position: static;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.sp .tq-btn,
+.sp .qb-btn {
+  height: 100%;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+}
+.sp .tq + .qb::before {
+  content: '';
+  width: 1px;
+  height: 16px;
+  background: hsl(var(--border));
+}
+.sp .tq-red {
+  top: 3px;
+  right: 3px;
+}
+
+.qb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: default;
+}
+.qb-btn:hover,
+.qb-btn.on {
+  background: hsl(var(--accent));
+}
+.qb-mark {
+  display: flex;
+}
+.qb-mark .service-logo {
+  width: 13px;
+  height: 13px;
+}
+.qb-text.amber,
+.qp-row.amber .pct,
+.qp-money .val.amber {
+  color: hsl(32 90% 42%);
+}
+.qb-text.red,
+.qp-row.red .pct,
+.qp-money .val.red {
+  color: hsl(var(--destructive));
+}
+:root[data-theme='dark'] .qb-text.amber,
+:root[data-theme='dark'] .qp-row.amber .pct,
+:root[data-theme='dark'] .qp-money .val.amber {
+  color: hsl(38 92% 60%);
+}
+
+/* a battery: how much is left */
+.bat {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 20px;
+  height: 11px;
+  margin-right: 3px;
+  border: 1.6px solid hsl(var(--muted-foreground));
+  border-radius: 3px;
+}
+.bat::after {
+  content: '';
+  position: absolute;
+  top: 2.5px;
+  right: -4px;
+  width: 2px;
+  height: 3.5px;
+  border-radius: 0 1px 1px 0;
+  background: hsl(var(--muted-foreground));
+}
+.bat b {
+  position: absolute;
+  top: 1.5px;
+  bottom: 1.5px;
+  left: 1.5px;
+  border-radius: 1px;
+  background: hsl(var(--muted-foreground));
+}
+.bat.amber {
+  border-color: hsl(38 92% 50%);
+}
+.bat.amber::after,
+.bat.amber b {
+  background: hsl(38 92% 50%);
+}
+.bat.red {
+  border-color: hsl(var(--destructive));
+}
+.bat.red::after,
+.bat.red b {
+  background: hsl(var(--destructive));
+}
+
+.qp {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 360px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+  font-family: var(--font-ui);
+  transform-origin: top right;
+  animation: popIn 0.14s ease-out both;
+}
+.qp-head {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 10px 0 18px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.qp-head b {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+.tq-ib.spinning svg {
+  animation: tq-spin 0.9s linear infinite;
+}
+@keyframes tq-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.qp-body {
+  padding: 4px 18px 12px;
+}
+.qp-svc {
+  padding: 12px 0 4px;
+}
+.qp-svc + .qp-svc {
+  border-top: 1px solid hsl(var(--border));
+}
+.qp-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.qp-name .service-logo {
+  width: 16px;
+  height: 16px;
+}
+.qp-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 40px 92px;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  font-size: 12px;
+}
+.qp-row .lab,
+.qp-money .lab {
+  color: hsl(var(--muted-foreground));
+}
+.qp-row .bar {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: hsl(var(--border));
+}
+.qp-row .bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: hsl(var(--primary));
+}
+.qp-row.amber .bar i {
+  background: hsl(38 92% 50%);
+}
+.qp-row.red .bar i {
+  background: hsl(var(--destructive));
+}
+.qp-row .pct {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+.qp-row .reset {
+  color: hsl(var(--faint-foreground));
+  text-align: right;
+  white-space: nowrap;
+}
+.qp-money {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  height: 26px;
+  font-size: 12px;
+}
+.qp-money .val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}

@@ -6,7 +6,7 @@ import { modelLabel, pickModel, type ServiceStatus } from '../../../shared/model
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
 import { CallLauncher, HeartButton, LaterButton, Menu, ThemeButton, type MenuItem } from './Chrome'
-import { TaskButton } from './Tasks'
+import { StatusBlock } from './Quota'
 import { Conferences, LaterCard, useConfOverview, useLater } from './Conferences'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
 import { PaperVenue } from './VenueTags'
@@ -234,7 +234,7 @@ export function Library(props: {
       <header className="topbar drag">
         <SpaceSwitch space={space} onChange={setSpace} fresh={space === 'lib' && !!overview?.fresh} />
         <div className="topbar-actions">
-          <TaskButton papers={papers} />
+          <StatusBlock papers={papers} />
           <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
           <button className="icon-btn bordered no-drag" title="设置" onClick={props.onOpenSettings}>
             <Icon name="settings" />

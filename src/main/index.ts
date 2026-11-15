@@ -10,6 +10,7 @@ import { checkDeepseekKey, serviceStatus } from './ai'
 import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
 import { cancel, enqueue, initJobs, pendingFromPapers, prepare, startGuide } from './jobs'
 import { addTask, forgetPaper, initTasks, loadTasks, taskAction, taskList } from './tasks'
+import { initQuota, quotaSoon, quotaView, readQuota } from './quota'
 import { initVenues } from './venue'
 import { deleteEntry, loadGlossary, saveEntry } from './glossary'
 import { ask, resetChat, stopAsking } from './chat'
@@ -93,6 +94,7 @@ function registerIpc(): void {
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     const s = saveSettings(patch)
     if ('petShown' in patch) syncPet()
+    if ('processModel' in patch || 'chatModel' in patch || 'callModel' in patch) void readQuota(false)
     if (patch.libraryPath) {
       lib.ensureLibrary()
       loadGlossary()
@@ -192,6 +194,8 @@ function registerIpc(): void {
 
   ipcMain.handle('tasks:list', () => taskList())
   ipcMain.handle('tasks:act', (_e, a: TaskAction) => taskAction(a))
+  ipcMain.handle('quota:get', () => quotaView())
+  ipcMain.handle('quota:read', () => readQuota(true))
 
   ipcMain.handle('chat:ask', (_e, id: string, input) => ask(id, input, (ev: ChatEvent) => send('chat:event', ev)))
   ipcMain.handle('chat:stop', (_e, id: string) => stopAsking(id))
@@ -241,7 +245,14 @@ app.whenReady().then(() => {
   createWindow()
   initJobs(paperChanged)
   initVenues(paperChanged)
-  initTasks((list) => send('tasks:changed', list))
+  // a task that has just finished has spent some allowance
+  let lastRunning: string | undefined
+  initTasks((list) => {
+    send('tasks:changed', list)
+    if (lastRunning && list.running?.key !== lastRunning) quotaSoon()
+    lastRunning = list.running?.key
+  })
+  initQuota((v) => send('quota:changed', v))
   reloadTasks()
   initOpenReview({ send, window: () => main })
   initConferences({ send, paperChanged })
