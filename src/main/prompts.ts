@@ -117,6 +117,21 @@ ${o.glossary}
 ${FORMAT}`
 }
 
+const written = (parts: string[]) => `${parts.join(', ')} ${parts.length > 1 ? 'are' : 'is'} already written`
+
+/** Said to the same session after it was cut off. */
+export const resumePrompt = (parts: string[]) =>
+  `You were interrupted. ${written(parts)}; leave ${parts.length > 1 ? 'them' : 'it'} as ${parts.length > 1 ? 'they are' : 'it is'}. Look at the last one to see
+where it stops, carry on from there in the next file number, finish the remaining steps, and reply DONE.`
+
+/** Told to a new session when the one that started is gone: the same work, minus what is on disk. */
+export const carryOnNote = (parts: string[]) => `
+
+## Carrying on
+An earlier run stopped partway. ${written(parts)}: don't write ${parts.length > 1 ? 'them' : 'it'} again. Still read the
+whole paper, read what is written for its wording and terms, then continue from where the last one stops, starting
+with the next file number, and do the remaining steps.`
+
 const GUIDE_SAMPLE = `## 要解决的问题
 
 这篇论文研究的是机器翻译这类序列转换任务：输入一串词，输出另一串词。2017 年前后，这类任务主要使用循环神经网络（RNN）。RNN 按顺序处理句子，处理第 5 个词之前必须先处理完前 4 个词，这带来了两个实际的麻烦。

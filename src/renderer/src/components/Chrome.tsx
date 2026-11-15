@@ -82,6 +82,16 @@ export function CallLauncher() {
 }
 
 /** Red when the owner likes the paper; click to change your mind. */
+/** How much of a paper's processing an interrupted run left, as a small pie in the colour around it. */
+export function Kept({ share, bare }: { share: number; bare?: boolean }) {
+  return (
+    <span className="kept">
+      <span className="kept-pie" style={{ '--share': `${Math.round(share * 360)}deg` } as React.CSSProperties} />
+      {!bare && `${Math.round(share * 100)}%`}
+    </span>
+  )
+}
+
 export function HeartButton({ paper, bordered }: { paper: PaperMeta; bordered?: boolean }) {
   const liked = !!paper.likedAt
   return (

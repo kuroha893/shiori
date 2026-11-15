@@ -152,6 +152,8 @@ export interface AgentRun {
   instructions?: string
   /** Continue this session of the same service */
   session?: string
+  /** A new session's id, chosen beforehand so an interrupted run can be resumed (Claude Code only) */
+  id?: string
   /** Keep the session for a later run */
   keep?: boolean
   /**
@@ -218,7 +220,7 @@ export async function runAgent(r: AgentRun): Promise<AgentResult> {
   if (r.search) tools.push('WebSearch')
   if (r.fetch) tools.push('WebFetch')
   const web = tools.filter((t) => t.startsWith('Web'))
-  const sessionId = r.session ?? randomUUID()
+  const sessionId = r.session ?? r.id ?? randomUUID()
   const res = await runClaude({
     cwd: r.cwd,
     prompt: r.prompt,

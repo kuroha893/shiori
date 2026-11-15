@@ -5,7 +5,7 @@ import { plainText } from '../../../shared/tex'
 import { modelLabel, pickModel, type ServiceStatus } from '../../../shared/models'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
-import { CallLauncher, HeartButton, LaterButton, Menu, ThemeButton, type MenuItem } from './Chrome'
+import { CallLauncher, HeartButton, Kept, LaterButton, Menu, ThemeButton, type MenuItem } from './Chrome'
 import { StatusBlock } from './Quota'
 import { Conferences, LaterCard, useConfOverview, useLater } from './Conferences'
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
@@ -204,7 +204,7 @@ export function Library(props: {
         { label: '归入分类…', icon: 'folder', onClick: () => openFolderMenu(p, x, y) },
         ...(p.status === 'processing' || p.status === 'queued'
           ? [{ label: '取消处理', icon: 'stop', onClick: () => api.cancelPaper(p.id) }]
-          : [{ label: p.processedAt ? '重新处理' : '开始处理', icon: 'refresh', onClick: () => api.processPaper(p.id) }]),
+          : [{ label: p.processedAt || p.kept !== undefined ? '重新处理' : '开始处理', icon: 'refresh', onClick: () => api.processPaper(p.id, true) }]),
         { label: p.finished ? '标为未读完' : '标为已读完', icon: 'check', onClick: () => api.updatePaper(p.id, { finished: !p.finished }) },
         { label: p.laterAt ? '移出稍后再看' : '稍后再看', icon: 'bookmark', onClick: () => api.updatePaper(p.id, { laterAt: p.laterAt ? undefined : new Date().toISOString() }) },
         { label: '在 Finder 中显示', icon: 'folder', onClick: () => api.revealPaper(p.id) },
@@ -477,14 +477,25 @@ function PaperCard({
             ))}
           {busy && (
             <span className="pill busy">
-              <span className="dot" />
+              {p.status === 'queued' && p.kept !== undefined ? <Kept share={p.kept} bare /> : <span className="dot" />}
               {p.status === 'queued' ? '排队中' : `${Math.round((p.progress ?? 0) * 100)}%`}
             </span>
           )}
           {p.status === 'error' && (
             <span className="pill err" title={p.error}>
-              <span className="dot" />
-              处理失败
+              {p.kept !== undefined ? (
+                <Kept share={p.kept} />
+              ) : (
+                <>
+                  <span className="dot" />
+                  处理失败
+                </>
+              )}
+            </span>
+          )}
+          {p.status === 'new' && p.kept !== undefined && (
+            <span className="pill">
+              <Kept share={p.kept} />
             </span>
           )}
           {(p.status === 'new' || p.status === 'error') && (
@@ -496,7 +507,7 @@ function PaperCard({
               }}
             >
               <Icon name="play" size={12} />
-              {p.status === 'error' ? '重试' : '处理'}
+              {p.kept !== undefined ? '继续' : p.status === 'error' ? '重试' : '处理'}
             </button>
           )}
           <LaterButton paper={p} />
@@ -512,7 +523,7 @@ function PaperCard({
             <Icon name="more" />
           </button>
         </div>
-        {busy && (
+        {busy && !(p.status === 'queued' && p.kept !== undefined) && (
           <div className="paper-stage">
             <span className="faint">{p.stage}</span>
             <span className="bar">

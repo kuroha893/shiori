@@ -1,5 +1,6 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { PaperMeta } from '../shared/types'
 import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, updateMeta } from './library'
@@ -7,7 +8,7 @@ import { findFolder, loadFolders } from './folders'
 import { glossaryPrompt } from './glossary'
 import { modelFor, runAgent, type Activity } from './ai'
 import { parseModel } from '../shared/models'
-import { guidePrompt, processPrompt, verifyPrompt, type Source } from './prompts'
+import { carryOnNote, guidePrompt, processPrompt, resumePrompt, verifyPrompt, type Source } from './prompts'
 import { getSettings } from './settings'
 import { workerCall } from './worker'
 import { applyFoundVenue, awaitingVenue, checkVenue, isPreprint } from './venue'
@@ -23,8 +24,8 @@ export function initJobs(onChange: Notify): void {
   notify = onChange
   registerRunner('process', {
     run: processTask,
-    queued: (id) => set(id, { status: 'queued', stage: '等待处理', progress: 0, error: undefined }),
-    stopped: (id) => set(id, { status: 'queued', stage: '等待处理', progress: 0 }),
+    queued: (id) => set(id, { status: 'queued', stage: '等待处理', progress: 0, error: undefined, kept: keptOf(id) }),
+    stopped: (id) => set(id, { status: 'queued', stage: '等待处理', progress: 0, kept: keptOf(id) }),
     dropped: (id) => unqueue(id)
   })
   registerRunner('guide', {
@@ -44,6 +45,35 @@ export function pendingFromPapers(): { paper: string; kind: 'process' | 'guide' 
     else if (p.guideWriting) out.push({ paper: p.id, kind: 'guide' })
   }
   return out
+}
+
+/** The parts of the transcription on disk: doc/01.md, doc/02.md, ... */
+const docParts = (id: string): string[] => {
+  try {
+    return readdirSync(join(paperDir(id), 'doc'))
+      .filter((f) => /^\d+\.md$/.test(f))
+      .sort()
+      .map((f) => `doc/${f}`)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * What an unfinished run leaves to carry on from: its share of the work, when parts of the transcription are on
+ * disk. A finished paper being processed again keeps nothing; 重新处理 drops it beforehand.
+ */
+function keptOf(id: string): number | undefined {
+  const meta = readMeta(id)
+  if (!meta || meta.status === 'ready' || !docParts(id).length) return undefined
+  return meta.kept ?? meta.progress ?? 0.3
+}
+
+/** Process a paper from the start, dropping what an interrupted run left. */
+export function restart(id: string): void {
+  if (readMeta(id)?.kept !== undefined) set(id, { kept: undefined })
+  if (readMeta(id)?.status !== 'ready') for (const d of ['doc', 'figures']) rmSync(join(paperDir(id), d), { recursive: true, force: true })
+  enqueue(id)
 }
 
 function set(id: string, patch: Partial<PaperMeta>): void {
@@ -98,7 +128,7 @@ async function processTask(id: string, ctx: TaskContext): Promise<void> {
     await runJob(id, ctx.signal)
   } catch (e: any) {
     // Stopped or cancelled: whoever stopped it has set the paper's state.
-    if (!ctx.signal.aborted) set(id, { status: 'error', stage: undefined, error: String(e?.message || e) })
+    if (!ctx.signal.aborted) set(id, { status: 'error', stage: undefined, error: String(e?.message || e), kept: keptOf(id) })
     throw e
   } finally {
     current = undefined
@@ -146,35 +176,46 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
   const dir = paperDir(id)
   const model = await modelFor(getSettings().processModel, 'process')
   const source = sourceFor(model)
-  set(id, { status: 'processing', stage: '渲染页面', progress: 0.02, error: undefined })
+  const before = readMeta(id)
+  const parts = docParts(id)
+  // Carry on from an interrupted run, unless the model changed: one article in two hands reads oddly.
+  const resume = before?.kept !== undefined && parts.length > 0 && before.processModel === model
+  set(id, { status: 'processing', stage: '渲染页面', progress: resume ? before!.kept : 0.02, error: undefined, kept: undefined })
 
-  // Start clean: a previous run may have left partial output.
-  for (const d of ['doc', 'figures', 'pages']) rmSync(join(dir, d), { recursive: true, force: true })
-  for (const f of ['info.json', 'summary.md', 'paper.txt']) rmSync(join(dir, f), { force: true })
+  if (resume) rmSync(join(dir, 'figures'), { recursive: true, force: true })
+  else {
+    // Start clean: a previous run may have left partial output.
+    for (const d of ['doc', 'figures', 'pages']) rmSync(join(dir, d), { recursive: true, force: true })
+    for (const f of ['info.json', 'summary.md', 'paper.txt']) rmSync(join(dir, f), { force: true })
+  }
 
   const url = pdfUrl(id)
   const { pages } = await workerCall<{ pages: number }>('info', { url })
   mkdirSync(join(dir, 'pages'), { recursive: true })
   mkdirSync(join(dir, 'doc'), { recursive: true })
+  const page = (p: number) => join(dir, 'pages', `p${String(p).padStart(2, '0')}.png`)
   for (let p = 1; p <= pages; p++) {
     if (signal.aborted) throw new Error('已取消')
-    const png = await workerCall<Uint8Array>('render', { url, page: p, width: 1100, grid: true })
-    writeFileSync(join(dir, 'pages', `p${String(p).padStart(2, '0')}.png`), png)
+    if (resume && existsSync(page(p))) continue
+    writeFileSync(page(p), await workerCall<Uint8Array>('render', { url, page: p, width: 1100, grid: true }))
   }
-  writeFileSync(join(dir, 'paper.txt'), await workerCall<string>('text', { url }))
+  if (!existsSync(join(dir, 'paper.txt'))) writeFileSync(join(dir, 'paper.txt'), await workerCall<string>('text', { url }))
 
-  set(id, { pages, stage: '正在读论文', progress: 0.05, processSession: undefined, processModel: model })
+  set(id, { pages, stage: resume ? `正在转写和翻译（第 ${parts.length + 1} 部分）` : '正在读论文', progress: resume ? before!.kept : 0.05, processModel: model })
 
   // Progress: pages read count for the first ~30%, written doc parts for the rest.
   let pagesRead = 0
-  let partsWritten = 0
-  const written = new Set<string>()
+  let partsWritten = parts.length
+  const written = new Set<string>(parts.map((p) => join(dir, p)))
   const expectedParts = Math.max(3, Math.round(pages / 2.5))
   const readUpTo = (n: number) => {
     pagesRead = Math.min(pages, Math.max(pagesRead, n))
-    set(id, { stage: `正在读论文（${pagesRead}/${pages} 页）`, progress: 0.05 + 0.25 * (pagesRead / pages) })
+    // Carrying on, the bar stays where the last run left it while the paper is read again.
+    set(id, { stage: `正在读论文（${pagesRead}/${pages} 页）`, ...(resume ? {} : { progress: 0.05 + 0.25 * (pagesRead / pages) }) })
   }
   const onActivity = (a: Activity) => {
+    // A stopped run's last events would write over the state whoever stopped it set.
+    if (signal.aborted) return
     if (a.kind === 'read' && /paper\.pdf(#|$)/.test(a.path)) {
       const m = a.path.match(/#(\d+)\s*-\s*(\d+)/)
       readUpTo(m ? +m[2] : pages)
@@ -201,16 +242,21 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     set(id, { stage: '（开发模式）使用预置转写稿', progress: 0.85 })
     return finish(id, dir, [])
   }
-  const first = await runAgent({
-    cwd: dir,
-    prompt: processPrompt({ pages, glossary, source }),
-    model,
-    effort: getSettings().processEffort,
-    write: true,
-    keep: true,
-    onActivity,
-    signal
-  })
+  const viaCli = parseModel(model).provider !== 'openai'
+  const run = { cwd: dir, model, effort: getSettings().processEffort, write: true, keep: true, onActivity, signal }
+  let first: Awaited<ReturnType<typeof runAgent>> | undefined
+  // The same Claude Code session, which still has the paper in mind; ChatGPT's threads don't outlive the app.
+  // Only a session that is gone starts a new one; any other failure stops here with the progress kept.
+  if (resume && viaCli && before?.processSession) {
+    first = await runAgent({ ...run, prompt: resumePrompt(parts), session: before.processSession })
+    if (first.isError && /no conversation found/i.test(first.text)) first = undefined
+  }
+  if (!first) {
+    // Its id is kept from the start, so a run cut off halfway can be resumed.
+    const session = randomUUID()
+    if (viaCli) set(id, { processSession: session })
+    first = await runAgent({ ...run, prompt: processPrompt({ pages, glossary, source }) + (resume ? carryOnNote(parts) : ''), id: session })
+  }
   set(id, { processSession: first.session })
   if (first.isError) throw new Error(first.text || '处理失败')
   if (!parseDoc(readDocSource(id)).length) throw new Error('没有写出正文，可以重新处理试试')
@@ -254,7 +300,7 @@ async function finish(id: string, dir: string, figs: string[], verify?: () => Pr
       /* keep what we had */
     }
   }
-  set(id, { ...patch, status: 'ready', stage: undefined, progress: 1, processedAt: new Date().toISOString() })
+  set(id, { ...patch, status: 'ready', stage: undefined, progress: 1, kept: undefined, processedAt: new Date().toISOString() })
 }
 
 async function writeGuide(id: string, signal: AbortSignal): Promise<void> {

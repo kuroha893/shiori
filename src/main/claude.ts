@@ -315,6 +315,8 @@ export async function runClaude(opts: RunOptions): Promise<RunResult> {
     child.on('close', (code) => {
       opts.signal?.removeEventListener('abort', onAbort)
       if (opts.signal?.aborted) return rejectRun(new Error('已取消'))
+      // An error with nothing to say (no such session, for one) says it on stderr.
+      if (result?.isError && !result.text && err.trim()) result.text = err.trim().split('\n').slice(-3).join('\n')
       if (result) return resolveRun(result)
       rejectRun(new Error(err.trim().split('\n').slice(-3).join('\n') || `Claude Code 退出（代码 ${code}）`))
     })

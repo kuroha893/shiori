@@ -442,6 +442,20 @@ button {
 :root[data-theme='dark'] .pill.ok {
   color: hsl(150 50% 62%);
 }
+/* The share an interrupted run left, as a pie in the colour of what it sits in */
+.kept {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.kept-pie {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: conic-gradient(currentColor var(--share), color-mix(in srgb, currentColor 20%, transparent) 0);
+}
 .pill.busy {
   color: hsl(var(--primary));
 }

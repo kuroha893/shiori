@@ -3,6 +3,7 @@ import type { PaperMeta, Task, TaskKind, TaskList } from '../../../shared/types'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
 import { PaperText } from './PaperText'
+import { Kept } from './Chrome'
 
 /*
  * The owner's AI tasks, like a music player's queue: a button in the top bar with the running task's progress, and a
@@ -258,6 +259,11 @@ function TaskPanel(props: { list: TaskList; papers: PaperMeta[]; onDrag: (on: bo
   )
 
   const r = list.running
+  /** What an interrupted run of this paper left, to carry on from */
+  const kept = (t: Task) => {
+    const share = t.kind === 'process' ? byId.get(t.paper)?.kept : undefined
+    return share !== undefined ? <Kept share={share} /> : undefined
+  }
   const resume = list.paused && !r && list.queue.length > 0
   return (
     <div className="tq-pop">
@@ -319,7 +325,7 @@ function TaskPanel(props: { list: TaskList; papers: PaperMeta[]; onDrag: (on: bo
               {btn('top', '置顶', () => act({ type: 'top', key: t.key }))}
               {btn('x', '移除', () => act({ type: 'remove', key: t.key }))}
             </>,
-            undefined,
+            kept(t),
             true
           )
         )}
@@ -329,12 +335,15 @@ function TaskPanel(props: { list: TaskList; papers: PaperMeta[]; onDrag: (on: bo
             t,
             'err',
             <>
-              {btn('refresh', '重试', () => act({ type: 'retry', key: t.key }))}
+              {kept(t) ? btn('play', '继续', () => act({ type: 'retry', key: t.key })) : btn('refresh', '重试', () => act({ type: 'retry', key: t.key }))}
               {btn('x', '移除', () => act({ type: 'remove', key: t.key }))}
             </>,
-            <span className="tq-err" title={t.error}>
-              失败
-            </span>
+            <>
+              <span className="tq-err" title={t.error}>
+                失败
+              </span>
+              {kept(t)}
+            </>
           )
         )}
       </div>

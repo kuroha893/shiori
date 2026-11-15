@@ -29,6 +29,8 @@ export interface PaperMeta {
   error?: string
   /** Claude session used for transcription and translation */
   processSession?: string
+  /** An interrupted run left this share of the work (doc parts) to carry on from; 重新处理 drops it */
+  kept?: number
   processedAt?: string
   processModel?: string
   /** A guide is being written in the background */

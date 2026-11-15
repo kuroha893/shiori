@@ -35,7 +35,7 @@ const api = {
   importFiles: (files: File[]) => ipcRenderer.invoke('papers:importPaths', files.map((f) => webUtils.getPathForFile(f))),
   importArxiv: (input: string) => ipcRenderer.invoke('papers:importArxiv', input),
   updatePaper: (id: string, patch: Partial<PaperMeta>) => ipcRenderer.invoke('papers:update', id, patch),
-  processPaper: (id: string) => ipcRenderer.invoke('papers:process', id),
+  processPaper: (id: string, fresh?: boolean) => ipcRenderer.invoke('papers:process', id, fresh),
   writeGuide: (id: string) => ipcRenderer.invoke('papers:guide', id),
   findVenue: (id: string): Promise<{ changed: boolean; meta?: PaperMeta }> => ipcRenderer.invoke('papers:findVenue', id),
   cancelPaper: (id: string) => ipcRenderer.invoke('papers:cancel', id),
