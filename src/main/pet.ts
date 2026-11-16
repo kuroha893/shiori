@@ -98,6 +98,15 @@ export function closePet(): void {
 
 export const petBounds = () => win?.getBounds()
 
+/** Call this contact, hanging up on anyone else first; nothing changes if they are already on the line. */
+export function callWith(id: string): void {
+  if (contact === id) return
+  closePet()
+  contact = id
+  syncPet()
+  notify(petState())
+}
+
 /** Stays above every other app's windows, on every Space, and over full-screen apps too. */
 export function keepOnTop(w: BrowserWindow): void {
   w.setAlwaysOnTop(true, 'floating')

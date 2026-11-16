@@ -43,6 +43,8 @@ interface Props {
   ready: boolean
   onOpenPaper: (id: string) => void
   toast: Toast
+  /** An edition to open on, as when one of her notes leads here */
+  start?: { conf: string; year: number }
 }
 
 type View = { kind: 'home' } | { kind: 'edition'; conf: string; year: number }
@@ -50,7 +52,7 @@ type View = { kind: 'home' } | { kind: 'edition'; conf: string; year: number }
 /** Renders the sidebar (inside an edition) and the main area. */
 export function Conferences(props: Props) {
   const { overview } = props
-  const [view, setView] = useState<View>({ kind: 'home' })
+  const [view, setView] = useState<View>(props.start ? { kind: 'edition', ...props.start } : { kind: 'home' })
 
   useEffect(() => {
     if (overview && !overview.started) api.confStart()

@@ -1,0 +1,1262 @@
+/* ---------- 小窝 ---------- */
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: hsl(var(--background));
+}
+
+/* the top bar floats over the wallpaper, its buttons on glass */
+.lib.in-room .topbar {
+  background: transparent;
+}
+.lib.in-room .topbar-actions > .sp,
+.lib.in-room .topbar-actions > .icon-btn {
+  background: hsl(var(--background) / 0.55);
+  border-color: hsl(var(--border) / 0.7);
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+
+.room-wall {
+  position: absolute;
+  inset: -60px;
+  background-size: cover;
+  background-position: center;
+  transition: filter 0.6s ease;
+  pointer-events: none;
+}
+.room-wall.plain {
+  background: linear-gradient(160deg, hsl(36 40% 94%), hsl(205 30% 90%));
+}
+:root[data-theme='dark'] .room-wall.plain {
+  background: linear-gradient(160deg, hsl(240 6% 12%), hsl(220 12% 18%));
+}
+:root[data-theme='sepia'] .room-wall.plain {
+  background: linear-gradient(160deg, hsl(40 40% 92%), hsl(30 30% 86%));
+}
+.room.focus .room-wall {
+  filter: blur(28px) saturate(1.1);
+}
+
+/* ink that reads on whatever is behind it */
+.on-dark {
+  --ink: #fff;
+  --ink-shadow: 0 1px 2px hsl(0 0% 0% / 0.45), 0 2px 18px hsl(0 0% 0% / 0.4);
+}
+.on-light {
+  --ink: hsl(30 14% 13%);
+  --ink-shadow: 0 1px 2px hsl(0 0% 100% / 0.5), 0 2px 18px hsl(0 0% 100% / 0.6);
+}
+.room-wall.plain ~ .room-clock {
+  --ink: hsl(var(--foreground));
+  --ink-shadow: none;
+}
+
+.room-clock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 11%;
+  text-align: center;
+  color: var(--ink);
+  text-shadow: var(--ink-shadow);
+  pointer-events: none;
+  transition: opacity 0.5s, color 0.4s;
+}
+.room-clock .hm {
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 72px;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.room-clock .d {
+  margin-top: 10px;
+  font-size: 15px;
+  opacity: 0.92;
+}
+.room.focus .room-clock {
+  opacity: 0;
+}
+
+/* ---------- what is playing ---------- */
+
+.room-player {
+  position: absolute;
+  left: 50%;
+  top: calc(11% + 116px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 340px;
+  height: 60px;
+  padding: 0 10px 0 9px;
+  border-radius: 18px;
+  background: hsl(var(--background) / 0.55);
+  border: 1px solid hsl(var(--border) / 0.6);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: 0 14px 34px -20px hsl(30 30% 15% / 0.5);
+  overflow: hidden;
+  transform: translateX(-50%);
+  transition: top 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.room-player.docked {
+  top: calc(100% - 82px);
+}
+.room-player button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+.room-player .art {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  box-shadow: 0 3px 10px -3px hsl(0 0% 0% / 0.35);
+}
+.room-player .art img {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  transition: transform 0.2s;
+}
+.room-player .art:hover img:not(.app) {
+  transform: scale(1.05);
+}
+.room-player .art .app {
+  position: absolute;
+  z-index: 1;
+  right: -5px;
+  bottom: -5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  filter: drop-shadow(0 1px 2px hsl(0 0% 0% / 0.3));
+}
+.room-player .art svg {
+  width: 18px;
+  height: 18px;
+}
+.room-player .meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.room-player .title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 500;
+}
+.room-player .name,
+.room-player .artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.room-player .artist {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: hsl(var(--faint-foreground));
+}
+.room-player .eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+  flex: none;
+}
+.room-player .eq i {
+  width: 2.5px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--np, hsl(var(--primary)));
+  transform-origin: bottom;
+  animation: room-eq 1s ease-in-out infinite;
+}
+.room-player .eq i:nth-child(2) {
+  animation-delay: -0.35s;
+}
+.room-player .eq i:nth-child(3) {
+  animation-delay: -0.7s;
+}
+@keyframes room-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.room-player.paused .eq i {
+  animation: none;
+  transform: scaleY(0.3);
+}
+.room-player .ctl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.room-player .ctl button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.room-player .ctl button:hover {
+  background: hsl(var(--accent) / 0.8);
+}
+.room-player .ctl svg {
+  width: 17px;
+  height: 17px;
+}
+.room-player .ctl .pp svg {
+  width: 20px;
+  height: 20px;
+}
+.room-player .prog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: hsl(var(--border) / 0.5);
+}
+.room-player .prog i {
+  display: block;
+  height: 100%;
+  background: var(--np, hsl(var(--primary)));
+  opacity: 0.75;
+}
+
+/* ---------- drawers ---------- */
+
+.room-drawer {
+  position: absolute;
+  top: 70px;
+  z-index: 10;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.room-drawer.dragging {
+  transition: none;
+}
+.room-drawer.left {
+  left: 20px;
+  width: 440px;
+}
+.room-drawer.right {
+  right: 20px;
+  width: 360px;
+}
+.room-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: min(360px, calc(100vh - 160px));
+  max-height: calc(100vh - 160px);
+  padding: 16px;
+  border-radius: 22px;
+  background: hsl(var(--background) / 0.5);
+  border: 1px solid hsl(0 0% 100% / 0.55);
+  backdrop-filter: blur(26px) saturate(1.3);
+  box-shadow: 0 24px 60px -30px hsl(30 30% 15% / 0.45);
+  overflow: hidden;
+}
+.room-drawer:not([data-state='open']) .room-body {
+  cursor: grab;
+}
+.room-scroll {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  animation: room-page 0.28s ease;
+  transition: opacity 0.3s;
+}
+.room-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: hsl(var(--faint-foreground));
+}
+@keyframes room-page {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.room-drawer:not([data-state='open']) .room-scroll {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.room-grip {
+  display: none;
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 4px;
+  background: hsl(var(--foreground) / 0.18);
+}
+.room-drawer.left .room-grip {
+  right: 6px;
+}
+.room-drawer.right .room-grip {
+  left: 6px;
+}
+
+:root[data-theme='dark'] .room-body,
+:root[data-theme='dark'] .room-mark {
+  border-color: hsl(0 0% 100% / 0.12);
+}
+
+/* bookmarks sticking out of the inner edge; closed, they are all that shows */
+.room-marks {
+  position: absolute;
+  top: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.room-drawer.left .room-marks {
+  left: 100%;
+  margin-left: -1px;
+}
+.room-drawer.right .room-marks {
+  right: 100%;
+  margin-right: -1px;
+  align-items: flex-end;
+}
+.room-mark {
+  position: relative;
+  width: 30px;
+  height: 62px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid hsl(0 0% 100% / 0.55);
+  background: hsl(var(--background) / 0.62);
+  backdrop-filter: blur(20px);
+  color: hsl(var(--faint-foreground));
+  cursor: default;
+  transition: width 0.2s, background 0.2s, color 0.2s;
+}
+.room-drawer.left .room-mark {
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+}
+.room-drawer.right .room-mark {
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+}
+.room-mark:hover {
+  width: 36px;
+  color: hsl(var(--foreground));
+}
+.room-mark.on {
+  background: hsl(var(--background) / 0.5);
+  color: hsl(var(--foreground));
+}
+.room-mark .contact-avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+.room-mark.her.on::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: 10px 0 0 10px;
+  background: hsl(352 62% 52%);
+}
+.room-dot {
+  position: absolute;
+  top: 7px;
+  left: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(352 62% 52%);
+  box-shadow: 0 0 0 2px hsl(var(--background));
+}
+.room-mark .room-typing {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.7);
+}
+
+/* three dots, as when she is thinking on a call */
+.room-typing {
+  display: inline-flex;
+  gap: 3px;
+}
+.room-typing i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+  animation: room-dots 1.2s ease-in-out infinite;
+}
+.room-typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.room-typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes room-dots {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 0.9;
+  }
+}
+
+/* ---------- cards ---------- */
+
+.room-card {
+  flex: none;
+  border-radius: 16px;
+  background: hsl(var(--card) / 0.66);
+  border: 1px solid hsl(var(--border) / 0.5);
+  box-shadow: 0 1px 2px hsl(30 20% 20% / 0.05), 0 18px 40px -24px hsl(30 30% 20% / 0.28);
+}
+.room-card .thumb {
+  display: block;
+  background: hsl(var(--muted));
+}
+
+.room-reading {
+  display: flex;
+  gap: 16px;
+  padding: 14px;
+  cursor: default;
+}
+.room-reading img,
+.room-reading .thumb {
+  flex: none;
+  width: 80px;
+  height: 104px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 14px -4px hsl(0 0% 0% / 0.25);
+}
+.room-reading .t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.room-reading .zh {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.room-reading .en {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: hsl(var(--faint-foreground));
+}
+.room-reading .bar {
+  margin-top: auto;
+  height: 3px;
+  border-radius: 3px;
+  background: hsl(var(--border));
+  overflow: hidden;
+}
+.room-reading .bar i {
+  display: block;
+  height: 100%;
+  background: hsl(var(--primary));
+}
+.room-reading .go {
+  align-self: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+
+.room-quote {
+  padding: 20px 22px 16px;
+  cursor: default;
+}
+.room-quote p {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 16.5px;
+  line-height: 1.85;
+}
+.room-quote .src {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: hsl(var(--faint-foreground));
+}
+
+.room-shelf {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 14px;
+}
+.room-shelf .p {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: default;
+}
+.room-shelf .p img,
+.room-shelf .p .thumb {
+  width: 100%;
+  aspect-ratio: 64 / 82;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 3px 10px -4px hsl(0 0% 0% / 0.3);
+}
+.room-shelf .p span {
+  display: -webkit-box;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: hsl(var(--muted-foreground));
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* journal: stamps for the days studied, a ring for days only read */
+.room-month {
+  padding: 12px 14px 12px;
+}
+.room-month .mh {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 0 8px;
+}
+.room-month .mh b {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+.room-month .mh .sum {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: hsl(var(--faint-foreground));
+  white-space: pre;
+}
+.room-month .cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.room-month .cal i {
+  font-style: normal;
+  font-size: 11px;
+  color: hsl(var(--faint-foreground));
+  text-align: center;
+  padding-bottom: 2px;
+}
+.room-month .cal button {
+  position: relative;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+.room-month .cal button:disabled {
+  opacity: 0.4;
+}
+.room-month .cal button:not(:disabled):hover {
+  background: hsl(var(--background) / 0.5);
+}
+.room-month .cal button span {
+  position: relative;
+}
+.room-month .cal .stamp {
+  color: #fff;
+}
+.room-month .cal .stamp::before,
+.room-month .cal .read::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+}
+.room-month .cal .stamp::before {
+  background: hsl(352 62% 52%);
+  opacity: var(--a);
+  transform: rotate(var(--r));
+  box-shadow: inset 0 0 0 2px hsl(0 0% 100% / 0.35);
+}
+.room-month .cal .read::before {
+  border: 1.5px solid hsl(352 62% 52% / 0.55);
+}
+.room-month .cal .today span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.room-month .cal .sel {
+  background: hsl(var(--background) / 0.7);
+  box-shadow: inset 0 0 0 1.5px hsl(var(--foreground));
+}
+.room-month .cal .new::before {
+  animation: room-stamp 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes room-stamp {
+  from {
+    transform: scale(1.8) rotate(var(--r));
+    opacity: 0;
+  }
+}
+
+.room-day {
+  padding: 14px 16px 12px;
+}
+.room-day .jd {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.room-day .jd span {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: hsl(var(--faint-foreground));
+}
+.room-day .jd em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(352 62% 52%);
+}
+.room-day .jpaper + .jpaper {
+  margin-top: 12px;
+}
+.room-day .jp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.room-day .jp img,
+.room-day .jp .thumb {
+  flex: none;
+  width: 30px;
+  height: 39px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 2px 6px -2px hsl(0 0% 0% / 0.3);
+}
+.room-day .jp span {
+  font-size: 14px;
+  font-weight: 500;
+}
+.room-day .jq {
+  margin: 6px 0 0 40px;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid hsl(var(--border));
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+.room-day .jq.h {
+  font-family: var(--font-serif);
+  color: hsl(var(--foreground));
+  border-left-color: hsl(48 95% 58%);
+}
+.room-day .jq.q::before {
+  content: '问';
+  margin-right: 8px;
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+}
+.room-day .jmore {
+  margin: 6px 0 0 40px;
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+}
+
+/* her notes, tinted with her colour */
+.room-day-label {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+  text-align: center;
+}
+.room-note {
+  padding: 13px 15px 11px;
+  border-radius: 4px 16px 16px 16px;
+  background: hsl(var(--hue, 350) 60% 98% / 0.85);
+  border: 1px solid hsl(var(--hue, 350) 50% 90% / 0.9);
+  box-shadow: 0 10px 24px -18px hsl(var(--hue, 350) 40% 30% / 0.45);
+  transition: opacity 0.4s;
+}
+:root[data-theme='dark'] .room-note {
+  background: hsl(var(--hue, 350) 14% 16% / 0.85);
+  border-color: hsl(var(--hue, 350) 14% 24% / 0.9);
+}
+.room-note.day {
+  background: hsl(40 60% 98% / 0.82);
+  border-color: hsl(40 50% 90% / 0.9);
+}
+:root[data-theme='dark'] .room-note.day {
+  background: hsl(40 10% 16% / 0.85);
+  border-color: hsl(40 10% 24% / 0.9);
+}
+.room-note.read {
+  opacity: 0.62;
+}
+.room-note.writing {
+  align-self: flex-start;
+  padding: 12px 16px;
+  color: hsl(var(--muted-foreground));
+}
+.room-note .o {
+  margin-bottom: 4px;
+  font-family: 'Hiragino Sans', var(--font-ui);
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+}
+.room-note .z {
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+.room-note .foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.room-note .when {
+  margin-right: auto;
+  font-size: 12px;
+  color: hsl(var(--faint-foreground));
+}
+.room-note .act {
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font: 500 12.5px var(--font-ui);
+  cursor: default;
+}
+.room-note .act:hover {
+  background: hsl(var(--accent));
+}
+.room-note-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* studying together; a break turns the ring green */
+.room-timer .ph {
+  font: 500 12.5px 'Outfit Variable', var(--font-ui);
+  letter-spacing: 0.08em;
+  color: hsl(var(--faint-foreground));
+}
+.room-timer .rounds {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.room-timer .rounds i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--border));
+}
+.room-timer .rounds .done {
+  background: hsl(352 62% 52% / 0.45);
+}
+.room-timer .rounds .now {
+  background: hsl(352 62% 52%);
+}
+.room-timer.rest .arc,
+.st-btn.rest .fg {
+  stroke: hsl(158 42% 44%);
+}
+.room-timer.rest .rounds .now {
+  background: hsl(158 42% 44%);
+}
+.room-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 18px 20px;
+}
+.room-timer .dial {
+  position: relative;
+  width: 184px;
+  height: 184px;
+}
+.room-timer .dial svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.room-timer .dial circle {
+  fill: none;
+  stroke-width: 3;
+}
+.room-timer .track {
+  stroke: hsl(var(--border));
+}
+.room-timer .arc {
+  stroke: hsl(352 62% 52%);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s linear;
+}
+.room-timer .t {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 44px;
+  font-weight: 250;
+  font-variant-numeric: tabular-nums;
+}
+.room-timer .plan {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font: 500 13px 'Outfit Variable', var(--font-ui);
+}
+.room-timer .plan .op {
+  color: hsl(var(--faint-foreground));
+}
+.room-timer .plan .n {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  min-width: 38px;
+  height: 28px;
+  padding: 0 10px;
+  line-height: 28px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background) / 0.55);
+  color: hsl(var(--foreground));
+  cursor: text;
+}
+.room-timer .plan .n:focus-within {
+  border-color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  box-shadow: 0 0 0 3px hsl(var(--foreground) / 0.08);
+}
+.room-timer .plan input {
+  width: auto;
+  min-width: 1ch;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  field-sizing: content;
+}
+.room-timer .plan small {
+  font-size: 11px;
+  color: hsl(var(--faint-foreground));
+}
+.room-timer .plan.quiet .n {
+  min-width: 0;
+  padding: 0 2px;
+  border-color: transparent;
+  background: none;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+.room-timer .go-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.room-timer .start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font: 500 15px var(--font-ui);
+  cursor: default;
+}
+.room-timer .stop {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background) / 0.55);
+  color: hsl(var(--foreground));
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+.room-timer .with {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  cursor: default;
+}
+.room-timer .with.on {
+  opacity: 1;
+}
+.room-timer .with .contact-avatar {
+  width: 42px;
+  height: 42px;
+}
+.room-timer .with::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid hsl(var(--background));
+  background: hsl(146 55% 44%)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h3.5l1.6 4.2-2.2 1.4a11 11 0 0 0 6.5 6.5l1.4-2.2L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z'/%3E%3C/svg%3E")
+    center / 10px no-repeat;
+}
+
+/* ---------- the study timer in the top bar ---------- */
+
+.st {
+  position: relative;
+}
+.st-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px 0 5px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: default;
+}
+.st-btn:hover,
+.st-btn.on {
+  background: hsl(var(--accent));
+}
+.st-ring {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+.st-ring > svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+/* an alarm clock while focusing, a cup in the breaks, pause when paused */
+.st-ic {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: hsl(var(--muted-foreground));
+}
+.st-ic svg {
+  display: block;
+}
+.st-ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+.st-ring .bg {
+  stroke: hsl(var(--border));
+}
+.st-ring .fg {
+  stroke: hsl(352 62% 52%);
+  stroke-linecap: round;
+}
+.st-btn.paused .fg {
+  stroke: hsl(var(--faint-foreground));
+}
+.st-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: var(--shadow-pop);
+  animation: popIn 0.14s ease-out both;
+}
+.sp .st {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.sp .st-btn {
+  height: 100%;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+}
+.sp .st + .tq::before {
+  content: '';
+  width: 1px;
+  height: 16px;
+  background: hsl(var(--border));
+}
+
+/* Settings: the wallpaper's preview */
+.set-wallpaper {
+  width: 64px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border));
+}
+.room-reading .zh,
+.room-reading .en {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.room-reading .zh {
+  -webkit-line-clamp: 3;
+}
+.room-reading .en {
+  -webkit-line-clamp: 2;
+  margin-bottom: 10px;
+}
+
+/* ---------- 小窝's wallpaper on the other pages (Settings › 壁纸 › 用在) ---------- */
+
+html.walled {
+  background: hsl(var(--background));
+}
+html.walled body {
+  background: transparent;
+}
+.app-wall {
+  position: fixed;
+  inset: -60px;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+/* the theme's own colour laid over it, thicker where there is a paper to read */
+.app-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: hsl(var(--background) / 0.45);
+  pointer-events: none;
+}
+html.walled-reading .app-veil {
+  background: hsl(var(--background) / 0.72);
+}
+/* sidebars and bars turn to glass, cards to frosted cards */
+html.walled .lib-side,
+html.walled .brand {
+  background: hsl(var(--background) / 0.4);
+  backdrop-filter: blur(20px) saturate(1.2);
+}
+html.walled .brand {
+  background: transparent;
+  backdrop-filter: none;
+}
+html.walled .reader-bar {
+  background: hsl(var(--background) / 0.55);
+  backdrop-filter: blur(20px) saturate(1.2);
+}
+html.walled .card {
+  background: hsl(var(--card) / 0.7);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+html.walled .side {
+  background: hsl(var(--card) / 0.78);
+  backdrop-filter: blur(20px) saturate(1.2);
+}
+html.walled .composer {
+  background: transparent;
+}
+
+/* ---------- what is playing, in the top bar's status block outside the room ---------- */
+
+.sp .np-seg {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.sp .np-seg + .st::before,
+.sp .np-seg + .tq::before,
+.sp .np-seg + .qb::before {
+  content: '';
+  width: 1px;
+  height: 16px;
+  background: hsl(var(--border));
+}
+.np-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  padding: 0 9px 0 6px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+}
+.np-btn:hover,
+.np-btn.on {
+  background: hsl(var(--accent));
+}
+.np-btn img,
+.np-btn .np-blank {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: cover;
+  box-shadow: 0 1px 4px -1px hsl(0 0% 0% / 0.35);
+}
+.np-btn .np-blank {
+  display: grid;
+  place-items: center;
+  background: hsl(var(--muted));
+}
+.np-btn .eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+}
+.np-btn .eq i {
+  width: 2.5px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--np, hsl(var(--primary)));
+  transform-origin: bottom;
+  animation: room-eq 1s ease-in-out infinite;
+}
+.np-btn .eq i:nth-child(2) {
+  animation-delay: -0.35s;
+}
+.np-btn .eq i:nth-child(3) {
+  animation-delay: -0.7s;
+}
+.np-btn.paused .eq i {
+  animation: none;
+  transform: scaleY(0.3);
+  background: hsl(var(--faint-foreground));
+}
+.np-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  animation: popIn 0.14s ease-out both;
+  transform-origin: top right;
+}
+.np-pop .room-player {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  background: hsl(var(--popover) / 0.72);
+  box-shadow: var(--shadow-pop);
+}

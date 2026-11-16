@@ -20,6 +20,8 @@ import { checkFishKey, endCall, initCall, placeCall, startCall, watchPaper } fro
 import { contactAsset, initContacts } from './contacts'
 import { initConferences, markFile } from './conferences'
 import { initOpenReview } from './openreview'
+import { initRoom, roomPaper, wallpaperFile } from './room'
+import { initNowPlaying } from './nowplaying'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
 if (process.env.SHIORI_USER_DATA) app.setPath('userData', process.env.SHIORI_USER_DATA)
@@ -77,6 +79,7 @@ const send = (channel: string, payload: unknown) => main?.webContents.send(chann
 const paperChanged = (meta: PaperMeta) => {
   send('paper:changed', meta)
   watchPaper(meta)
+  roomPaper(meta)
 }
 const foldersChanged = () => send('folders:changed', loadFolders())
 /** The task list of the library now in use */
@@ -210,13 +213,23 @@ function registerIpc(): void {
 app.whenReady().then(() => {
   app.setName('Shiori')
   // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://contact/<id>/<path> a contact's picture and character;
-  // shiori://conf/<id>/mark a conference's downloaded mark.
+  // shiori://conf/<id>/mark a conference's downloaded mark; shiori://room/wallpaper the wallpaper of 小窝.
   protocol.handle('shiori', (req) => {
     const u = new URL(req.url)
     if (u.host === 'contact') {
       const [id, ...rest] = u.pathname.slice(1).split('/').map(decodeURIComponent)
       const file = contactAsset(id, rest.join('/'))
       return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
+    }
+    if (u.host === 'room') {
+      const file = u.pathname === '/wallpaper' && wallpaperFile()
+      if (!file) return new Response('not found', { status: 404 })
+      // The room reads the picture's brightness from a canvas, which needs it marked as shareable.
+      return net.fetch(pathToFileURL(file).toString()).then((res) => {
+        const headers = new Headers(res.headers)
+        headers.set('Access-Control-Allow-Origin', '*')
+        return new Response(res.body, { status: res.status, headers })
+      })
     }
     if (u.host === 'conf') {
       const file = markFile(decodeURIComponent(u.pathname.slice(1).split('/')[0]))
@@ -257,6 +270,8 @@ app.whenReady().then(() => {
   reloadTasks()
   initOpenReview({ send, window: () => main })
   initConferences({ send, paperChanged })
+  initRoom({ send, window: () => main })
+  initNowPlaying()
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().some((w) => w.isVisible())) createWindow()

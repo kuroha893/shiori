@@ -5,6 +5,7 @@ import { api } from '../api'
 import { Icon } from './Icon'
 import { ServiceLogo } from './ServiceLogo'
 import { TaskButton } from './Tasks'
+import { clockOf, playerHue, PlayerCapsule, useLeft, usePlayer, useStudy } from './Room'
 
 /*
  * The status block in the top bar: the owner's tasks on the left, what is left of the AI allowance on the right.
@@ -12,11 +13,122 @@ import { TaskButton } from './Tasks'
  * runs on more than one); amber at 25% or less, red at 10% or less. Opened, every connected service with its windows.
  */
 
-export function StatusBlock({ papers }: { papers: PaperMeta[] }) {
+export function StatusBlock({ papers, music = true }: { papers: PaperMeta[]; music?: boolean }) {
   return (
     <div className="sp no-drag">
+      {music && <MusicButton />}
+      <StudyButton />
       <TaskButton papers={papers} />
       <QuotaButton />
+    </div>
+  )
+}
+
+/** What is playing, outside the room: a small cover and level bars; opened, the room's capsule. Hidden when nothing plays. */
+function MusicButton() {
+  const p = usePlayer()
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!p.np) setOpen(false)
+  }, [!!p.np])
+  useEffect(() => {
+    if (!open) return
+    const down = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
+  if (!p.np) return null
+  return (
+    <div className="np-seg" ref={box}>
+      <button className={`np-btn ${open ? 'on' : ''} ${p.np.playing ? '' : 'paused'}`} style={playerHue(p.np)} title={p.np.title} onClick={() => setOpen((v) => !v)}>
+        {p.cover ? (
+          <img src={p.cover} alt="" draggable={false} />
+        ) : (
+          <span className="np-blank">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V6l10-2v12" />
+              <circle cx="6.5" cy="18" r="2.5" />
+              <circle cx="16.5" cy="16" r="2.5" />
+            </svg>
+          </span>
+        )}
+        <span className="eq">
+          <i />
+          <i />
+          <i />
+        </span>
+      </button>
+      {open && (
+        <div className="np-pop">
+          <PlayerCapsule p={p} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** While the study timer runs, wherever the owner is: its ring and time left; open, pause or end it. */
+function StudyButton() {
+  const s = useStudy()
+  const left = useLeft(s)
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!s) setOpen(false)
+  }, [!!s])
+  useEffect(() => {
+    if (!open) return
+    const down = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
+  if (!s || left === undefined) return null
+  const r = 9.5
+  const c = 2 * Math.PI * r
+  const share = 1 - left / (s.minutes * 60_000)
+  return (
+    <div className="st" ref={box}>
+      <button className={`st-btn ${open ? 'on' : ''} ${s.endsAt ? '' : 'paused'} ${s.phase === 'rest' ? 'rest' : ''}`} title={s.phase === 'rest' ? '休息' : '专注'} onClick={() => setOpen((v) => !v)}>
+        <span className="st-ring">
+          <svg viewBox="0 0 22 22" width="22" height="22">
+            <circle className="bg" cx="11" cy="11" r={r} />
+            <circle className="fg" cx="11" cy="11" r={r} strokeDasharray={`${c * share} ${c}`} />
+          </svg>
+          <span className="st-ic">
+            {!s.endsAt ? (
+              <Icon name="pause" size={9} />
+            ) : s.phase === 'rest' ? (
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z" />
+                <path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3v2M12 3v2" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="13" r="7" />
+                <path d="M12 10v3l2 1.5M5 4 2.5 6.5M19 4l2.5 2.5" />
+              </svg>
+            )}
+          </span>
+        </span>
+        <span>{clockOf(left)}</span>
+      </button>
+      {open && (
+        <div className="st-pop">
+          <button className="btn sm" onClick={() => (s.endsAt ? api.studyPause() : api.studyResume())}>
+            <Icon name={s.endsAt ? 'pause' : 'play'} size={12} />
+            {s.endsAt ? '暂停' : '继续'}
+          </button>
+          <button className="btn sm" onClick={() => api.studyStop()}>
+            <Icon name="stop" size={12} />
+            结束
+          </button>
+        </div>
+      )}
     </div>
   )
 }

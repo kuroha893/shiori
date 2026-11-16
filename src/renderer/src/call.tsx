@@ -212,6 +212,7 @@ function Call() {
         stop()
         tone([880, 660])
       }),
+      bridge.onMoodSet(setMood),
       bridge.onLine((line) => {
         queue.current.push(line)
         if (!playing.current) playNext()

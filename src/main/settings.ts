@@ -26,7 +26,9 @@ const defaults: Settings = {
   petShown: false,
   fishKey: '',
   fishModel: 's2.1-pro',
-  view: 'zh'
+  view: 'zh',
+  wallpaperUse: 'room',
+  wallpaperBlur: 24
 }
 
 const file = () => join(app.getPath('userData'), 'settings.json')

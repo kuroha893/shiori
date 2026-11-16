@@ -247,8 +247,14 @@ export interface Settings {
   petPosition?: { x: number; y: number }
   petScale?: number
   view: 'zh' | 'en' | 'both'
+  /** Where 小窝's wallpaper also shows: only the room, also 书库 and 会议, or everywhere including the reader */
+  wallpaperUse: 'room' | 'pages' | 'all'
+  /** How blurred the wallpaper is outside the room, in px */
+  wallpaperBlur: number
   /** Whether the welcome page has been through, or skipped */
   welcomed?: boolean
+  /** The contact last called, who leaves notes in 小窝 */
+  roomContact?: string
 }
 
 export interface PetState {
@@ -274,4 +280,99 @@ export type ChatEvent =
 export interface OpenReviewAccount {
   /** Its email or profile id, as OpenReview gives it */
   name: string
+}
+
+/* ---------- 小窝 ---------- */
+
+/** Where a note of hers leads */
+export type RoomLink = { kind: 'paper'; paper: string } | { kind: 'edition'; conf: string; year: number } | { kind: 'later' }
+
+/** Something that happened while no call was open, waiting for her to write it down */
+export interface RoomFact {
+  at: string
+  text: string
+  links: RoomLink[]
+}
+
+/** A note she left in the room */
+export interface RoomNote {
+  id: string
+  /** When what it tells happened; for a note about her day, when she wrote it */
+  at: string
+  kind: 'news' | 'day'
+  /** Her words in her own language, when that isn't Chinese */
+  say?: string
+  zh: string
+  links: RoomLink[]
+  read?: boolean
+}
+
+export interface RoomView {
+  /** Who leaves notes: the contact last called */
+  contact?: string
+  notes: RoomNote[]
+  /** She is writing notes right now */
+  writing: boolean
+  /** shiori:// address of the owner's wallpaper, versioned */
+  wallpaper?: string
+  /** The paper being read: the one opened last that isn't finished */
+  reading?: string
+  /** A passage the owner highlighted some day, a different one each day */
+  quote?: { text: string; paper: string }
+}
+
+/** A study timer, kept by the main process so it runs on whatever page is open */
+/** Focus, then a break, so many times over; minutes */
+export interface StudyPlan {
+  focus: number
+  rest: number
+  rounds: number
+}
+
+export interface StudyState {
+  plan: StudyPlan
+  /** Which round, from 1 */
+  round: number
+  phase: 'focus' | 'rest'
+  /** Length of the phase now running, in minutes */
+  minutes: number
+  /** When this phase ends, while running */
+  endsAt?: number
+  /** Milliseconds left in this phase, while paused */
+  left?: number
+  /** Who is on the call for it */
+  with?: string
+}
+
+export interface JournalPaper {
+  id: string
+  title: string
+  questions: string[]
+  highlights: string[]
+}
+
+export interface JournalDay {
+  /** YYYY-MM-DD, local */
+  date: string
+  /** Minutes studied with the timer */
+  minutes: number
+  papers: JournalPaper[]
+}
+
+/** What macOS says is playing */
+export interface NowPlaying {
+  /** The player's bundle id */
+  app: string
+  appName?: string
+  playing: boolean
+  title: string
+  artist?: string
+  album?: string
+  /** Seconds */
+  duration?: number
+  /** Seconds, as of `at` */
+  elapsed?: number
+  at: number
+  /** A data: URL; sent with a new song only, null when the song has none */
+  cover?: string | null
 }

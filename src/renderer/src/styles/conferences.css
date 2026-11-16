@@ -1,4 +1,4 @@
-/* ---------- 书库 / 会议 switch ---------- */
+/* ---------- 书库 / 会议 switch, on frosted glass like the room's panels ---------- */
 
 /* It waits above the top bar; a faint handle shows where, and turns blue when there are new conference papers. */
 .space-zone {
@@ -35,8 +35,11 @@
   left: 50%;
   top: 13px;
   z-index: 2;
-  background: hsl(var(--popover));
-  box-shadow: var(--shadow-pop);
+  border-color: hsl(0 0% 100% / 0.55);
+  border-radius: 12px;
+  background: hsl(var(--background) / 0.5);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: 0 14px 34px -20px hsl(30 30% 15% / 0.5);
   opacity: 0;
   transform: translate(-50%, -62px);
   transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s;
@@ -48,7 +51,28 @@
 .space-switch button {
   min-width: 64px;
   height: 28px;
+  border-radius: 9px;
   font-size: 13px;
+}
+.space-switch button.fresh {
+  position: relative;
+}
+.space-switch button.fresh::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+}
+.space-switch button.on {
+  background: hsl(var(--background) / 0.85);
+  box-shadow: 0 1px 3px hsl(0 0% 0% / 0.08);
+}
+:root[data-theme='dark'] .space-switch {
+  border-color: hsl(0 0% 100% / 0.12);
 }
 
 /* ---------- shared with the library ---------- */

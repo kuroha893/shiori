@@ -6,6 +6,7 @@ import { Modal, themeOptions } from './Chrome'
 import { ContactsList } from './ContactsList'
 import { GlossaryList } from './GlossaryList'
 import { FontPicker } from './FontPicker'
+import { Icon } from './Icon'
 import { ModelPicker } from './ModelPicker'
 import { CHATGPT_DOWNLOAD, installClaudeCode, KeyInput, Pill, saveDeepseekKey, Steps, useServicePolling, Waiting } from './ServiceSetup'
 
@@ -221,6 +222,35 @@ export function SettingsModal(props: {
       </section>
 
       <section className="set-section">
+        <h3>壁纸</h3>
+        <div className="set-rows">
+          <WallpaperRow />
+          <div className="set-row">
+            <label>用在</label>
+            <div className="seg">
+              {(
+                [
+                  ['room', '大厅'],
+                  ['pages', '大厅，书库，会议'],
+                  ['all', '大厅，书库，会议，阅读']
+                ] as const
+              ).map(([v, label]) => (
+                <button key={v} className={s.wallpaperUse === v ? 'on' : ''} onClick={() => props.onChange({ wallpaperUse: v })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {s.wallpaperUse !== 'room' && (
+            <div className="set-row">
+              <label>模糊度</label>
+              <BlurStepper value={s.wallpaperBlur} onChange={(wallpaperBlur) => props.onChange({ wallpaperBlur })} />
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="set-section">
         <h3>联系人</h3>
         <ContactsList petShown={s.petShown} onPetShown={(petShown) => props.onChange({ petShown })} toast={props.toast} />
       </section>
@@ -250,5 +280,72 @@ export function SettingsModal(props: {
         <GlossaryList />
       </section>
     </Modal>
+  )
+}
+
+/** How blurred the wallpaper is behind the other pages: one step at a time, or typed. */
+function BlurStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const MAX = 60
+  const [text, setText] = useState(String(value))
+  useEffect(() => setText(String(value)), [value])
+  const clamp = (v: number) => Math.min(MAX, Math.max(0, Math.round(v)))
+  const commit = () => {
+    const v = parseInt(text, 10)
+    const next = Number.isFinite(v) ? clamp(v) : value
+    setText(String(next))
+    if (next !== value) onChange(next)
+  }
+  return (
+    <div className="stepper">
+      <button className="icon-btn" onClick={() => onChange(clamp(value - 1))}>
+        <Icon name="minus" size={14} />
+      </button>
+      <input
+        className="input mono stepper-input"
+        value={text}
+        inputMode="numeric"
+        onChange={(e) => {
+          const t = e.target.value.replace(/\D/g, '').slice(0, 2)
+          setText(t)
+          const v = parseInt(t, 10)
+          if (v >= 0 && v <= MAX) onChange(v)
+        }}
+        onFocus={(e) => e.target.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault()
+            onChange(clamp(value + (e.key === 'ArrowUp' ? 1 : -1)))
+          }
+        }}
+      />
+      <button className="icon-btn" onClick={() => onChange(clamp(value + 1))}>
+        <Icon name="plus" size={14} />
+      </button>
+    </div>
+  )
+}
+
+/** The wallpaper of 小窝: a small preview, then choose or remove. */
+function WallpaperRow() {
+  const [url, setUrl] = useState<string>()
+  useEffect(() => {
+    api.roomView().then((v) => setUrl(v.wallpaper))
+    return api.onRoomChanged((v) => setUrl(v.wallpaper))
+  }, [])
+  return (
+    <div className="set-row">
+      {url && <img className="set-wallpaper" src={url} alt="" />}
+      <span className="spacer" />
+      {url && (
+        <button className="btn sm" onClick={() => api.clearWallpaper()}>
+          移除
+        </button>
+      )}
+      <button className="btn sm" onClick={() => api.chooseWallpaper()}>
+        {url ? '更换' : '选择'}
+      </button>
+    </div>
   )
 }

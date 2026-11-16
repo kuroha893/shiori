@@ -1277,6 +1277,12 @@ body.resizing-side .side-resize {
   width: 26px;
   text-align: center;
 }
+.stepper .stepper-input {
+  width: 44px;
+  height: 28px;
+  padding: 0 4px;
+  text-align: center;
+}
 .stepper .icon-btn {
   width: 28px;
   height: 28px;

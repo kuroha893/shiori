@@ -11,10 +11,19 @@ import { Conferences, LaterCard, useConfOverview, useLater } from './Conferences
 import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
 import { PaperVenue } from './VenueTags'
 import { PaperText } from './PaperText'
+import { Room } from './Room'
 import brand from '../assets/brand.png'
 import type { Toast } from './App'
 
 type Filter = 'all' | 'todo' | 'busy' | 'ready' | 'done'
+
+/** 书库, 小窝 or 会议; kept by the app so closing a paper goes back to where it was opened. The switch holds 书库 and
+ * 会议; the brand at the top of the library goes to 小窝. */
+export type Space = 'lib' | 'room' | 'conf'
+const SPACES: { id: Space; label: string }[] = [
+  { id: 'lib', label: '书库' },
+  { id: 'conf', label: '会议' }
+]
 
 const PAPER_DRAG = 'application/x-shiori-paper'
 
@@ -41,8 +50,11 @@ export function Library(props: {
   onSettings: (patch: Partial<Settings>) => void
   onOpenSettings: () => void
   toast: Toast
+  space: Space
+  onSpace: (s: Space) => void
 }) {
-  const { papers, settings, services, toast } = props
+  const { papers, settings, services, toast, space, onSpace: setSpace } = props
+  const [confStart, setConfStart] = useState<{ conf: string; year: number }>()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [arxiv, setArxiv] = useState('')
@@ -50,7 +62,6 @@ export function Library(props: {
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
   const folders = useFolders()
-  const [space, setSpace] = useState<'lib' | 'conf'>('lib')
   const [chosenPlace, setPlace] = useState<'all' | 'none' | 'liked' | 'later' | string>('all')
   const likedCount = papers.filter((p) => p.likedAt).length
   const later = useLater()
@@ -62,12 +73,13 @@ export function Library(props: {
   useEffect(() => {
     if (place === 'later') return () => void api.laterSeen()
   }, [place])
-  // ⌘1 and ⌘2 switch between the library and the conferences.
+  // ⌘1 and ⌘2 switch between the spaces, in the switch's order.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (!e.metaKey || (e.key !== '1' && e.key !== '2')) return
+      const s = e.metaKey && SPACES[Number(e.key) - 1]
+      if (!s) return
       e.preventDefault()
-      setSpace(e.key === '1' ? 'lib' : 'conf')
+      setSpace(s.id)
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
@@ -222,7 +234,7 @@ export function Library(props: {
 
   return (
     <div
-      className="lib"
+      className={`lib ${space === 'room' ? 'in-room' : ''}`}
       onDragOver={(e) => {
         e.preventDefault()
         if (e.dataTransfer.types.includes('Files')) setDragging(true)
@@ -232,9 +244,9 @@ export function Library(props: {
     >
       <CallLauncher />
       <header className="topbar drag">
-        <SpaceSwitch space={space} onChange={setSpace} fresh={space === 'lib' && !!overview?.fresh} />
+        <SpaceSwitch space={space} onChange={setSpace} fresh={space !== 'conf' && !!overview?.fresh} />
         <div className="topbar-actions">
-          <StatusBlock papers={papers} />
+          <StatusBlock papers={papers} music={space !== 'room'} />
           <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
           <button className="icon-btn bordered no-drag" title="设置" onClick={props.onOpenSettings}>
             <Icon name="settings" />
@@ -243,14 +255,30 @@ export function Library(props: {
       </header>
 
       <div className="lib-body">
-      {space === 'conf' ? (
-        <Conferences overview={overview} library={papers} ready={ready} onOpenPaper={props.onOpen} toast={toast} />
+      {space === 'room' ? (
+        <Room
+          papers={papers}
+          onOpenPaper={props.onOpen}
+          onLink={(l) => {
+            if (l.kind === 'paper') return props.onOpen(l.paper)
+            if (l.kind === 'edition') {
+              setConfStart({ conf: l.conf, year: l.year })
+              return setSpace('conf')
+            }
+            setPlace('later')
+            setSpace('lib')
+          }}
+        />
+      ) : space === 'conf' ? (
+        <Conferences key={confStart ? `${confStart.conf}/${confStart.year}` : 'home'} start={confStart} overview={overview} library={papers} ready={ready} onOpenPaper={props.onOpen} toast={toast} />
       ) : (
       <>
       <aside className="lib-side">
           <div className="brand drag">
-            <img className="brand-mark" src={brand} alt="" draggable={false} />
-            <span>Shiori</span>
+            <button className="brand-home no-drag" onClick={() => setSpace('room')}>
+              <img className="brand-mark" src={brand} alt="" draggable={false} />
+              <span>Shiori</span>
+            </button>
           </div>
           <button className={`lib-side-item ${place === 'all' ? 'on' : ''}`} onClick={() => setPlace('all')}>
             <span>全部论文</span>
@@ -541,7 +569,7 @@ function PaperCard({
  * 书库 or 会议. The switch waits above the top bar and drops down when the pointer comes near the top middle, staying a
  * moment after it leaves. The top bar drags the window and gets no mouse events, so the zone that wakes it is no-drag.
  */
-function SpaceSwitch({ space, onChange, fresh }: { space: 'lib' | 'conf'; onChange: (s: 'lib' | 'conf') => void; fresh: boolean }) {
+function SpaceSwitch({ space, onChange, fresh }: { space: Space; onChange: (s: Space) => void; fresh: boolean }) {
   const [open, setOpen] = useState(false)
   const timers = useRef<{ show?: number; hide?: number }>({})
   const clear = () => {
@@ -557,22 +585,26 @@ function SpaceSwitch({ space, onChange, fresh }: { space: 'lib' | 'conf'; onChan
     timers.current.hide = window.setTimeout(() => setOpen(false), after)
   }
   useEffect(() => clear, [])
+  // In 小窝 it stays down: the room has nothing else to lead out of it.
+  const pinned = space === 'room'
   return (
     <>
-      <div className={`space-zone no-drag ${fresh ? 'fresh' : ''} ${open ? 'open' : ''}`} onMouseEnter={show} onMouseLeave={() => hide(2000)}>
-        <i className="space-handle" />
-      </div>
-      <div className={`seg space-switch no-drag ${open ? 'open' : ''}`} onMouseEnter={show} onMouseLeave={() => hide(2000)}>
-        {(['lib', 'conf'] as const).map((s) => (
+      {!pinned && (
+        <div className={`space-zone no-drag ${fresh ? 'fresh' : ''} ${open ? 'open' : ''}`} onMouseEnter={show} onMouseLeave={() => hide(2000)}>
+          <i className="space-handle" />
+        </div>
+      )}
+      <div className={`seg space-switch no-drag ${open || pinned ? 'open' : ''}`} onMouseEnter={show} onMouseLeave={() => hide(2000)}>
+        {SPACES.map((s) => (
           <button
-            key={s}
-            className={space === s ? 'on' : ''}
+            key={s.id}
+            className={`${space === s.id ? 'on' : ''} ${s.id === 'conf' && fresh ? 'fresh' : ''}`}
             onClick={() => {
-              onChange(s)
+              onChange(s.id)
               hide(700)
             }}
           >
-            {s === 'lib' ? '书库' : '会议'}
+            {s.label}
           </button>
         ))}
       </div>

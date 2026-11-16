@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, net, screen, shell } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { CallLine, CallMood, CallState, PaperMeta, PastCall } from '../shared/types'
+import type { CallLine, CallMood, CallState, PaperMeta, PastCall, RoomLink } from '../shared/types'
 import type { Conversation } from './claude'
 import { modelFor, runAgent, talkTo } from './ai'
 import { listPapers, readMeta } from './library'
@@ -281,11 +281,29 @@ function settleMood(): void {
   }
 }
 
-/** Something happened in the app; she says so if a call is open. */
-export function callEvent(text: string): void {
-  if (!state.active) return
+let missed: (text: string, links: RoomLink[]) => void = () => {}
+/** Where events go while no call is open: 小窝, where she writes them down as notes. */
+export const onMissedEvent = (fn: typeof missed) => (missed = fn)
+export const callActive = () => state.active
+
+/** Something happened in the app; she says so if a call is open, and leaves a note otherwise. */
+export function callEvent(text: string, links: RoomLink[] = []): void {
+  if (!state.active) return missed(text, links)
   record({ who: 'event', text })
   speak(`[event] ${text}`)
+}
+
+/** The mood changed from the app's side (the study timer), not by the button; the button follows. */
+export function setCallMood(mood: CallMood): void {
+  if (settling) {
+    clearTimeout(settling.timer)
+    settling = undefined
+  }
+  if (mood === getSettings().callMood) return
+  saveSettings({ callMood: mood })
+  push('call:moodSet', mood)
+  if (mood === 'quiet') dropUnprompted()
+  else if (mood === 'chat') scheduleChat()
 }
 
 /**
@@ -390,6 +408,7 @@ export const placeCall = place
 export function startCall(id: string): void {
   if (state.active) return
   contact = id
+  if (getSettings().roomContact !== id) saveSettings({ roomContact: id })
   mkdirSync(join(dir(), 'calls'), { recursive: true })
   const now = new Date()
   logFile = join(dir(), 'calls', `${now.toISOString().replace(/[:.]/g, '-')}.jsonl`)

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { PaperMeta, Settings } from '../../../shared/types'
 import type { ServiceStatus } from '../../../shared/models'
 import { api } from '../api'
-import { Library } from './Library'
+import { Library, type Space } from './Library'
+import { useWallpaper } from './Room'
 import { Reader } from './Reader'
 import { SettingsModal } from './SettingsModal'
 import { Welcome } from './Welcome'
@@ -16,6 +17,26 @@ function applyTheme(theme: Settings['theme']): void {
   document.documentElement.dataset.theme = theme === 'system' ? (dark ? 'dark' : 'light') : theme
 }
 
+/** 小窝's wallpaper behind the other pages, when the owner wants it there: blurred, under a veil of the theme's colour. */
+function Backdrop({ settings, reading, inRoom }: { settings: Settings; reading: boolean; inRoom: boolean }) {
+  const url = useWallpaper()
+  const use = settings.wallpaperUse
+  const on = !!url && (reading ? use === 'all' : !inRoom && use !== 'room')
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('walled', on)
+    root.classList.toggle('walled-reading', on && reading)
+    return () => root.classList.remove('walled', 'walled-reading')
+  }, [on, reading])
+  if (!on) return null
+  return (
+    <>
+      <div className="app-wall" style={{ backgroundImage: `url("${url}")`, filter: settings.wallpaperBlur ? `blur(${settings.wallpaperBlur}px)` : undefined }} />
+      <div className="app-veil" />
+    </>
+  )
+}
+
 export function App() {
   const [settings, setSettings] = useState<Settings>()
   const [papers, setPapers] = useState<PaperMeta[]>([])
@@ -23,6 +44,8 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [services, setServices] = useState<ServiceStatus>()
   const [toast, setToast] = useState<string>()
+  // Shiori opens on 小窝; closing a paper goes back to the space it was opened from.
+  const [space, setSpace] = useState<Space>('room')
 
   const refreshServices = useCallback((fresh?: boolean) => api.serviceStatus(fresh).then(setServices), [])
 
@@ -93,6 +116,7 @@ export function App() {
 
   return (
     <>
+      <Backdrop settings={settings} reading={!!paper} inRoom={space === 'room'} />
       {paper ? (
         <Reader
           key={paper.id}
@@ -114,6 +138,8 @@ export function App() {
           onSettings={updateSettings}
           onOpenSettings={() => setShowSettings(true)}
           toast={showToast}
+          space={space}
+          onSpace={setSpace}
         />
       )}
       {showSettings && (

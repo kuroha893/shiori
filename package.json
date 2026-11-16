@@ -11,7 +11,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "electron-vite preview",
-    "pack": "electron-vite build && electron-builder --mac --dir"
+    "pack": "sh scripts/build-native.sh && electron-vite build && electron-builder --mac --dir"
   },
   "devDependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -76,6 +76,7 @@
     "files": [
       "out/**",
       "resources/contacts/**",
+      "resources/native/**",
       "package.json",
       "!node_modules/onnxruntime-node/bin/napi-v*/linux/**",
       "!node_modules/onnxruntime-node/bin/napi-v*/win32/**",
@@ -89,7 +90,8 @@
       "identity": null
     },
     "asarUnpack": [
-      "node_modules/onnxruntime-node/bin/**"
+      "node_modules/onnxruntime-node/bin/**",
+      "resources/native/**"
     ]
   },
   "dependencies": {

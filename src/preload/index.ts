@@ -1,6 +1,6 @@
 import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, Folder, GlossaryEntry, OpenReviewAccount, PaperMeta, PetState, Settings, TaskAction, TaskList, QuotaView } from '../shared/types'
+import type { Annotation, ChatEvent, Folder, GlossaryEntry, JournalDay, NowPlaying, OpenReviewAccount, PaperMeta, PetState, RoomView, Settings, StudyPlan, StudyState, TaskAction, TaskList, QuotaView } from '../shared/types'
 import type { ServiceStatus } from '../shared/models'
 import type { ConfOverview, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../shared/conferences'
 
@@ -108,6 +108,25 @@ const api = {
   onConfChanged: (fn: () => void) => on('conf:changed', fn),
   onLaterChanged: (fn: () => void) => on('later:changed', fn),
   onOpenReviewChanged: (fn: () => void) => on('openreview:changed', fn),
+
+  roomView: (): Promise<RoomView> => ipcRenderer.invoke('room:view'),
+  roomVisit: () => ipcRenderer.invoke('room:visit'),
+  roomRead: () => ipcRenderer.invoke('room:read'),
+  chooseWallpaper: () => ipcRenderer.invoke('room:chooseWallpaper'),
+  clearWallpaper: () => ipcRenderer.invoke('room:clearWallpaper'),
+  journal: (year: number, month: number): Promise<JournalDay[]> => ipcRenderer.invoke('room:journal', year, month),
+  study: (): Promise<StudyState | null> => ipcRenderer.invoke('room:study'),
+  studyPlan: (): Promise<StudyPlan> => ipcRenderer.invoke('room:studyPlan'),
+  studyStart: (plan: StudyPlan, withContact?: string) => ipcRenderer.invoke('room:studyStart', plan, withContact),
+  studyPause: () => ipcRenderer.invoke('room:studyPause'),
+  studyResume: () => ipcRenderer.invoke('room:studyResume'),
+  studyStop: () => ipcRenderer.invoke('room:studyStop'),
+  onRoomChanged: (fn: (v: RoomView) => void) => on('room:changed', fn),
+  onStudyChanged: (fn: (s: StudyState | null) => void) => on('room:study', fn),
+  nowPlaying: (withCover: boolean): Promise<NowPlaying | undefined> => ipcRenderer.invoke('np:get', withCover),
+  playerSend: (command: 'play' | 'pause' | 'toggle' | 'next' | 'previous') => ipcRenderer.invoke('np:send', command),
+  showPlayer: (bundle: string) => ipcRenderer.invoke('np:show', bundle),
+  playerIcon: (bundle: string): Promise<string | null> => ipcRenderer.invoke('np:icon', bundle),
 
   onPaperChanged: (fn: (m: PaperMeta) => void) => on('paper:changed', fn),
   onFoldersChanged: (fn: (f: Folder[]) => void) => on('folders:changed', fn),
