@@ -282,7 +282,7 @@ function settleMood(): void {
 }
 
 let missed: (text: string, links: RoomLink[]) => void = () => {}
-/** Where events go while no call is open: 小窝, where she writes them down as notes. */
+/** Where events go while no call is open: 大厅, where she writes them down as notes. */
 export const onMissedEvent = (fn: typeof missed) => (missed = fn)
 export const callActive = () => state.active
 

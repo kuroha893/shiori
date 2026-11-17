@@ -397,6 +397,13 @@ button {
   border-radius: calc(var(--radius) - 1px);
   background: hsl(var(--muted) / 0.6);
 }
+/* a row of switches that are each on or off, apart so neighbours that are both on don't run together */
+.seg.multi {
+  gap: 4px;
+}
+.seg.multi button {
+  padding: 0 14px;
+}
 .seg button {
   height: 26px;
   min-width: 38px;

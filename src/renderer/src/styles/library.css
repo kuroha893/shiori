@@ -304,6 +304,54 @@ input.bare::placeholder {
   gap: 14px;
 }
 
+/* 稍后再看 by the day it was marked; a day's header sticks as a frosted bar while you are inside it */
+.later-day {
+  display: flex;
+  flex-direction: column;
+}
+.later-th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 -14px;
+  padding: 26px 14px 12px;
+}
+.later-day:first-child .later-th {
+  padding-top: 4px;
+}
+.later-th-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.later-th h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.later-th .n {
+  font-size: 14px;
+  color: hsl(var(--faint-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.later-th.stuck {
+  padding: 12px 14px;
+  border-radius: 0 0 12px 12px;
+  background: hsl(var(--background) / 0.72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 1px 0 hsl(var(--border) / 0.7), 0 12px 24px -18px hsl(0 0% 0% / 0.5);
+}
+.later-th.stuck h2 {
+  font-size: 16px;
+}
+.later-th.stuck .n {
+  font-size: 13px;
+}
+
 .paper {
   display: flex;
   gap: 16px;

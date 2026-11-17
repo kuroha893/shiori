@@ -213,7 +213,7 @@ function registerIpc(): void {
 app.whenReady().then(() => {
   app.setName('Shiori')
   // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://contact/<id>/<path> a contact's picture and character;
-  // shiori://conf/<id>/mark a conference's downloaded mark; shiori://room/wallpaper the wallpaper of 小窝.
+  // shiori://conf/<id>/mark a conference's downloaded mark; shiori://room/wallpaper the wallpaper of 大厅.
   protocol.handle('shiori', (req) => {
     const u = new URL(req.url)
     if (u.host === 'contact') {

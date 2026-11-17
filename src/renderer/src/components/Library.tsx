@@ -17,8 +17,8 @@ import type { Toast } from './App'
 
 type Filter = 'all' | 'todo' | 'busy' | 'ready' | 'done'
 
-/** 书库, 小窝 or 会议; kept by the app so closing a paper goes back to where it was opened. The switch holds 书库 and
- * 会议; the brand at the top of the library goes to 小窝. */
+/** 书库, 大厅 or 会议; kept by the app so closing a paper goes back to where it was opened. The switch holds 书库 and
+ * 会议; the brand at the top of the library goes to 大厅. */
 export type Space = 'lib' | 'room' | 'conf'
 const SPACES: { id: Space; label: string }[] = [
   { id: 'lib', label: '书库' },
@@ -258,6 +258,7 @@ export function Library(props: {
       {space === 'room' ? (
         <Room
           papers={papers}
+          wall={settings.wallpaperIn.includes('room')}
           onOpenPaper={props.onOpen}
           onLink={(l) => {
             if (l.kind === 'paper') return props.onOpen(l.paper)
@@ -401,8 +402,8 @@ export function Library(props: {
             </div>
           )}
 
-          <section className="grid">
-            {shown.map((p, i) => (
+          {(() => {
+            const card = (p: PaperMeta, i: number) => (
               <PaperCard
                 key={p.id}
                 paper={p}
@@ -413,9 +414,14 @@ export function Library(props: {
                 onProcess={() => (ready ? api.processPaper(p.id) : props.onOpenSettings())}
                 onMenu={(x, y) => openMenu(p, x, y)}
               />
-            ))}
-            {place === 'later' && later.map((item) => <LaterCard key={item.ref} item={item} ready={ready} toast={toast} />)}
-          </section>
+            )
+            if (place !== 'later') return <section className="grid">{shown.map(card)}</section>
+            const marked = [
+              ...shown.map((p) => ({ at: p.laterAt ?? '', node: (i: number) => card(p, i) })),
+              ...later.map((item) => ({ at: item.addedAt, node: () => <LaterCard key={item.ref} item={item} ready={ready} toast={toast} /> }))
+            ]
+            return <LaterDays marked={marked} />
+          })()}
           {papers.length > 0 && !shown.length && !(place === 'later' && later.length) && <p className="empty faint">没有符合条件的论文</p>}
         </div>
       </main>
@@ -432,6 +438,70 @@ export function Library(props: {
         </div>
       )}
       {menu && <Menu {...menu} onClose={() => setMenu(undefined)} />}
+    </div>
+  )
+}
+
+/** 今天, 昨天, or the day itself; the year only when it isn't this one. */
+function dayLabel(d: Date, now: Date): string {
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const back = Math.round((day(now) - day(d)) / 864e5)
+  if (back === 0) return '今天'
+  if (back === 1) return '昨天'
+  return `${d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()} 年 ` : ''}${d.getMonth() + 1} 月 ${d.getDate()} 日`
+}
+
+/**
+ * 稍后再看, newest first, one group per day it was marked on. A day's header sticks while you are inside that day;
+ * the sticky state is set on the DOM directly, since it changes with every scroll.
+ */
+function LaterDays({ marked }: { marked: { at: string; node: (i: number) => ReactNode }[] }) {
+  const root = useRef<HTMLDivElement>(null)
+  const days = useMemo(() => {
+    const now = new Date()
+    const out: { label: string; items: typeof marked }[] = []
+    for (const m of [...marked].sort((a, b) => b.at.localeCompare(a.at))) {
+      const label = dayLabel(new Date(m.at), now)
+      if (out.at(-1)?.label === label) out.at(-1)!.items.push(m)
+      else out.push({ label, items: [m] })
+    }
+    return out
+  }, [marked])
+  useEffect(() => {
+    const scroller = root.current?.closest('.lib-scroll')
+    if (!scroller) return
+    const spy = () => {
+      const top = scroller.getBoundingClientRect().top
+      for (const s of root.current!.querySelectorAll<HTMLElement>(':scope > .later-day')) {
+        const h = s.querySelector<HTMLElement>(':scope > .later-th')!
+        const r = s.getBoundingClientRect()
+        const stuck = r.top < top + 1 && r.bottom > top
+        if (stuck !== h.classList.contains('stuck')) {
+          // The stuck bar is shorter; make up the difference below it so the cards don't jump (see Stream in 会议).
+          const before = h.getBoundingClientRect().height
+          h.classList.toggle('stuck', stuck)
+          h.style.marginBottom = stuck ? `${before - h.getBoundingClientRect().height}px` : ''
+        }
+      }
+    }
+    spy()
+    scroller.addEventListener('scroll', spy, { passive: true })
+    return () => scroller.removeEventListener('scroll', spy)
+  }, [days])
+  let i = 0
+  return (
+    <div className="later-days" ref={root}>
+      {days.map((d) => (
+        <section key={d.label} className="later-day">
+          <div className="later-th">
+            <span className="later-th-label">
+              <h2>{d.label}</h2>
+              <span className="n">{d.items.length}</span>
+            </span>
+          </div>
+          <div className="grid">{d.items.map((m) => m.node(i++))}</div>
+        </section>
+      ))}
     </div>
   )
 }
@@ -585,7 +655,7 @@ function SpaceSwitch({ space, onChange, fresh }: { space: Space; onChange: (s: S
     timers.current.hide = window.setTimeout(() => setOpen(false), after)
   }
   useEffect(() => clear, [])
-  // In 小窝 it stays down: the room has nothing else to lead out of it.
+  // In 大厅 it stays down: the lobby has nothing else to lead out of it.
   const pinned = space === 'room'
   return (
     <>

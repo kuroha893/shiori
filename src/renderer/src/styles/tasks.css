@@ -497,6 +497,74 @@
   cursor: grabbing !important;
 }
 
+/* ---------- the top bar's trays: flat pieces in a tray, glass over the wallpaper (room.css) ---------- */
+
+:root {
+  --piece-shadow: 0 1px 2px hsl(220 20% 20% / 0.08), 0 3px 8px -5px hsl(220 30% 20% / 0.3);
+}
+:root[data-theme='dark'] {
+  --piece-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 3px 8px -5px hsl(0 0% 0% / 0.6);
+}
+.topbar .topbar-actions,
+.reader-nav {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 14px;
+}
+.topbar .topbar-actions::before,
+.reader-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid hsl(var(--border));
+  border-radius: inherit;
+  background: hsl(var(--muted) / 0.6);
+}
+.topbar .topbar-actions .icon-btn,
+.reader-nav .icon-btn,
+.topbar .topbar-actions .seg,
+.topbar .sp > * {
+  height: 32px;
+  border-color: transparent;
+  border-radius: 10px;
+  background: hsl(var(--card));
+  box-shadow: var(--piece-shadow);
+}
+.topbar .topbar-actions .icon-btn,
+.reader-nav .icon-btn {
+  color: hsl(var(--foreground) / 0.75);
+}
+.topbar .topbar-actions .icon-btn:hover,
+.topbar .topbar-actions .icon-btn.active,
+.reader-nav .icon-btn:hover,
+.reader-nav .icon-btn.active {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+}
+.topbar .topbar-actions .seg {
+  align-items: center;
+}
+.topbar .sp {
+  gap: 6px;
+  border: 0;
+}
+.topbar .sp > * > button {
+  border-radius: 10px;
+}
+/* pieces stand apart, so the lines between the status block's parts go */
+.topbar .sp > *::before {
+  display: none;
+}
+/* the failed-task dot stays on the tasks piece */
+.topbar .sp .tq-btn {
+  position: relative;
+}
+
 /* ---------- status block: tasks and allowance side by side ---------- */
 
 .sp {

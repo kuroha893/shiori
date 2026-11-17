@@ -6,7 +6,6 @@
   height: 100%;
 }
 .reader-bar {
-  border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--background));
   gap: 6px;
 }
@@ -27,7 +26,7 @@
 .read-bar {
   position: absolute;
   left: 0;
-  bottom: -1px;
+  bottom: 0;
   height: 2px;
   background: hsl(var(--primary));
   transition: width 0.25s ease;
@@ -1894,4 +1893,22 @@ body.resizing-side .side-resize {
 .note-math-hint {
   margin-top: 6px;
   font-size: 11px;
+}
+
+/* ---------- the side panel, a card of its own ---------- */
+
+.reader {
+  --card-shadow: 0 1px 2px hsl(220 20% 20% / 0.06), 0 6px 18px -10px hsl(220 30% 20% / 0.28);
+}
+:root[data-theme='dark'] .reader {
+  --card-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 20px -10px hsl(0 0% 0% / 0.6);
+}
+.reader .side {
+  margin: 8px 10px 10px 0;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+}
+.reader .side-tabs {
+  border-radius: 16px 16px 0 0;
 }

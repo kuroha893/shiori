@@ -1,4 +1,4 @@
-/* ---------- 小窝 ---------- */
+/* ---------- 大厅 ---------- */
 
 .room {
   position: fixed;
@@ -8,14 +8,13 @@
   background: hsl(var(--background));
 }
 
-/* the top bar floats over the wallpaper, its buttons on glass */
+/* the top bar floats over the room; with no wallpaper its tray is frosted (with one it is glass, further down) */
 .lib.in-room .topbar {
   background: transparent;
 }
-.lib.in-room .topbar-actions > .sp,
-.lib.in-room .topbar-actions > .icon-btn {
-  background: hsl(var(--background) / 0.55);
+html:not(.walled-room) .lib.in-room .topbar .topbar-actions::before {
   border-color: hsl(var(--border) / 0.7);
+  background: hsl(var(--background) / 0.4);
   backdrop-filter: blur(16px) saturate(1.3);
 }
 
@@ -1122,7 +1121,7 @@
   margin-bottom: 10px;
 }
 
-/* ---------- 小窝's wallpaper on the other pages (Settings › 壁纸 › 用在) ---------- */
+/* ---------- 大厅's wallpaper on the other pages (Settings › 壁纸 › 用在) ---------- */
 
 html.walled {
   background: hsl(var(--background));
@@ -1149,7 +1148,7 @@ html.walled body {
 html.walled-reading .app-veil {
   background: hsl(var(--background) / 0.72);
 }
-/* sidebars and bars turn to glass, cards to frosted cards */
+/* sidebars and bars turn to light frosted panes */
 html.walled .lib-side,
 html.walled .brand {
   background: hsl(var(--background) / 0.4);
@@ -1159,20 +1158,128 @@ html.walled .brand {
   background: transparent;
   backdrop-filter: none;
 }
+/*
+ * The reader, 铺满: a light frosted bar over the thick veil, the article across the page. 纸张 (walled-sheet): a thinner
+ * veil, no bar, the article on a solid sheet with the wallpaper either side, the contents a frosted pane. Either way the
+ * side panel is a solid card (reader.css).
+ */
 html.walled .reader-bar {
+  border-bottom-color: transparent;
   background: hsl(var(--background) / 0.55);
   backdrop-filter: blur(20px) saturate(1.2);
 }
-html.walled .card {
-  background: hsl(var(--card) / 0.7);
-  backdrop-filter: blur(18px) saturate(1.2);
+html.walled-sheet .app-veil {
+  background: hsl(var(--background) / 0.45);
 }
-html.walled .side {
-  background: hsl(var(--card) / 0.78);
+html.walled-sheet .reader-bar {
+  background: transparent;
+  backdrop-filter: none;
+}
+html.walled-sheet .reader-title {
+  text-shadow: 0 0 8px hsl(var(--background) / 0.9), 0 0 2px hsl(var(--background) / 0.8);
+}
+html.walled-sheet .toc {
+  margin: 8px 0 10px 8px;
+  border-radius: 16px;
+  background: hsl(var(--background) / 0.4);
   backdrop-filter: blur(20px) saturate(1.2);
+}
+html.walled-sheet .scroller {
+  padding: 0 20px;
+}
+html.walled-sheet .doc {
+  margin: 8px auto 10px;
+  border-radius: 16px;
+  background: hsl(var(--card));
+  box-shadow: 0 1px 2px hsl(220 20% 20% / 0.06), 0 6px 18px -10px hsl(220 30% 20% / 0.28);
+}
+html.walled-sheet[data-theme='dark'] .doc {
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 20px -10px hsl(0 0% 0% / 0.6);
 }
 html.walled .composer {
   background: transparent;
+}
+/*
+ * Cards are solid, with a soft shadow instead of a border, so what you read never has the wallpaper behind it.
+ * A conference paper is a card of its own.
+ */
+html.walled {
+  --flat-shadow: 0 1px 2px hsl(220 20% 20% / 0.06), 0 6px 18px -10px hsl(220 30% 20% / 0.28);
+}
+html.walled[data-theme='dark'] {
+  --flat-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 20px -10px hsl(0 0% 0% / 0.6);
+}
+html.walled .card,
+html.walled .cf-paper {
+  border-color: transparent;
+  background: hsl(var(--card));
+  box-shadow: var(--flat-shadow);
+}
+html.walled .cf-paper {
+  margin: 0 -14px 10px;
+  border-radius: 14px;
+}
+html.walled .cf-paper + .cf-paper,
+html.walled .cf-paper.open + .cf-paper,
+html.walled .cf-paper:hover + .cf-paper {
+  box-shadow: var(--flat-shadow);
+}
+html.walled .cf-paper:hover,
+html.walled .cf-paper.open {
+  background: color-mix(in srgb, hsl(var(--card)), hsl(var(--foreground)) 3%);
+}
+/*
+ * Liquid glass, only on the trays that float over the wallpaper, in 大厅 (walled-room) as on the other pages: the space
+ * switch, and the top bar's trays (the status area at the top right, the reader's back and contents). Their pieces
+ * stay flat (tasks.css). The lens is set live by lib/glass.ts (--lens). The rim's light is faint and the same in every
+ * theme. A tray's glass is a layer behind it, so the lists that open from it aren't caught inside its backdrop.
+ */
+html.walled,
+html.walled-room {
+  --glass-tint: hsl(0 0% 100% / 0.1);
+  --glass-rim: inset 1.5px 1.5px 0 -0.5px hsl(0 0% 100% / 0.24), inset -1px -1px 0 -0.5px hsl(0 0% 100% / 0.09), inset 0 0 14px hsl(0 0% 100% / 0.04);
+  --glass-drop: 0 10px 28px -16px hsl(215 40% 15% / 0.35);
+}
+html.walled[data-theme='dark'],
+html.walled-room[data-theme='dark'] {
+  --glass-tint: hsl(225 20% 10% / 0.45);
+  --glass-drop: 0 10px 28px -16px hsl(0 0% 0% / 0.6);
+}
+html.walled .topbar .topbar-actions::before,
+html.walled .reader-nav::before,
+html.walled-room .topbar .topbar-actions::before {
+  border-color: transparent;
+  background: var(--glass-tint);
+  backdrop-filter: var(--lens, none);
+  box-shadow: var(--glass-rim), var(--glass-drop);
+}
+html.walled .space-switch,
+html.walled-room .space-switch {
+  border-color: transparent;
+  background: var(--glass-tint);
+  backdrop-filter: var(--lens, none);
+  box-shadow: var(--glass-rim), var(--glass-drop);
+}
+/* solid: 会议's filter capsules, a paper's track tag */
+html.walled .cf-f {
+  border-color: transparent;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground) / 0.8);
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.08), 0 4px 12px -8px hsl(0 0% 0% / 0.3);
+}
+html.walled .cf-f:not(.on):not(:disabled):hover {
+  border-color: transparent;
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.1), 0 6px 14px -8px hsl(0 0% 0% / 0.4);
+}
+html.walled .cf-f.on {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+html.walled .cf-tag.track,
+html.walled .cf-tag.edition {
+  border-color: transparent;
+  background: hsl(var(--foreground) / 0.08);
 }
 
 /* ---------- what is playing, in the top bar's status block outside the room ---------- */

@@ -12,7 +12,7 @@ import { callActive, callEvent, onMissedEvent, setCallMood } from './call'
 import { callWith } from './pet'
 
 /*
- * 小窝, the room Shiori opens on. Everything in it grows out of what already happens: notes the contact last called
+ * 大厅, the lobby Shiori opens on. Everything in it grows out of what already happens: notes the contact last called
  * leaves about what the app did while no call was open, the papers being read, the owner's own highlights and
  * questions day by day, and a study timer she can keep with them. Its files live in <library>/room; her notes in her
  * own folder.

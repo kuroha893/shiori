@@ -208,6 +208,8 @@ export interface ChatState {
   messages: ChatMessage[]
 }
 
+export type WallpaperPlace = 'room' | 'pages' | 'reading'
+
 export interface Settings {
   libraryPath: string
   claudePath?: string
@@ -247,13 +249,17 @@ export interface Settings {
   petPosition?: { x: number; y: number }
   petScale?: number
   view: 'zh' | 'en' | 'both'
-  /** Where 小窝's wallpaper also shows: only the room, also 书库 and 会议, or everywhere including the reader */
-  wallpaperUse: 'room' | 'pages' | 'all'
-  /** How blurred the wallpaper is outside the room, in px */
+  /** Where the wallpaper shows, each switched on its own: 大厅, 书库 and 会议, the reader */
+  wallpaperIn: WallpaperPlace[]
+  /** How blurred the wallpaper is on 书库 and 会议, in px */
   wallpaperBlur: number
+  /** How blurred it is behind the reader, in px */
+  readingBlur: number
+  /** With the wallpaper in the reader: the article on a sheet of its own, or across the page over the wallpaper */
+  readingWall: 'sheet' | 'full'
   /** Whether the welcome page has been through, or skipped */
   welcomed?: boolean
-  /** The contact last called, who leaves notes in 小窝 */
+  /** The contact last called, who leaves notes in 大厅 */
   roomContact?: string
 }
 
@@ -282,7 +288,7 @@ export interface OpenReviewAccount {
   name: string
 }
 
-/* ---------- 小窝 ---------- */
+/* ---------- 大厅 ---------- */
 
 /** Where a note of hers leads */
 export type RoomLink = { kind: 'paper'; paper: string } | { kind: 'edition'; conf: string; year: number } | { kind: 'later' }

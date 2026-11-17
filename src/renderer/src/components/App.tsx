@@ -8,6 +8,7 @@ import { Reader } from './Reader'
 import { SettingsModal } from './SettingsModal'
 import { Welcome } from './Welcome'
 import { applyFonts } from '../lib/fonts'
+import { startGlass } from '../lib/glass'
 
 /** A short note at the bottom; with `until`, it stays until that settles instead of fading. */
 export type Toast = (text: string, until?: Promise<unknown>) => void
@@ -17,21 +18,24 @@ function applyTheme(theme: Settings['theme']): void {
   document.documentElement.dataset.theme = theme === 'system' ? (dark ? 'dark' : 'light') : theme
 }
 
-/** 小窝's wallpaper behind the other pages, when the owner wants it there: blurred, under a veil of the theme's colour. */
+/** 大厅's wallpaper behind the other pages, when the owner wants it there: blurred, under a veil of the theme's colour. */
 function Backdrop({ settings, reading, inRoom }: { settings: Settings; reading: boolean; inRoom: boolean }) {
   const url = useWallpaper()
-  const use = settings.wallpaperUse
-  const on = !!url && (reading ? use === 'all' : !inRoom && use !== 'room')
+  const shown = settings.wallpaperIn
+  const on = !!url && (reading ? shown.includes('reading') : !inRoom && shown.includes('pages'))
+  const blur = reading ? settings.readingBlur : settings.wallpaperBlur
   useEffect(() => {
     const root = document.documentElement
     root.classList.toggle('walled', on)
     root.classList.toggle('walled-reading', on && reading)
-    return () => root.classList.remove('walled', 'walled-reading')
-  }, [on, reading])
+    root.classList.toggle('walled-sheet', on && reading && settings.readingWall === 'sheet')
+    return () => root.classList.remove('walled', 'walled-reading', 'walled-sheet')
+  }, [on, reading, settings.readingWall])
+  useEffect(() => (on ? startGlass() : undefined), [on])
   if (!on) return null
   return (
     <>
-      <div className="app-wall" style={{ backgroundImage: `url("${url}")`, filter: settings.wallpaperBlur ? `blur(${settings.wallpaperBlur}px)` : undefined }} />
+      <div className="app-wall" style={{ backgroundImage: `url("${url}")`, filter: blur ? `blur(${blur}px)` : undefined }} />
       <div className="app-veil" />
     </>
   )
@@ -44,7 +48,7 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [services, setServices] = useState<ServiceStatus>()
   const [toast, setToast] = useState<string>()
-  // Shiori opens on 小窝; closing a paper goes back to the space it was opened from.
+  // Shiori opens on 大厅; closing a paper goes back to the space it was opened from.
   const [space, setSpace] = useState<Space>('room')
 
   const refreshServices = useCallback((fresh?: boolean) => api.serviceStatus(fresh).then(setServices), [])

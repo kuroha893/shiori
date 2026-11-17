@@ -27,8 +27,10 @@ const defaults: Settings = {
   fishKey: '',
   fishModel: 's2.1-pro',
   view: 'zh',
-  wallpaperUse: 'room',
-  wallpaperBlur: 24
+  wallpaperIn: ['room'],
+  wallpaperBlur: 24,
+  readingBlur: 24,
+  readingWall: 'sheet'
 }
 
 const file = () => join(app.getPath('userData'), 'settings.json')
@@ -38,8 +40,13 @@ let cache: Settings | undefined
 export function getSettings(): Settings {
   if (!cache) {
     try {
-      const { fishVoice, callLanguage, ...saved } = JSON.parse(readFileSync(file(), 'utf8'))
+      const { fishVoice, callLanguage, wallpaperUse, ...saved } = JSON.parse(readFileSync(file(), 'utf8'))
       cache = { ...defaults, ...saved }
+      // Where the wallpaper shows used to be one of three steps, each including the one before.
+      if (!saved.wallpaperIn && wallpaperUse) {
+        cache!.wallpaperIn = wallpaperUse === 'all' ? ['room', 'pages', 'reading'] : wallpaperUse === 'pages' ? ['room', 'pages'] : ['room']
+        cache!.readingBlur = saved.wallpaperBlur ?? defaults.readingBlur
+      }
       for (const k of ['processModel', 'chatModel', 'callModel'] as const) cache![k] = normalizeModel(cache![k])
       // Voice and language used to be one setting, from before there could be several contacts.
       if (fishVoice !== undefined && !cache!.contacts?.yachiyo) {

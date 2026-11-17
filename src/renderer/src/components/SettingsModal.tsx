@@ -227,25 +227,55 @@ export function SettingsModal(props: {
           <WallpaperRow />
           <div className="set-row">
             <label>用在</label>
-            <div className="seg">
+            <div className="seg multi">
               {(
                 [
                   ['room', '大厅'],
-                  ['pages', '大厅，书库，会议'],
-                  ['all', '大厅，书库，会议，阅读']
+                  ['pages', '书库，会议'],
+                  ['reading', '阅读']
                 ] as const
-              ).map(([v, label]) => (
-                <button key={v} className={s.wallpaperUse === v ? 'on' : ''} onClick={() => props.onChange({ wallpaperUse: v })}>
-                  {label}
-                </button>
-              ))}
+              ).map(([v, label]) => {
+                const on = s.wallpaperIn.includes(v)
+                return (
+                  <button
+                    key={v}
+                    className={on ? 'on' : ''}
+                    onClick={() => props.onChange({ wallpaperIn: on ? s.wallpaperIn.filter((p) => p !== v) : [...s.wallpaperIn, v] })}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           </div>
-          {s.wallpaperUse !== 'room' && (
+          {s.wallpaperIn.includes('pages') && (
             <div className="set-row">
               <label>模糊度</label>
               <BlurStepper value={s.wallpaperBlur} onChange={(wallpaperBlur) => props.onChange({ wallpaperBlur })} />
             </div>
+          )}
+          {s.wallpaperIn.includes('reading') && (
+            <>
+              <div className="set-row">
+                <label>阅读页</label>
+                <div className="seg">
+                  {(
+                    [
+                      ['sheet', '纸张'],
+                      ['full', '铺满']
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button key={v} className={s.readingWall === v ? 'on' : ''} onClick={() => props.onChange({ readingWall: v })}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="set-row">
+                <label>阅读页模糊度</label>
+                <BlurStepper value={s.readingBlur} onChange={(readingBlur) => props.onChange({ readingBlur })} />
+              </div>
+            </>
           )}
         </div>
       </section>
@@ -327,7 +357,7 @@ function BlurStepper({ value, onChange }: { value: number; onChange: (v: number)
   )
 }
 
-/** The wallpaper of 小窝: a small preview, then choose or remove. */
+/** The wallpaper of 大厅: a small preview, then choose or remove. */
 function WallpaperRow() {
   const [url, setUrl] = useState<string>()
   useEffect(() => {

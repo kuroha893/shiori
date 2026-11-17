@@ -5,9 +5,10 @@ import { api, fileUrl } from '../api'
 import { ContactAvatar, Menu, useContacts, type MenuItem } from './Chrome'
 import { Icon } from './Icon'
 import { PaperText } from './PaperText'
+import { startGlass } from '../lib/glass'
 
 /*
- * 小窝: the owner's wallpaper, a clock, what is playing, and two drawers that wait at the edges with bookmarks sticking
+ * 大厅 (the lobby): the owner's wallpaper, a clock, what is playing, and two drawers that wait at the edges with bookmarks sticking
  * out. Left is the owner's own (the paper being read, a highlight, 稍后再看; the journal); right is the contact's
  * (her notes; studying together).
  */
@@ -19,7 +20,7 @@ const WEEK = '日一二三四五六'
 const pad = (n: number) => String(n).padStart(2, '0')
 const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => void; onLink: (l: RoomLink) => void }) {
+export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => void; onLink: (l: RoomLink) => void; /** the owner wants the wallpaper here */ wall: boolean }) {
   const { papers } = props
   const [view, setView] = useState<RoomView>()
   const [drawers, setDrawers] = useState<Record<Side, DrawerState>>({ left: 'closed', right: 'closed' })
@@ -27,6 +28,18 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
   const contacts = useContacts()
   const writer = contacts.find((c) => c.id === view?.contact)
+
+  // over the room's own wallpaper the switch and the top bar's tray are liquid glass, as on the other pages
+  const walled = props.wall && !!view?.wallpaper
+  useEffect(() => {
+    if (!walled) return
+    document.documentElement.classList.add('walled-room')
+    const stop = startGlass()
+    return () => {
+      stop()
+      document.documentElement.classList.remove('walled-room')
+    }
+  }, [walled])
 
   useEffect(() => {
     api.roomView().then(setView)
@@ -83,7 +96,10 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
     <div
       className={`room ${anyOpen ? 'focus' : ''}`}
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) closeAll()
+        // Empty space works like a switch: anything open closes, and with everything closed both drawers come out.
+        if (e.target !== e.currentTarget || e.button !== 0) return
+        if (anyOpen) closeAll()
+        else setDrawers({ left: 'open', right: 'open' })
       }}
       onContextMenu={(e) => {
         if (e.target !== e.currentTarget) return
@@ -91,8 +107,8 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
         wallMenu(e.clientX, e.clientY)
       }}
     >
-      <Wall url={view?.wallpaper} />
-      <Clock wallpaper={view?.wallpaper} />
+      <Wall url={props.wall ? view?.wallpaper : undefined} />
+      <Clock wallpaper={props.wall ? view?.wallpaper : undefined} />
       <Player docked={anyOpen} />
 
       <Drawer
@@ -246,7 +262,11 @@ function Drawer(props: {
       }
     }
     window.addEventListener('pointermove', move)
-    return () => window.removeEventListener('pointermove', move)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      // A peek on its way back in mustn't close the drawer once something else has opened it.
+      window.clearTimeout(leave.current)
+    }
   }, [state, side, onState])
 
   // The drawer's width decides how far it hides; measured once it is on the page.

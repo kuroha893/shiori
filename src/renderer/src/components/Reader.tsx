@@ -277,12 +277,14 @@ export function Reader(props: {
   return (
     <div className={`reader font-${settings.readingFont} ${panel ? 'with-panel' : ''} ${toc ? 'with-toc' : ''}`} style={fontVars}>
       <header className="topbar drag reader-bar">
-        <button className="icon-btn no-drag" title="回到书架（Esc）" onClick={props.onClose}>
-          <Icon name="back" />
-        </button>
-        <button className={`icon-btn no-drag ${toc ? 'active' : ''}`} title="目录（⌘\）" onClick={() => setToc((v) => !v)}>
-          <Icon name="toc" />
-        </button>
+        <div className="reader-nav no-drag">
+          <button className="icon-btn" title="回到书架（Esc）" onClick={props.onClose}>
+            <Icon name="back" />
+          </button>
+          <button className={`icon-btn ${toc ? 'active' : ''}`} title="目录（⌘\）" onClick={() => setToc((v) => !v)}>
+            <Icon name="toc" />
+          </button>
+        </div>
         <PaperText as="div" className="reader-title" text={paper.titleZh || paper.title} zh={!!paper.titleZh} />
         <div className="topbar-actions no-drag">
           <div className="seg">
