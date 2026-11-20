@@ -8,7 +8,7 @@ import { inTerminal, openLogin } from './claude'
 import { closeCodex, openCodexLogin } from './codex'
 import { checkDeepseekKey, serviceStatus } from './ai'
 import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
-import { cancel, enqueue, initJobs, pendingFromPapers, prepare, restart, startGuide } from './jobs'
+import { cancel, enqueue, initJobs, pendingFromPapers, prepare, restart, startAppendix, startGuide } from './jobs'
 import { addTask, forgetPaper, initTasks, loadTasks, taskAction, taskList } from './tasks'
 import { initQuota, quotaSoon, quotaView, readQuota } from './quota'
 import { initVenues } from './venue'
@@ -179,6 +179,7 @@ function registerIpc(): void {
   // fresh: 重新处理, from the start; otherwise an interrupted paper carries on
   ipcMain.handle('papers:process', (_e, id: string, fresh?: boolean) => (fresh ? restart(id) : enqueue(id)))
   ipcMain.handle('papers:guide', (_e, id: string) => startGuide(id))
+  ipcMain.handle('papers:appendix', (_e, id: string) => startAppendix(id))
   ipcMain.handle('papers:findVenue', async (_e, id: string) => ({ changed: !!(await addTask(id, 'venue')), meta: lib.readMeta(id) }))
   ipcMain.handle('papers:cancel', (_e, id: string) => cancel(id))
   ipcMain.handle('papers:trash', async (_e, id: string) => {

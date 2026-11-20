@@ -55,45 +55,13 @@ Table 1: Results on ImageNet.
 表 1：ImageNet 上的结果。
 `
 
-export function processPrompt(o: { pages: number; glossary: string; source: Source }): string {
-  const pdf = o.source === 'pdf'
-  return `You are preparing an academic paper so a Chinese reader can read it as a beautifully typeset Chinese article.
-
-Files in the current folder:
-${
-  pdf
-    ? `- paper.pdf: the paper, ${o.pages} pages.`
-    : `- paper.txt: the text layer of the paper's PDF, ${o.pages} pages, each starting with a line "=== Page N ===". Its
-  words are reliable; math, tables and the order of columns often come out garbled.`
-}
-- pages/p01.png ... : the pages rendered with a coordinate grid. x runs from 0 (left edge) to 1000 (right
-  edge), y from 0 (top edge) to 1000 (bottom edge); gridlines every 50 units, labelled every 100.
-
-Do this:
-${
-  pdf
-    ? `1. Read paper.pdf completely with the Read tool (at most 20 pages per call, use the pages parameter).`
-    : `1. Read paper.txt completely, and look at every page image in pages/, in order, for the layout, math, tables and
-   figures the text layer garbles. Where the two disagree, the image is right.`
-}
-2. Transcribe and translate the whole paper into doc/01.md, doc/02.md, ... in reading order, one file per
-   top-level section or roughly every 3000 words, so no single write is huge. Format below.
-3. For every figure, algorithm box and table, look at the page image in pages/ and give a tight bbox in grid units
+/** Step of every transcription run that has figures to box. */
+const BBOX = `For every figure, algorithm box and table, look at the page image in pages/ and give a tight bbox in grid units
    around the graphic itself, including sub-figure labels but excluding the caption. Look closely at the
-   gridlines; a box that cuts off part of the graphic is worse than one a little too loose.
-4. Write info.json: {"title": "...", "title_zh": "...", "authors": ["..."], "venue": "...", "year": "..."}
-   venue: the conference or journal's usual short name without the year, as the paper states it: "NeurIPS",
-   "ACL", "CVPR", "TPAMI"; "Findings of EMNLP" for Findings papers; "<venue> Workshop" for workshop papers;
-   "<organization> Technical Report" for a technical report an organization released about its own model or
-   system (the title says Technical Report, or the authors are a company team such as "DeepSeek-AI" or "Qwen Team"),
-   with the organization's usual short name: "DeepSeek Technical Report", "Meta Technical Report";
-   "arXiv" for a preprint that names no venue. A paper counts as published at a venue only once accepted there:
-   "Under review at ICLR", "Submitted to NeurIPS" and the like are still "arXiv".
-   year: the year of that venue, else of the preprint.
-5. Reply with the single word DONE.
+   gridlines; a box that cuts off part of the graphic is worse than one a little too loose.`
 
-Rules:
-- Transcribe everything: abstract, all sections, appendix, footnotes, references. Skip running headers, page
+/** How a paper is transcribed and translated; `first` says what of it. */
+const rules = (first: string) => `- ${first} Skip running headers, page
   numbers, line numbers, watermarks and the arXiv side stamp. Merge paragraphs split across pages or columns.
   Restore words hyphenated at line ends.
 - The translation must be complete and faithful, sentence by sentence; never summarize or skip. Write natural,
@@ -109,7 +77,59 @@ Rules:
   merged. Cell contents stay as in the original (numbers exactly, bold/underline for best results kept). If a
   table cannot be transcribed faithfully, omit @@table; the cropped image will be shown instead.
 - Terminology: follow the glossary below. The first time an important term appears in the Chinese text, add
-  the English in parentheses: 注意力机制（attention）.
+  the English in parentheses: 注意力机制（attention）.`
+
+export function processPrompt(o: { pages: number; glossary: string; source: Source; skipAppendix?: boolean }): string {
+  const pdf = o.source === 'pdf'
+  const skip = !!o.skipAppendix
+  return `You are preparing an academic paper so a Chinese reader can read it as a beautifully typeset Chinese article.
+
+Files in the current folder:
+${
+  pdf
+    ? `- paper.pdf: the paper, ${o.pages} pages.`
+    : `- paper.txt: the text layer of the paper's PDF, ${o.pages} pages, each starting with a line "=== Page N ===". Its
+  words are reliable; math, tables and the order of columns often come out garbled.`
+}
+- pages/p01.png ... : the pages rendered with a coordinate grid. x runs from 0 (left edge) to 1000 (right
+  edge), y from 0 (top edge) to 1000 (bottom edge); gridlines every 50 units, labelled every 100.
+
+Do this:
+${
+  pdf
+    ? skip
+      ? `1. Read paper.pdf with the Read tool (at most 20 pages per call, use the pages parameter): everything but the
+   appendix. Stop where the appendix begins, unless the references come after it; then read only those.`
+      : `1. Read paper.pdf completely with the Read tool (at most 20 pages per call, use the pages parameter).`
+    : skip
+      ? `1. Read paper.txt, and look at the page images in pages/, in order, for the layout, math, tables and figures
+   the text layer garbles; where the two disagree, the image is right. Leave out the appendix: don't look at its
+   pages.`
+      : `1. Read paper.txt completely, and look at every page image in pages/, in order, for the layout, math, tables and
+   figures the text layer garbles. Where the two disagree, the image is right.`
+}
+2. Transcribe and translate the whole paper${skip ? ' except its appendix' : ''} into doc/01.md, doc/02.md, ... in reading order, one file per
+   top-level section or roughly every 3000 words, so no single write is huge. Format below.
+3. ${BBOX}
+4. Write info.json: {"title": "...", "title_zh": "...", "authors": ["..."], "venue": "...", "year": "..."}
+   venue: the conference or journal's usual short name without the year, as the paper states it: "NeurIPS",
+   "ACL", "CVPR", "TPAMI"; "Findings of EMNLP" for Findings papers; "<venue> Workshop" for workshop papers;
+   "<organization> Technical Report" for a technical report an organization released about its own model or
+   system (the title says Technical Report, or the authors are a company team such as "DeepSeek-AI" or "Qwen Team"),
+   with the organization's usual short name: "DeepSeek Technical Report", "Meta Technical Report";
+   "arXiv" for a preprint that names no venue. A paper counts as published at a venue only once accepted there:
+   "Under review at ICLR", "Submitted to NeurIPS" and the like are still "arXiv".
+   year: the year of that venue, else of the preprint.${
+     skip
+       ? `
+   Also "appendix_page": the page the appendix begins on (supplementary material after the main text counts),
+   or null when the paper has none.`
+       : ''
+   }
+5. Reply with the single word DONE.
+
+Rules:
+${rules(skip ? 'Transcribe everything but the appendix: abstract, all sections, footnotes, references.' : 'Transcribe everything: abstract, all sections, appendix, footnotes, references.')}
 - Only create files under doc/, plus info.json.
 
 ## Glossary (English → Chinese; "不译" means keep the English)
@@ -131,6 +151,75 @@ export const carryOnNote = (parts: string[]) => `
 An earlier run stopped partway. ${written(parts)}: don't write ${parts.length > 1 ? 'them' : 'it'} again. Still read the
 whole paper, read what is written for its wording and terms, then continue from where the last one stops, starting
 with the next file number, and do the remaining steps.`
+
+/**
+ * The appendix of a paper processed without it, written after the parts on disk in the same format, wording and ids.
+ */
+export function appendixPrompt(o: {
+  pages: number
+  from: number
+  glossary: string
+  source: Source
+  /** The written parts, and the one holding the references */
+  parts: string[]
+  refs?: string
+  /** The first file to write */
+  next: string
+  /** The highest running numbers in use: paragraphs, lists, unnumbered equations */
+  last: { p: number; l: number; eq: number }
+}): string {
+  const pdf = o.source === 'pdf'
+  const range = o.from >= o.pages ? `page ${o.pages}` : `pages ${o.from}-${o.pages}`
+  return `You are preparing an academic paper so a Chinese reader can read it as a beautifully typeset Chinese article.
+Its main text and references are already transcribed and translated in ${o.parts.join(', ')}. The appendix was left
+out, and is now to be added after them. It begins on page ${o.from} (check the page before too) and runs to the end of
+the paper, or up to the references if they come after it.
+
+Files in the current folder:
+${
+  pdf
+    ? `- paper.pdf: the paper, ${o.pages} pages.`
+    : `- paper.txt: the text layer of the paper's PDF, ${o.pages} pages, each starting with a line "=== Page N ===". Its
+  words are reliable; math, tables and the order of columns often come out garbled.`
+}
+- pages/p01.png ... : the pages rendered with a coordinate grid. x runs from 0 (left edge) to 1000 (right
+  edge), y from 0 (top edge) to 1000 (bottom edge); gridlines every 50 units, labelled every 100.
+- doc/*.md: what is written so far. Leave those files as they are.
+
+Do this:
+1. Look at the last written part for the wording and terms in use; there is no need to read them all.${o.refs ? ` The
+   reference entries are in ${o.refs}; citations link to their ids.` : ''}
+${
+  pdf
+    ? `2. Read the appendix in paper.pdf with the Read tool, ${range} (at most 20 pages per call, use the pages
+   parameter). Don't read the main text again.`
+    : `2. Read the appendix in paper.txt, ${range}, and look at those page images in pages/, in order, for the layout,
+   math, tables and figures the text layer garbles. Where the two disagree, the image is right.`
+}
+3. Transcribe and translate the whole appendix into ${o.next} and the numbered files after it, in reading order, one
+   file per top-level appendix section or roughly every 3000 words, so no single write is huge. Format below.
+4. ${BBOX}
+5. Reply with the single word DONE.
+
+Rules:
+${rules('Transcribe the whole appendix, its footnotes included, and nothing of the main text again.')}
+- Ids: never reuse one the written parts take. Paragraphs go on from p-${o.last.p + 1}, lists from l-${o.last.l + 1},
+  unnumbered equations from eq-u${o.last.eq + 1}. Sections, figures, tables, numbered equations and footnotes take
+  their numbers from the paper. Links to the main text use the ids it already has.
+- Only create files under doc/, starting with ${o.next}.
+
+## Glossary (English → Chinese; "不译" means keep the English)
+${o.glossary}
+${FORMAT}`
+}
+
+/** Told to a new session when the one writing the appendix is gone. */
+export const appendixCarryOnNote = (parts: string[]) => `
+
+## Carrying on
+An earlier run stopped partway through the appendix. ${written(parts)}: don't write ${parts.length > 1 ? 'them' : 'it'} again. Read what
+is written of the appendix, then continue from where the last one stops, starting with the next file number, and do
+the remaining steps.`
 
 const GUIDE_SAMPLE = `## 要解决的问题
 

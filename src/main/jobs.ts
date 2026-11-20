@@ -1,14 +1,14 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { PaperMeta } from '../shared/types'
+import type { AppendixState, PaperMeta, TaskKind } from '../shared/types'
 import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, updateMeta } from './library'
 import { findFolder, loadFolders } from './folders'
 import { glossaryPrompt } from './glossary'
 import { modelFor, runAgent, type Activity } from './ai'
 import { parseModel } from '../shared/models'
-import { carryOnNote, guidePrompt, processPrompt, resumePrompt, verifyPrompt, type Source } from './prompts'
+import { appendixCarryOnNote, appendixPrompt, carryOnNote, guidePrompt, processPrompt, resumePrompt, verifyPrompt, type Source } from './prompts'
 import { getSettings } from './settings'
 import { workerCall } from './worker'
 import { applyFoundVenue, awaitingVenue, checkVenue, isPreprint } from './venue'
@@ -35,14 +35,21 @@ export function initJobs(onChange: Notify): void {
     stopped: (id) => set(id, { guideWriting: true }),
     dropped: (id) => set(id, { guideWriting: undefined })
   })
+  registerRunner('appendix', {
+    run: appendixTask,
+    queued: (id) => setAppendix(id, { state: 'queued', error: undefined }),
+    stopped: (id) => setAppendix(id, { state: 'queued' }),
+    dropped: (id) => setAppendix(id, { state: undefined, progress: undefined, error: undefined })
+  })
 }
 
 /** The tasks the papers say are waiting, for a library from before the task list. */
-export function pendingFromPapers(): { paper: string; kind: 'process' | 'guide' }[] {
-  const out: { paper: string; kind: 'process' | 'guide' }[] = []
+export function pendingFromPapers(): { paper: string; kind: TaskKind }[] {
+  const out: { paper: string; kind: TaskKind }[] = []
   for (const p of listPapers()) {
     if (p.status === 'processing' || p.status === 'queued') out.push({ paper: p.id, kind: 'process' })
     else if (p.guideWriting) out.push({ paper: p.id, kind: 'guide' })
+    if (p.status === 'ready' && (p.appendix?.state === 'queued' || p.appendix?.state === 'writing')) out.push({ paper: p.id, kind: 'appendix' })
   }
   return out
 }
@@ -71,6 +78,7 @@ function keptOf(id: string): number | undefined {
 
 /** Process a paper from the start, dropping what an interrupted run left. */
 export function restart(id: string): void {
+  cancelTasks(id, ['appendix'])
   if (readMeta(id)?.kept !== undefined) set(id, { kept: undefined })
   if (readMeta(id)?.status !== 'ready') for (const d of ['doc', 'figures']) rmSync(join(paperDir(id), d), { recursive: true, force: true })
   enqueue(id)
@@ -80,6 +88,12 @@ function set(id: string, patch: Partial<PaperMeta>): void {
   const meta = updateMeta(id, patch)
   if (meta) notify(meta)
   if (current?.id === id && patch.stage && meta?.status === 'processing') current.ctx.report(patch.stage, patch.progress)
+}
+
+/** Change the appendix's state, while the paper still waits for its appendix. */
+function setAppendix(id: string, patch: Partial<AppendixState>): void {
+  const a = readMeta(id)?.appendix
+  if (a) set(id, { appendix: { ...a, ...patch } })
 }
 
 /** Back to how it was before it was queued. */
@@ -114,6 +128,9 @@ export const enqueue = (id: string) => void addTask(id, 'process')
 
 /** Write the guide again: next in the task list. */
 export const startGuide = (id: string) => void addTask(id, 'guide')
+
+/** Translate the appendix left out when the paper was processed: next in the task list. */
+export const startAppendix = (id: string) => void addTask(id, 'appendix')
 
 /** The owner cancelled processing from the paper itself. */
 export function cancel(id: string): void {
@@ -180,7 +197,8 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
   const parts = docParts(id)
   // Carry on from an interrupted run, unless the model changed: one article in two hands reads oddly.
   const resume = before?.kept !== undefined && parts.length > 0 && before.processModel === model
-  set(id, { status: 'processing', stage: '渲染页面', progress: resume ? before!.kept : 0.02, error: undefined, kept: undefined })
+  const skipAppendix = getSettings().appendix === 'skip'
+  set(id, { status: 'processing', stage: '渲染页面', progress: resume ? before!.kept : 0.02, error: undefined, kept: undefined, appendix: undefined })
 
   if (resume) rmSync(join(dir, 'figures'), { recursive: true, force: true })
   else {
@@ -255,7 +273,7 @@ async function runJob(id: string, signal: AbortSignal): Promise<void> {
     // Its id is kept from the start, so a run cut off halfway can be resumed.
     const session = randomUUID()
     if (viaCli) set(id, { processSession: session })
-    first = await runAgent({ ...run, prompt: processPrompt({ pages, glossary, source }) + (resume ? carryOnNote(parts) : ''), id: session })
+    first = await runAgent({ ...run, prompt: processPrompt({ pages, glossary, source, skipAppendix }) + (resume ? carryOnNote(parts) : ''), id: session })
   }
   set(id, { processSession: first.session })
   if (first.isError) throw new Error(first.text || '处理失败')
@@ -296,6 +314,11 @@ async function finish(id: string, dir: string, figs: string[], verify?: () => Pr
         patch.venue = info.venue
         if (info.year) patch.year = String(info.year)
       }
+      // Left out of a run told to skip it, unless the run wrote it anyway (sections A, B, ...).
+      const from = Number(info.appendix_page)
+      const pages = readMeta(id)?.pages ?? Infinity
+      const written = parseDoc(readDocSource(id)).some((b) => b.type === 'h' && /^[A-Z](\.|$)/.test(b.attrs.num ?? ''))
+      if (Number.isInteger(from) && from >= 1 && from <= pages && !written) patch.appendix = { from, parts: docParts(id).length }
     } catch {
       /* keep what we had */
     }
@@ -348,3 +371,113 @@ function applySuggestion(id: string, file: string): void {
   rmSync(file, { force: true })
 }
 
+
+/** The appendix of a paper processed without it, written as more doc parts after the main text's. */
+async function appendixTask(id: string, ctx: TaskContext): Promise<void> {
+  const meta = readMeta(id)
+  // Processed again, or written meanwhile: nothing left to do.
+  if (meta?.status !== 'ready' || !meta.appendix) return
+  try {
+    await writeAppendix(id, meta.appendix, ctx)
+  } catch (e: any) {
+    // Stopped: it waits in the queue again, with what it wrote kept.
+    if (!ctx.signal.aborted) setAppendix(id, { state: 'error', error: String(e?.message || e) })
+    throw e
+  }
+  set(id, { appendix: undefined })
+}
+
+async function writeAppendix(id: string, a: AppendixState, ctx: TaskContext): Promise<void> {
+  const { signal } = ctx
+  const dir = paperDir(id)
+  const all = docParts(id)
+  const mainCount = a.parts ?? all.length
+  const main = all.slice(0, mainCount)
+  const done = all.slice(mainCount)
+  const report = (stage: string, progress?: number) => {
+    if (signal.aborted) return
+    if (progress !== undefined) setAppendix(id, { state: 'writing', progress })
+    ctx.report(stage, progress ?? readMeta(id)?.appendix?.progress)
+  }
+  setAppendix(id, { parts: mainCount, state: 'writing', error: undefined, progress: done.length ? (a.progress ?? 0.3) : 0.02 })
+  ctx.report('正在翻译附录', readMeta(id)?.appendix?.progress)
+
+  const model = await modelFor(getSettings().processModel, 'process')
+  const source = sourceFor(model)
+  const url = pdfUrl(id)
+  const { pages } = await workerCall<{ pages: number }>('info', { url })
+  const from = Math.min(Math.max(1, a.from), pages)
+  // The page images are kept from processing; any gone are rendered again.
+  mkdirSync(join(dir, 'pages'), { recursive: true })
+  for (let p = Math.max(1, from - 1); p <= pages; p++) {
+    if (signal.aborted) throw new Error('已停止')
+    const file = join(dir, 'pages', `p${String(p).padStart(2, '0')}.png`)
+    if (!existsSync(file)) writeFileSync(file, await workerCall<Uint8Array>('render', { url, page: p, width: 1100, grid: true }))
+  }
+  if (source === 'pages') await ensurePaperText(id)
+
+  const blocks = parseDoc(readDocSource(id))
+  const top = (re: RegExp) => Math.max(0, ...blocks.map((b) => Number(b.id.match(re)?.[1] ?? 0)))
+  const last = { p: top(/^p-(\d+)$/), l: top(/^l-(\d+)$/), eq: top(/^eq-u(\d+)$/) }
+  const refs = main.find((f) => /^@@ ref /m.test(readFileSync(join(dir, f), 'utf8')))
+  const next = `doc/${String(all.length + 1).padStart(2, '0')}.md`
+
+  // Progress: appendix pages read for the first ~30%, written parts for the rest.
+  const span = pages - from + 1
+  const expected = Math.max(1, Math.round(span / 2.5))
+  const written = new Set(all.map((f) => join(dir, f)))
+  let partsWritten = done.length
+  const onActivity = (act: Activity) => {
+    if (signal.aborted) return
+    if (act.kind === 'read' && /paper\.pdf(#|$)/.test(act.path) && !partsWritten) {
+      const m = act.path.match(/#(\d+)\s*-\s*(\d+)/)
+      const upTo = m ? Math.min(pages, +m[2]) : pages
+      report(`正在读附录（${Math.max(0, upTo - from + 1)}/${span} 页）`, 0.05 + 0.25 * Math.min(1, Math.max(0, upTo - from + 1) / span))
+    } else if (act.kind === 'read' && /pages\/p\d+\.png$/.test(act.path)) {
+      const page = parseInt(act.path.match(/p(\d+)\.png$/)![1], 10)
+      if (source === 'pages' && !partsWritten) report(`正在读附录（${Math.max(0, page - from + 1)}/${span} 页）`, 0.05 + 0.25 * Math.min(1, Math.max(0, page - from + 1) / span))
+      else report(`正在定位图表（第 ${page} 页）`)
+    } else if (act.kind === 'write' && /doc\/\d+\.md$/.test(act.path) && !written.has(act.path)) {
+      written.add(act.path)
+      partsWritten++
+      report(`正在翻译附录（第 ${partsWritten} 部分）`, Math.min(0.85, 0.3 + 0.55 * (partsWritten / expected)))
+    }
+  }
+
+  const viaCli = parseModel(model).provider !== 'openai'
+  const run = { cwd: dir, model, effort: getSettings().processEffort, write: true, keep: true, onActivity, signal }
+  let first: Awaited<ReturnType<typeof runAgent>> | undefined
+  if (done.length && viaCli && a.session) {
+    first = await runAgent({ ...run, prompt: resumePrompt(done), session: a.session })
+    if (first.isError && /no conversation found/i.test(first.text)) first = undefined
+  }
+  if (!first) {
+    const session = randomUUID()
+    if (viaCli) setAppendix(id, { session })
+    const prompt = appendixPrompt({ pages, from, glossary: glossaryPrompt(), source, parts: main, refs, next, last }) + (done.length ? appendixCarryOnNote(done) : '')
+    first = await runAgent({ ...run, prompt, id: session })
+  }
+  if (viaCli && first.session) setAppendix(id, { session: first.session })
+  if (first.isError) throw new Error(first.text || '翻译附录失败')
+  const added = docParts(id).slice(mainCount)
+  const text = added.map((f) => readFileSync(join(dir, f), 'utf8')).join('\n')
+  if (!parseDoc(text).length) throw new Error('没有写出附录，可以重试')
+
+  report('正在裁剪图表', 0.9)
+  const figs = parseDoc(text).filter((b) => (b.type === 'fig' || b.type === 'tab') && b.page && b.bbox).map((b) => b.id)
+  await cropAll(id)
+  if (figs.length && !signal.aborted) {
+    report('正在检查图表裁剪', 0.93)
+    const check = await runAgent({
+      cwd: dir,
+      prompt: verifyPrompt(figs, parseModel(model).provider === 'openai' ? 'apply_patch' : undefined),
+      model,
+      effort: getSettings().processEffort,
+      write: true,
+      session: first.session,
+      signal
+    })
+    if (!check.isError && !/^\s*NONE\s*$/i.test(check.text)) await cropAll(id)
+  }
+  if (signal.aborted) throw new Error('已停止')
+}

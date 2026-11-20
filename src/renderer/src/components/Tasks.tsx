@@ -14,7 +14,8 @@ import { Kept } from './Chrome'
 const KIND: Record<TaskKind, [string, string]> = {
   process: ['file', '处理论文'],
   guide: ['sparkles', '导读'],
-  venue: ['search', '发表信息']
+  venue: ['search', '发表信息'],
+  appendix: ['lang', '翻译附录']
 }
 
 const EMPTY: TaskList = { queue: [], failed: [], paused: false, stopAfter: false }

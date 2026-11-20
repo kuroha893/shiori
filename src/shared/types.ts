@@ -33,6 +33,11 @@ export interface PaperMeta {
   kept?: number
   processedAt?: string
   processModel?: string
+  /**
+   * The appendix, left out when the paper was processed, until the owner has it translated: the page it starts on,
+   * how many doc parts the main text took (the appendix's parts come after), and the task's state
+   */
+  appendix?: AppendixState
   /** A guide is being written in the background */
   guideWriting?: boolean
   guideError?: string
@@ -52,11 +57,22 @@ export interface PaperMeta {
   finished?: boolean
 }
 
+export interface AppendixState {
+  from: number
+  parts?: number
+  state?: 'queued' | 'writing' | 'error'
+  progress?: number
+  error?: string
+  /** The Claude Code session writing it, to carry on after an interruption */
+  session?: string
+}
+
 /**
  * The owner's own AI tasks, done one at a time in their order (see main/tasks.ts). A paper's guide is the last stage
- * of processing it; a guide task alone is a rewrite, a venue task the owner asking where a paper was published.
+ * of processing it; a guide task alone is a rewrite, a venue task the owner asking where a paper was published, an
+ * appendix task the appendix left out when processing.
  */
-export type TaskKind = 'process' | 'guide' | 'venue'
+export type TaskKind = 'process' | 'guide' | 'venue' | 'appendix'
 
 export interface Task {
   key: string
@@ -222,6 +238,8 @@ export interface Settings {
   /** Thinking level wanted for each place; a model that lacks it runs at the nearest below, see pickEffort */
   processEffort: string
   chatEffort: string
+  /** Whether processing a paper transcribes and translates its appendix too, or leaves it for later */
+  appendix: 'translate' | 'skip'
   callEffort: string
   theme: 'system' | 'light' | 'dark' | 'sepia'
   readingFont: 'serif' | 'sans'

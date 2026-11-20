@@ -561,6 +561,13 @@ p.doc-title {
   font-size: 22px;
   color: hsl(var(--faint-foreground));
 }
+/* an appendix left out when processing: translate it on request */
+.doc-appendix {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-ui);
+}
 
 /* highlights (CSS Custom Highlight API: no DOM changes to the text) */
 ::highlight(hl-yellow) {

@@ -13,6 +13,7 @@ const defaults: Settings = {
   processEffort: 'high',
   chatEffort: 'medium',
   callEffort: 'low',
+  appendix: 'translate',
   theme: 'system',
   readingFont: 'serif',
   uiFont: 'Outfit Variable',

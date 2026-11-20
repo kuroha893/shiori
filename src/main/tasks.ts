@@ -6,13 +6,13 @@ import { root } from './library'
 
 /*
  * The owner's own AI tasks, in one queue, one at a time, in the owner's order: processing papers (with the guide as
- * the last stage), rewriting a guide, looking up where a paper was published. Work Shiori starts by itself
- * (conferences, the weekly venue checks) and the owner's chat and calls don't come through here.
+ * the last stage), rewriting a guide, looking up where a paper was published, translating an appendix left out. Work
+ * Shiori starts by itself (conferences, the weekly venue checks) and the owner's chat and calls don't come through here.
  *
- * Processing goes to the end of the queue; a guide or venue task, a single click on one paper, goes next. The queue
- * stops when the owner says so, at once (the task goes back to the head, and starts over later) or once the running
- * task is done. Failed tasks wait until the owner retries or removes them. Kept in <library>/tasks.json, so a quit
- * picks up where it was; a task cut off by quitting starts over.
+ * Processing goes to the end of the queue; a guide, venue or appendix task, a single click on one paper, goes next.
+ * The queue stops when the owner says so, at once (the task goes back to the head, and starts over later) or once the
+ * running task is done. Failed tasks wait until the owner retries or removes them. Kept in <library>/tasks.json, so a
+ * quit picks up where it was; a task cut off by quitting starts over.
  */
 
 export interface TaskContext {
@@ -295,7 +295,7 @@ export function cancelTasks(paper: string, kinds: TaskKind[] = ['process', 'guid
 
 /** A paper going to the Trash takes all its tasks along. */
 export function forgetPaper(paper: string): void {
-  cancelTasks(paper, ['process', 'guide', 'venue'])
+  cancelTasks(paper, ['process', 'guide', 'venue', 'appendix'])
   failed = failed.filter((t) => t.paper !== paper)
   if (!queue.length && !running) paused = false
   changed(true)

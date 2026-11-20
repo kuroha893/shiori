@@ -166,6 +166,21 @@ export function SettingsModal(props: {
         <div className="set-rows">
           <Services services={services} onStatus={props.onServices} />
           {picker('处理论文', 'process')}
+          <div className="set-row">
+            <label>附录</label>
+            <div className="seg">
+              {(
+                [
+                  ['translate', '翻译'],
+                  ['skip', '跳过']
+                ] as const
+              ).map(([v, label]) => (
+                <button key={v} className={s.appendix === v ? 'on' : ''} onClick={() => props.onChange({ appendix: v })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           {picker('问答默认', 'chat')}
           {picker('通话模型', 'call')}
         </div>

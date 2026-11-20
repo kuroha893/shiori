@@ -60,6 +60,13 @@ export function Reader(props: {
     guideWriting.current = paper.guideWriting
   }, [paper.id, paper.guideWriting])
 
+  // So does an appendix translated in the background.
+  const awaitingAppendix = useRef(!!paper.appendix)
+  useEffect(() => {
+    if (awaitingAppendix.current && !paper.appendix && paper.status === 'ready') api.loadDoc(paper.id).then(setDoc)
+    awaitingAppendix.current = !!paper.appendix
+  }, [paper.id, paper.appendix, paper.status])
+
   // On a call she can tell what you are reading.
   useEffect(() => {
     api.callReading(paper.id)
@@ -258,6 +265,42 @@ export function Reader(props: {
     '--read-lh': settings.lineHeight
   } as React.CSSProperties
 
+  // The appendix left out when processing: its heading, and translating it on request.
+  const appendix = paper.appendix
+  const appendixEnd = appendix && (
+    <>
+      <h2 className="blk h h1" data-id="appendix">
+        <span className="h-texts">
+          <span className="h-text">{view === 'en' ? 'Appendix' : '附录'}</span>
+        </span>
+      </h2>
+      <div className="doc-appendix">
+        {appendix.state === 'queued' || appendix.state === 'writing' ? (
+          <span className="pill busy">
+            <span className="dot" />
+            {appendix.state === 'queued' ? '排队中' : `${Math.round((appendix.progress ?? 0) * 100)}%`}
+          </span>
+        ) : appendix.state === 'error' ? (
+          <>
+            <span className="pill err" title={appendix.error}>
+              <span className="dot" />
+              翻译失败
+            </span>
+            <button className="btn sm" onClick={() => api.translateAppendix(paper.id)}>
+              <Icon name="play" size={12} />
+              重试
+            </button>
+          </>
+        ) : (
+          <button className="btn sm" onClick={() => api.translateAppendix(paper.id)}>
+            <Icon name="lang" size={14} />
+            翻译附录
+          </button>
+        )}
+      </div>
+    </>
+  )
+
   const finished = (
     <div className="doc-end">
       <div className="doc-end-mark">❦</div>
@@ -338,6 +381,11 @@ export function Reader(props: {
                   <span>{(view === 'en' ? h.parts.en : h.parts.zh ?? h.parts.en)?.replace(/\$[^$]*\$/g, '…')}</span>
                 </button>
               ))}
+              {appendix && (
+                <button className="toc-item l1" onClick={() => jump('appendix')}>
+                  <span>{view === 'en' ? 'Appendix' : '附录'}</span>
+                </button>
+              )}
             </div>
           </nav>
         )}
@@ -360,7 +408,12 @@ export function Reader(props: {
                 setPanel(true)
                 setTab('guide')
               }}
-              footer={finished}
+              footer={
+                <>
+                  {appendixEnd}
+                  {finished}
+                </>
+              }
               toast={toast}
             />
           )}
