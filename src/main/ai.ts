@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { net } from 'electron'
-import { CLAUDE_EFFORTS, CLAUDE_MODELS, DEEPSEEK_EFFORTS, DEEPSEEK_MODELS, parseModel, pickEffort, pickModel, type ModelOption, type ModelUse, type Provider, type ServiceStatus } from '../shared/models'
+import { CLAUDE_EFFORTS, CLAUDE_MODELS, DEEPSEEK_EFFORTS, DEEPSEEK_MODELS, normalizeModel, parseModel, pickEffort, pickModel, type ModelOption, type ModelUse, type Provider, type ServiceStatus } from '../shared/models'
 import { claudeStatus, openConversation, runClaude, type Conversation } from './claude'
 import { codexAccount, findCodex, isDesktopCodex, openCodexConversation, runCodex, type Activity, type CodexModel } from './codex'
 import { getSettings } from './settings'
@@ -97,24 +97,36 @@ async function check(): Promise<ServiceStatus> {
   return { claude, openai, deepseek, models }
 }
 
+const statusListeners: ((s: ServiceStatus, before?: ServiceStatus) => void)[] = []
+/** A service was signed in or out, installed or removed, since the last look. */
+export const onStatusChange = (fn: (s: ServiceStatus, before?: ServiceStatus) => void) => statusListeners.push(fn)
+const stateKey = (s: ServiceStatus) => `${s.claude.state}/${s.openai.state}/${s.deepseek.state}`
+
 /** Checking starts CLIs, so a recent answer is reused unless `fresh` is asked for. */
 export async function serviceStatus(fresh = false): Promise<ServiceStatus> {
   if (!fresh && status && Date.now() - checkedAt < 30_000) return status
   checking ??= check()
     .then((s) => {
+      const before = status
       status = s
       checkedAt = Date.now()
+      if (!before || stateKey(before) !== stateKey(s)) for (const fn of statusListeners) fn(s, before)
       return s
     })
     .finally(() => (checking = undefined))
   return checking
 }
 
+const swapListeners: ((use: ModelUse, wanted: string, picked: string) => void)[] = []
+/** The model picked for a place couldn't run, and another one did instead (picked === wanted once it can again). */
+export const onModelSwap = (fn: (use: ModelUse, wanted: string, picked: string) => void) => swapListeners.push(fn)
+
 /** The model to run for a place, falling back to another connected one; throws when nothing is connected. */
 export async function modelFor(value: string, use: ModelUse): Promise<string> {
   let picked = pickModel(value, (await serviceStatus()).models, use)
   picked ??= pickModel(value, (await serviceStatus(true)).models, use)
   if (!picked) throw new Error('还没有接入模型服务，请先在设置里接入 Claude、ChatGPT 或 DeepSeek')
+  for (const fn of swapListeners) fn(use, normalizeModel(value), picked)
   return picked
 }
 

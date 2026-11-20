@@ -1,6 +1,6 @@
 import type { Contact, ContactDraft } from '../shared/contacts'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annotation, ChatEvent, Folder, GlossaryEntry, JournalDay, NowPlaying, OpenReviewAccount, PaperMeta, PetState, RoomView, Settings, StudyPlan, StudyState, TaskAction, TaskList, QuotaView } from '../shared/types'
+import type { Annotation, ArxivPeek, ChatEvent, Folder, GlossaryEntry, JournalDay, NowPlaying, OpenReviewAccount, PaperMeta, PetState, PhoneThread, PhoneView, RoomView, Settings, StudyPlan, StudyState, TaskAction, TaskList, QuotaView } from '../shared/types'
 import type { ServiceStatus } from '../shared/models'
 import type { ConfOverview, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../shared/conferences'
 
@@ -23,7 +23,6 @@ const api = {
   createFolder: (name: string): Promise<Folder> => ipcRenderer.invoke('folders:create', name),
   renameFolder: (id: string, name: string) => ipcRenderer.invoke('folders:rename', id, name),
   deleteFolder: (id: string) => ipcRenderer.invoke('folders:delete', id),
-  acceptSuggestion: (id: string) => ipcRenderer.invoke('papers:acceptSuggestion', id),
   serviceStatus: (fresh?: boolean): Promise<ServiceStatus> => ipcRenderer.invoke('services:status', fresh),
   serviceLogin: (provider: 'claude' | 'openai') => ipcRenderer.invoke('services:login', provider),
   openTerminal: () => ipcRenderer.invoke('services:terminal'),
@@ -34,6 +33,8 @@ const api = {
   importDialog: () => ipcRenderer.invoke('papers:importDialog'),
   importFiles: (files: File[]) => ipcRenderer.invoke('papers:importPaths', files.map((f) => webUtils.getPathForFile(f))),
   importArxiv: (input: string) => ipcRenderer.invoke('papers:importArxiv', input),
+  peekArxiv: (input: string): Promise<ArxivPeek | undefined> => ipcRenderer.invoke('papers:peekArxiv', input),
+  clipboardArxiv: (): Promise<string | undefined> => ipcRenderer.invoke('clipboard:arxiv'),
   updatePaper: (id: string, patch: Partial<PaperMeta>) => ipcRenderer.invoke('papers:update', id, patch),
   processPaper: (id: string, fresh?: boolean) => ipcRenderer.invoke('papers:process', id, fresh),
   writeGuide: (id: string) => ipcRenderer.invoke('papers:guide', id),
@@ -111,8 +112,6 @@ const api = {
   onOpenReviewChanged: (fn: () => void) => on('openreview:changed', fn),
 
   roomView: (): Promise<RoomView> => ipcRenderer.invoke('room:view'),
-  roomVisit: () => ipcRenderer.invoke('room:visit'),
-  roomRead: () => ipcRenderer.invoke('room:read'),
   chooseWallpaper: () => ipcRenderer.invoke('room:chooseWallpaper'),
   clearWallpaper: () => ipcRenderer.invoke('room:clearWallpaper'),
   journal: (year: number, month: number): Promise<JournalDay[]> => ipcRenderer.invoke('room:journal', year, month),
@@ -123,6 +122,12 @@ const api = {
   studyResume: () => ipcRenderer.invoke('room:studyResume'),
   studyStop: () => ipcRenderer.invoke('room:studyStop'),
   onRoomChanged: (fn: (v: RoomView) => void) => on('room:changed', fn),
+  phoneView: (): Promise<PhoneView> => ipcRenderer.invoke('phone:view'),
+  phoneThread: (id: string): Promise<PhoneThread> => ipcRenderer.invoke('phone:thread', id),
+  phoneRead: (id: string) => ipcRenderer.invoke('phone:read', id),
+  phoneMute: (id: string, on: boolean) => ipcRenderer.invoke('phone:mute', id, on),
+  phoneAct: (notice: string) => ipcRenderer.invoke('phone:act', notice),
+  onPhoneChanged: (fn: (v: PhoneView) => void) => on('phone:changed', fn),
   onStudyChanged: (fn: (s: StudyState | null) => void) => on('room:study', fn),
   nowPlaying: (withCover: boolean): Promise<NowPlaying | undefined> => ipcRenderer.invoke('np:get', withCover),
   playerSend: (command: 'play' | 'pause' | 'toggle' | 'next' | 'previous') => ipcRenderer.invoke('np:send', command),

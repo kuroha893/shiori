@@ -3,7 +3,9 @@ import { net } from 'electron'
 import { promisify } from 'node:util'
 import type { QuotaView, QuotaWindow, ServiceQuota } from '../shared/types'
 import { parseModel, type Provider } from '../shared/models'
-import { DEEPSEEK_URL, serviceStatus } from './ai'
+import { DEEPSEEK_URL, onStatusChange, serviceStatus } from './ai'
+import { onTurnFailed } from './call'
+import { serviceExhausted, serviceSignedOut } from './phone'
 import { claudeEnv, findClaude } from './claude'
 import { codexRateLimits, onCodexRateLimits } from './codex'
 import { getSettings } from './settings'
@@ -119,12 +121,17 @@ function inUse(): Provider[] {
   return [...new Set([s.processModel, s.chatModel, s.callModel].map((m) => parseModel(m).provider))]
 }
 
+/** Asked again while a read was under way, which may have started before whatever changed */
+let again = false
+
 /** Read the connected services; `all` also reads those Shiori doesn't run on now, for the open panel. */
 export function readQuota(all: boolean): Promise<QuotaView> {
+  if (reading) again = true
   reading ??= (async () => {
     const status = await serviceStatus()
     const connected = (['claude', 'openai', 'deepseek'] as const).filter((p) => status[p].state === 'ready')
     const using = inUse().filter((p) => connected.includes(p))
+    const signedOut = inUse().filter((p): p is 'claude' | 'openai' => p !== 'deepseek' && status[p].state === 'signedOut')
     const want = all ? connected : using
     const fresh = await Promise.all(want.map((p) => READERS[p]()))
     // Keep what was read before for services not read this time; drop services no longer connected.
@@ -133,14 +140,27 @@ export function readQuota(all: boolean): Promise<QuotaView> {
       .filter((q): q is ServiceQuota => !!q)
       // a failed read keeps the last good numbers
       .map((q) => (q.failed ? (view.services.find((o) => o.provider === q.provider && !o.failed) ?? q) : q))
-    view = { services, inUse: using, checkedAt: Date.now() }
+    view = { services, inUse: using, signedOut, checkedAt: Date.now() }
+    for (const p of inUse()) serviceSignedOut(p, (signedOut as string[]).includes(p))
+    // Only what was actually read this time says the allowance is gone or back.
+    for (const q of fresh.filter((q) => !q.failed && using.includes(q.provider))) {
+      const empty = q.windows?.filter((w) => w.left <= 0) ?? []
+      const out = !!empty.length || (!!q.balance && !q.balance.usable)
+      serviceExhausted(q.provider, out, empty.map((w) => w.resetsAt ?? 0).sort((a, b) => b - a)[0] || undefined)
+    }
     notify(view)
     return view
-  })().finally(() => (reading = undefined))
+  })().finally(() => {
+    reading = undefined
+    if (again) {
+      again = false
+      void readQuota(false)
+    }
+  })
   return reading
 }
 
-export const quotaView = () => ({ ...view, inUse: inUse().filter((p) => view.services.some((q) => q.provider === p)) })
+export const quotaView = (): QuotaView => ({ ...view, inUse: inUse().filter((p) => view.services.some((q) => q.provider === p)) })
 
 let soon: NodeJS.Timeout | undefined
 /** After the owner's task is done, read again once things settle. */
@@ -155,4 +175,8 @@ export function initQuota(onChange: (v: QuotaView) => void): void {
   setInterval(() => void readQuota(false), 5 * 60_000)
   // Codex says when its numbers change while it runs.
   onCodexRateLimits(() => quotaSoon())
+  // Signed in or out somewhere: the block and the notices follow at once.
+  onStatusChange(() => void readQuota(false))
+  // A call that couldn't reach its model may have run out of allowance.
+  onTurnFailed(() => quotaSoon())
 }

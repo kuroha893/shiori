@@ -1,0 +1,858 @@
+/*
+ * The phone. One pane of clear liquid glass (lib/glass.ts, PHONE_KINDS on .ph-ground): its rounded rim bends what is
+ * behind it, the middle only softens it. Everything on it is flat; words straight on the glass are .glass-ink
+ * (lib/ink.ts) and take dark or white ink from what is under them. Its apps are bright pages inside.
+ */
+
+.ph {
+  --ph-coral: #ec6f78;
+  --ph-coral-2: #f39097;
+  --ph-steel: #4d6577;
+  --ph-steel-soft: #e4eaef;
+  --ph-name: #3b4148;
+  --ph-sub: #8a949e;
+  --ph-line: #edf0f3;
+  --ph-red: #ff4a3d;
+  position: relative;
+  width: 380px;
+  height: min(700px, calc(100vh - 110px));
+  border-radius: 40px;
+  overflow: hidden;
+  isolation: isolate;
+  color: #f4f3f7;
+  font-family: var(--font-ui);
+  text-align: left;
+  user-select: none;
+  box-shadow: 0 34px 60px -24px rgb(10 14 26 / 0.38), 0 0 0 0.5px rgb(0 0 0 / 0.12);
+}
+/* the glass's thickness: a fixed light from the upper left, a weaker one lower right, a faint glow inside the rim */
+.ph-edge,
+.ph-spec,
+.ph-bevel,
+.ph-bevel i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.ph-edge {
+  z-index: 6;
+  box-shadow:
+    inset 1.5px 1.5px 0.5px -0.5px rgb(255 255 255 / 0.7),
+    inset -1.5px -1.5px 0.5px -0.5px rgb(255 255 255 / 0.32),
+    inset 0 0 22px rgb(255 255 255 / 0.12),
+    inset 0 0 3px rgb(255 255 255 / 0.18);
+}
+/* light from the pointer, only on the rim (usePointerLight sets --px/--py in the phone's pixels): a bright line where
+   it comes near, and a softer glow in the bevel beside it */
+.ph-spec,
+.ph-bevel i {
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+.ph-spec {
+  z-index: 7;
+  padding: 1.5px;
+  background: radial-gradient(150px circle at calc(var(--px, -999) * 1px) calc(var(--py, -999) * 1px), rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.3) 45%, transparent 75%);
+}
+.ph-bevel {
+  z-index: 6;
+  filter: blur(5px);
+}
+.ph-bevel i {
+  padding: 12px;
+  background: radial-gradient(150px circle at calc(var(--px, -999) * 1px) calc(var(--py, -999) * 1px), rgb(255 255 255 / 0.32), transparent 75%);
+}
+.ph button {
+  font: inherit;
+  cursor: default;
+}
+.ph-ground {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgb(255 255 255 / 0.05);
+  backdrop-filter: var(--lens, blur(6px) saturate(1.45));
+}
+.ph-status {
+  position: absolute;
+  z-index: 5;
+  top: 15px;
+  left: 28px;
+  right: 26px;
+  display: flex;
+  align-items: center;
+  font-family: -apple-system, 'PingFang SC', sans-serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.ph-status-ic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* a conversation's picture: her avatar in her ring, or the app's mark */
+.ph-av {
+  position: relative;
+  flex: none;
+  display: block;
+  box-sizing: border-box;
+  padding: 2px;
+  border-radius: 50%;
+  background: hsl(var(--hue, 215) 60% 60%);
+}
+.ph-av img,
+.ph-av .contact-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  object-fit: cover;
+  box-sizing: border-box;
+}
+.ph-av.sys {
+  background: #c9d3dc;
+}
+.ph-av.sys img {
+  background: #f3eee4;
+}
+
+/* ---------- home ---------- */
+
+.ph-home {
+  position: absolute;
+  inset: 0;
+  padding-top: 50px;
+}
+.ph-latest {
+  position: relative;
+  height: 224px;
+  margin: 0 14px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #26243a;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 16px 30px -18px rgb(0 0 0 / 0.6);
+}
+.ph-latest-pic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 16%;
+}
+.ph-latest.sys {
+  background: #f3eee4;
+}
+.ph-latest.sys .ph-latest-pic {
+  object-position: 50% 74%;
+  transform: scale(1.22);
+  transform-origin: 50% 62%;
+}
+.ph-tag {
+  position: absolute;
+  z-index: 2;
+  left: 12px;
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background: rgb(15 12 22 / 0.5);
+  color: #fff;
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.ph-tag i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ph-red);
+}
+.ph-plate {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 9px;
+  padding: 10px 14px 11px;
+  border-radius: 19px;
+  background: rgb(22 16 30 / 0.5);
+  color: #fff;
+  text-shadow: 0 1px 6px rgb(20 12 28 / 0.5);
+}
+.ph-latest.sys .ph-plate {
+  background: rgb(40 30 36 / 0.55);
+}
+.ph-plate-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.ph-plate-who b {
+  letter-spacing: 0.05em;
+}
+.ph-plate-who time {
+  font-size: 11.5px;
+  opacity: 0.75;
+}
+.ph-plate-who .ph-av img {
+  border-width: 1.5px;
+}
+.ph-plate-line {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.ph-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+.ph-plate-line.strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-plate-line.strong .service-logo {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.ph-plate-act {
+  flex: none;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: #f7f5f2;
+  color: #1f1c27;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  text-shadow: none;
+}
+.ph-apps {
+  display: flex;
+  gap: 30px;
+  margin: 22px 30px 0;
+}
+.ph-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 11.5px !important;
+  letter-spacing: 0.03em;
+}
+.ph-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  box-shadow: 0 10px 20px -12px rgb(0 0 0 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.35);
+  transition: transform 0.15s;
+}
+.ph-app:hover .ph-tile {
+  transform: scale(1.04);
+}
+.ph-tile.talk {
+  background: linear-gradient(160deg, #f59ba1 0%, var(--ph-coral) 100%);
+}
+.ph-tile.tomato {
+  background: #fdfaf5;
+}
+.ph-count,
+.ph-launch-n,
+.ph-edge-n,
+.ph-rail-n,
+.ph-n {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--ph-red, #ff4a3d);
+  color: #fff;
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.ph-count {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  min-width: 22px;
+  height: 22px;
+  line-height: 22px;
+  font-size: 12.5px;
+}
+.ph-dock {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 16px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding: 12px 0;
+  border-radius: 32px;
+}
+.ph-dock-item {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  transition: transform 0.15s;
+}
+.ph-dock-item:hover {
+  transform: scale(1.05);
+}
+.ph-dock-item .ph-av {
+  padding: 2.5px;
+}
+.ph-dot {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--ph-red);
+  box-sizing: border-box;
+}
+
+/* ---------- the apps: bright and flat ---------- */
+
+.ph-app-page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f7f8fa;
+  color: var(--ph-name);
+}
+.ph-bar {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 96px;
+  padding: 44px 16px 0 18px;
+  box-sizing: border-box;
+  background: linear-gradient(100deg, var(--ph-coral) 0%, var(--ph-coral-2) 100%);
+  color: #fff;
+}
+.ph-bar.tomato {
+  background: linear-gradient(100deg, #e2483a 0%, #ef7a62 100%);
+}
+.ph-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.ph-wordmark i {
+  font-style: normal;
+  font-weight: 300;
+}
+.ph-bar-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.22);
+}
+.ph-bar-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+}
+.ph-bar-who {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.ph-bar-who b {
+  font-size: 16.5px;
+  letter-spacing: 0.05em;
+}
+.ph-bar-who small {
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.ph-talk-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.ph-rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 58px;
+  padding-top: 12px;
+  background: #eef1f4;
+  border-right: 1px solid #e3e7eb;
+}
+.ph-rail button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #9aa4ae;
+}
+.ph-rail button.on {
+  background: #fff;
+  color: var(--ph-coral);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}
+.ph-rail-n {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 16px;
+  font-size: 10.5px;
+}
+.ph-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ph-row {
+  display: grid;
+  grid-template-columns: 50px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 14px 11px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--ph-line);
+  background: #fff;
+  color: var(--ph-name);
+  text-align: left;
+}
+.ph-row:hover {
+  background: #fbfcfd;
+}
+.ph-row-main {
+  min-width: 0;
+}
+.ph-row-main b {
+  display: block;
+  font-size: 14.5px;
+  letter-spacing: 0.03em;
+}
+.ph-row-last {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ph-sub);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ph-row-last .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-row-side {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  padding-top: 3px;
+  color: var(--ph-sub);
+  font-size: 11px;
+}
+.ph-row.muted .ph-n {
+  background: #c3cad1;
+}
+.ph-muted {
+  color: #9aa4ae;
+}
+
+/* a conversation */
+.ph-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px 14px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  user-select: text;
+}
+.ph-chat > :first-child {
+  margin-top: auto;
+}
+.ph-ban {
+  flex: none;
+  margin: 6px 0;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--ph-steel-soft);
+  color: var(--ph-steel);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.ph-grp {
+  flex: none;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.ph-grp-name {
+  margin: 1px 0 5px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.ph-msgs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.ph-m {
+  position: relative;
+  max-width: 100%;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: var(--ph-steel);
+  color: #fff;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.ph-m small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.72;
+}
+.ph-m.first::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 10px;
+  border: 6px solid transparent;
+  border-left: 0;
+  border-right-color: var(--ph-steel);
+}
+.ph-callrec {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin: 6px 0;
+  padding: 0 13px 0 9px;
+  border: 1px solid #e3e8ec;
+  border-radius: 15px;
+  background: #fff;
+  color: var(--ph-steel);
+  font-size: 12px;
+}
+.ph-callrec b {
+  font-family: 'Outfit Variable', var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ph-callrec-ic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #34c759;
+}
+.ph-dialbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 74px;
+  padding-bottom: 8px;
+  box-sizing: border-box;
+  border-top: 1px solid #e8ecef;
+  background: #fff;
+}
+.ph-dial {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 20px;
+  background: #34c759;
+  color: #fff;
+  font-size: 14px !important;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  box-shadow: 0 6px 14px -8px rgb(30 140 60 / 0.7);
+}
+.ph-dial.hang {
+  background: #e0574f;
+  box-shadow: 0 6px 14px -8px rgb(160 40 30 / 0.7);
+}
+
+/* the app's own notices */
+.ph-notice {
+  flex: none;
+  margin: 4px 0;
+  padding: 11px 13px 12px;
+  border: 1px solid #e3e8ec;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.ph-notice.done {
+  opacity: 0.6;
+}
+.ph-notice-lab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--ph-steel);
+  color: var(--ph-steel);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.ph-notice-lab time {
+  margin-left: auto;
+  color: var(--ph-sub);
+  font-weight: 400;
+}
+.ph-notice-paper {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+.ph-notice-paper img,
+.ph-thumb-blank {
+  width: 38px;
+  height: 50px;
+  border: 1px solid #eceff2;
+  border-radius: 4px;
+  object-fit: cover;
+  object-position: top;
+  background: #eef1f4;
+  box-sizing: border-box;
+}
+.ph-notice-paper b {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.ph-notice-paper small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ph-sub);
+  font-size: 11px;
+}
+.ph-notice-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.ph-notice-title .service-logo {
+  width: 16px;
+  height: 16px;
+}
+.ph-notice-sub {
+  margin-top: 5px;
+  color: var(--ph-sub);
+  font-size: 12.5px;
+}
+.ph-notice-acts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ph-cap {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-right: auto;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: var(--ph-steel-soft);
+  color: var(--ph-steel);
+  font-family: 'Outfit Variable', var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ph-act {
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ph-steel-soft);
+  color: var(--ph-steel);
+  font-size: 12.5px !important;
+  font-weight: 600;
+}
+.ph-act.strong {
+  background: #1f1c27;
+  color: #fff;
+}
+.ph-done {
+  color: var(--ph-sub);
+  font-size: 12px;
+}
+
+/* 番茄钟: the lobby's timer, on the app's light page whatever the theme */
+.ph-pomo {
+  --background: 210 33% 99%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --muted: 240 4.8% 95%;
+  --muted-foreground: 240 3.8% 32%;
+  --faint-foreground: 240 3.8% 52%;
+  --accent: 240 4.8% 95.9%;
+  --border: 240 5.9% 88%;
+  --primary: 200 29% 45%;
+  flex: 1;
+  min-height: 0;
+  padding: 18px 14px;
+  overflow-y: auto;
+  color: hsl(var(--foreground));
+  user-select: text;
+}
+.ph-pomo .room-card {
+  border-color: #e3e8ec;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+/* ---------- where it lives ---------- */
+
+/* 书库, 会议: rising from the green ring */
+.ph-launcher .call-launch {
+  position: relative;
+}
+.ph-launch-n {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+}
+.ph-pop {
+  position: absolute;
+  right: -6px;
+  bottom: 54px;
+  /* springs out of the ring and back in from PhoneLauncher */
+}
+
+
+/* 大厅: waiting at the right edge */
+.ph-dock-edge {
+  position: fixed;
+  z-index: 14;
+  right: 0;
+  top: calc(50% + 20px);
+  transform: translate(calc(100% - 22px), -50%);
+  transition: transform 0.42s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.ph-dock-edge[data-state='peek'] {
+  transform: translate(calc(100% - 76px), -50%);
+}
+.ph-dock-edge[data-state='open'] {
+  transform: translate(-32px, -50%);
+}
+.ph-dock-edge:not([data-state='open']) .ph {
+  pointer-events: none;
+}
+.ph-edge-n {
+  position: absolute;
+  left: -10px;
+  top: 42%;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-dock-edge {
+    transition: none;
+  }
+}

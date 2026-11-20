@@ -43,8 +43,6 @@ export interface PaperMeta {
   guideError?: string
   /** Ids of the research directions the owner filed this paper under */
   folders?: string[]
-  /** Claude's suggestion for an unfiled paper; nothing is filed until the owner accepts it */
-  suggestion?: { name: string; folderId?: string }
   /** When the owner hearted this paper */
   likedAt?: string
   /** Marked 稍后再看 */
@@ -126,6 +124,8 @@ export interface QuotaView {
   services: ServiceQuota[]
   /** Services Shiori runs on now: those picked for processing, chat or calls */
   inUse: ServiceQuota['provider'][]
+  /** Services in use that are signed out */
+  signedOut?: ('claude' | 'openai')[]
   checkedAt?: number
 }
 
@@ -240,6 +240,11 @@ export interface Settings {
   chatEffort: string
   /** Whether processing a paper transcribes and translates its appendix too, or leaves it for later */
   appendix: 'translate' | 'skip'
+  /** Which title a paper shows by: the translation, or the paper's own (where both show, the other goes small) */
+  paperTitle: 'zh' | 'en'
+  /** How 书库 shows papers: covers, cards or a list, and what it groups them by */
+  libraryView: LibraryView
+  libraryGroup: LibraryGroup
   callEffort: string
   theme: 'system' | 'light' | 'dark' | 'sepia'
   readingFont: 'serif' | 'sans'
@@ -277,8 +282,22 @@ export interface Settings {
   readingWall: 'sheet' | 'full'
   /** Whether the welcome page has been through, or skipped */
   welcomed?: boolean
-  /** The contact last called, who leaves notes in 大厅 */
+  /** The contact last called */
   roomContact?: string
+  /** Conversations in Shiori Talk that write without lighting a badge */
+  mutedContacts: string[]
+}
+
+export type LibraryView = 'cover' | 'card' | 'list'
+export type LibraryGroup = 'none' | 'added' | 'venue' | 'year' | 'state'
+
+/** What arXiv says about a paper before it is imported, or the paper already in the library */
+export interface ArxivPeek {
+  arxiv: string
+  title: string
+  authors: string[]
+  /** The library's paper, when it is already there */
+  paper?: string
 }
 
 export interface PetState {
@@ -306,24 +325,97 @@ export interface OpenReviewAccount {
   name: string
 }
 
+/* ---------- 手机 ---------- */
+
+/** The conversation of the app itself in Shiori Talk */
+export const SYSTEM_THREAD = '@shiori'
+
+export type NoticeKind =
+  | 'paper-ready'
+  | 'paper-failed'
+  | 'edition'
+  | 'later'
+  | 'openreview-public'
+  | 'signed-out'
+  | 'quota-out'
+  | 'model'
+  | 'openreview-expired'
+  | 'voice'
+  | 'disk'
+  | 'recovered'
+
+/** What a notice's button does */
+export type NoticeAction =
+  | RoomLink
+  | { kind: 'login'; provider: 'claude' | 'openai' | 'deepseek' }
+  | { kind: 'openreview' }
+  | { kind: 'settings' }
+  | { kind: 'retry' }
+
+/** A message from the app itself: a fact, with the one thing to do about it */
+export interface SystemNotice {
+  id: string
+  at: string
+  kind: NoticeKind
+  /** The fact, in a few words */
+  title: string
+  /** A second line when the title can't carry it: when the allowance comes back, how much disk is left */
+  sub?: string
+  paper?: string
+  provider?: 'claude' | 'openai' | 'deepseek'
+  /** New papers, failed tasks */
+  count?: number
+  action?: NoticeAction
+  read?: boolean
+  /** The condition it reported is over (signed in again, allowance back) */
+  done?: boolean
+  /** Conditions that last are reported once until they end */
+  key?: string
+}
+
+export interface PhoneConversation {
+  /** A contact's id, or SYSTEM_THREAD */
+  id: string
+  /** The latest thing in it */
+  at?: string
+  last?: string
+  /** That latest thing was a call of so many seconds */
+  call?: number
+  unread: number
+  muted?: boolean
+}
+
+export interface PhoneView {
+  /** Most recent first */
+  conversations: PhoneConversation[]
+  /** Unread, leaving out muted conversations */
+  unread: number
+  /** The newest message of all, for the home screen */
+  latest?: { thread: string; at: string; note?: RoomNote; notice?: SystemNotice }
+}
+
+export type PhoneItem = { type: 'note'; at: string; note: RoomNote } | { type: 'call'; at: string; seconds: number } | { type: 'notice'; at: string; notice: SystemNotice }
+
+export interface PhoneThread {
+  id: string
+  /** Oldest first */
+  items: PhoneItem[]
+  /** Where 到此已读 goes: the first unread item */
+  firstUnread?: number
+}
+
 /* ---------- 大厅 ---------- */
 
 /** Where a note of hers leads */
 export type RoomLink = { kind: 'paper'; paper: string } | { kind: 'edition'; conf: string; year: number } | { kind: 'later' }
 
-/** Something that happened while no call was open, waiting for her to write it down */
-export interface RoomFact {
-  at: string
-  text: string
-  links: RoomLink[]
-}
-
-/** A note she left in the room */
+/** A message a contact left in Shiori Talk */
 export interface RoomNote {
   id: string
-  /** When what it tells happened; for a note about her day, when she wrote it */
+  /** When she wrote it; for older notes that told the app's news, when that happened */
   at: string
-  kind: 'news' | 'day'
+  /** About her own day, a reaction to what the owner did, or (written before notices) the app's news in her words */
+  kind: 'news' | 'day' | 'reaction'
   /** Her words in her own language, when that isn't Chinese */
   say?: string
   zh: string
@@ -332,11 +424,6 @@ export interface RoomNote {
 }
 
 export interface RoomView {
-  /** Who leaves notes: the contact last called */
-  contact?: string
-  notes: RoomNote[]
-  /** She is writing notes right now */
-  writing: boolean
   /** shiori:// address of the owner's wallpaper, versioned */
   wallpaper?: string
   /** The paper being read: the one opened last that isn't finished */

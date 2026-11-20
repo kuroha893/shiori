@@ -16,7 +16,7 @@ declare global {
 
 const bridge = window.callBridge
 
-type Entry = { who: 'you' | 'her'; zh: string; say?: string; at: number; key: string }
+type Entry = { who: 'you' | 'her'; zh: string; say?: string; at: number; key: string; failed?: boolean }
 type Row = { kind: 'line'; entry: Entry } | { kind: 'time' | 'end'; text: string; key: string }
 
 const MOODS: { id: CallMood; label: string }[] = [
@@ -213,6 +213,13 @@ function Call() {
         tone([880, 660])
       }),
       bridge.onMoodSet(setMood),
+      // What you last said didn't reach her: marked, without any error text.
+      bridge.onFailed(() =>
+        setHistory((h) => {
+          const i = h.map((e) => e.who).lastIndexOf('you')
+          return i < 0 ? h : h.map((e, j) => (j === i ? { ...e, failed: true } : e))
+        })
+      ),
       bridge.onLine((line) => {
         queue.current.push(line)
         if (!playing.current) playNext()
@@ -364,7 +371,7 @@ function Call() {
             <div className="call-lines">
               {rows.map((row) =>
                 row.kind === 'line' ? (
-                  <div key={row.entry.key} className={`call-line ${row.entry.who}`}>
+                  <div key={row.entry.key} className={`call-line ${row.entry.who} ${row.entry.failed ? 'failed' : ''}`}>
                     {row.entry.zh}
                     {row.entry.say && <small>{row.entry.say}</small>}
                   </div>

@@ -24,6 +24,9 @@ const listeners: (() => void)[] = []
 /** Whether the owner was signed in when Shiori last looked, for callers that can't wait. */
 export const isSignedIn = () => signedIn
 export const onAccountChange = (fn: () => void) => listeners.push(fn)
+const expiry: (() => void)[] = []
+/** OpenReview stopped taking the session on its own, rather than the owner signing out. */
+export const onExpired = (fn: () => void) => expiry.push(fn)
 
 function accountChanged(now: boolean): void {
   signedIn = now
@@ -101,9 +104,11 @@ async function get(path: string, ms: number): Promise<Response | undefined> {
     const body = res.status === 403 ? ((await res.clone().json().catch(() => ({}))) as { name?: string }) : {}
     if (res.status !== 401 && body.name !== 'ChallengeRequiredError') return res
   }
+  const was = signedIn
   await ses().clearStorageData()
   await keep()
   accountChanged(false)
+  if (was) for (const fn of expiry) fn()
   return undefined
 }
 

@@ -14,6 +14,9 @@ const defaults: Settings = {
   chatEffort: 'medium',
   callEffort: 'low',
   appendix: 'translate',
+  paperTitle: 'zh',
+  libraryView: 'card',
+  libraryGroup: 'none',
   theme: 'system',
   readingFont: 'serif',
   uiFont: 'Outfit Variable',
@@ -31,7 +34,8 @@ const defaults: Settings = {
   wallpaperIn: ['room'],
   wallpaperBlur: 24,
   readingBlur: 24,
-  readingWall: 'sheet'
+  readingWall: 'sheet',
+  mutedContacts: []
 }
 
 const file = () => join(app.getPath('userData'), 'settings.json')

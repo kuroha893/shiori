@@ -9,6 +9,7 @@ import { SettingsModal } from './SettingsModal'
 import { Welcome } from './Welcome'
 import { applyFonts } from '../lib/fonts'
 import { startGlass } from '../lib/glass'
+import { setTitleLang } from '../lib/titles'
 
 /** A short note at the bottom; with `until`, it stays until that settles instead of fading. */
 export type Toast = (text: string, until?: Promise<unknown>) => void
@@ -35,14 +36,15 @@ function Backdrop({ settings, reading, inRoom }: { settings: Settings; reading: 
   if (!on) return null
   return (
     <>
-      <div className="app-wall" style={{ backgroundImage: `url("${url}")`, filter: blur ? `blur(${blur}px)` : undefined }} />
-      <div className="app-veil" />
+      <div className="app-wall" data-ink-layer="" style={{ backgroundImage: `url("${url}")`, filter: blur ? `blur(${blur}px)` : undefined }} />
+      <div className="app-veil" data-ink-layer="" />
     </>
   )
 }
 
 export function App() {
   const [settings, setSettings] = useState<Settings>()
+  useEffect(() => setTitleLang(settings?.paperTitle), [settings?.paperTitle])
   const [papers, setPapers] = useState<PaperMeta[]>([])
   const [open, setOpen] = useState<string>()
   const [showSettings, setShowSettings] = useState(false)

@@ -1,21 +1,17 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification } from 'electron'
+import { BrowserWindow, dialog, ipcMain, Notification } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
-import { randomUUID } from 'node:crypto'
-import type { JournalDay, JournalPaper, PaperMeta, RoomFact, RoomLink, RoomNote, RoomView, StudyPlan, StudyState } from '../shared/types'
+import type { JournalDay, JournalPaper, PaperMeta, RoomView, StudyPlan, StudyState } from '../shared/types'
 import { getSettings } from './settings'
 import { listPapers, loadAnnotations, loadChat, readMeta, root } from './library'
-import { contactDir, getContact, loadContacts } from './contacts'
-import { modelFor, runAgent } from './ai'
-import { notesPrompt } from './callPrompt'
-import { callActive, callEvent, onMissedEvent, setCallMood } from './call'
+import { getContact } from './contacts'
+import { callActive, callEvent, setCallMood } from './call'
 import { callWith } from './pet'
 
 /*
- * 大厅, the lobby Shiori opens on. Everything in it grows out of what already happens: notes the contact last called
- * leaves about what the app did while no call was open, the papers being read, the owner's own highlights and
- * questions day by day, and a study timer she can keep with them. Its files live in <library>/room; her notes in her
- * own folder.
+ * 大厅, the lobby Shiori opens on: the owner's desk. Everything in it grows out of what already happens: the papers
+ * being read, the owner's own highlights and questions day by day, and the study timer (番茄钟 in the phone). Its
+ * files live in <library>/room. Her messages are the phone's (phone.ts).
  */
 
 const dir = () => join(root(), 'room')
@@ -41,13 +37,6 @@ const dayOf = (d: Date | string | number = new Date()) => {
 }
 
 const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-// Facts wait for company before she writes: a few quiet minutes, but never much longer than half an hour.
-const WRITE_AFTER_QUIET = 5 * MINUTE
-const WRITE_AT_MOST = 30 * MINUTE
-// A note about her own day: after a long time away, at most one a day.
-const DAY_NOTE_AFTER = 6 * HOUR
-const KEEP_NOTES = 30 * 24 * HOUR
 // Shorter stretches with the timer don't count as studying.
 const STUDY_COUNTS = 5
 
@@ -128,150 +117,6 @@ async function quoteOfTheDay(): Promise<RoomView['quote']> {
   let h = 0
   for (const c of dayOf()) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return all[h % all.length]
-}
-
-/* ---------- her notes ---------- */
-
-/** Who leaves notes: the contact last called, or the first one there is. */
-function noteWriter(): string | undefined {
-  const id = getSettings().roomContact
-  if (id && getContact(id)) return id
-  return loadContacts()[0]?.id
-}
-
-const notesFile = (contact: string) => join(contactDir(contact), 'notes.json')
-const loadNotes = (contact: string) => readJson<RoomNote[]>(notesFile(contact), [])
-const loadInbox = () => readJson<RoomFact[]>(file('inbox.json'), [])
-
-let writing = false
-/** Asked to write again while writing, and whether a note about her day was wanted then */
-let again: boolean | undefined
-let writeTimer: NodeJS.Timeout | undefined
-
-/** Something happened with no call open: keep it for her next note. */
-function addFact(text: string, links: RoomLink[]): void {
-  const inbox = loadInbox()
-  inbox.push({ at: new Date().toISOString(), text, links })
-  writeJson(file('inbox.json'), inbox)
-  schedule()
-}
-
-function schedule(): void {
-  clearTimeout(writeTimer)
-  const inbox = loadInbox()
-  if (!inbox.length) return
-  const first = Date.parse(inbox[0].at)
-  const last = Date.parse(inbox[inbox.length - 1].at)
-  const due = Math.min(last + WRITE_AFTER_QUIET, first + WRITE_AT_MOST)
-  writeTimer = setTimeout(() => void write(false), Math.max(0, due - Date.now()))
-}
-
-/** A fact the owner has already seen to, such as a paper opened since it was translated, needs no note. */
-function stillNews(f: RoomFact): boolean {
-  const { last } = loadOpens()
-  return !f.links.some((l) => l.kind === 'paper' && (!readMeta(l.paper) || (last[l.paper] ?? '') > f.at))
-}
-
-/** When the owner last left and came back, to tell whether a note about her day is due. */
-let away = { since: 0, lasted: 0 }
-
-function dayNoteDue(contact: string): boolean {
-  if (away.lasted < DAY_NOTE_AFTER) return false
-  const today = dayOf()
-  return !loadNotes(contact).some((n) => n.kind === 'day' && dayOf(n.at) === today)
-}
-
-/** She writes whatever is waiting, and a note about her day when one is due. */
-async function write(withDay: boolean): Promise<void> {
-  if (writing) {
-    again = again || withDay
-    return
-  }
-  const contact = noteWriter()
-  const person = contact && getContact(contact)
-  if (!contact || !person) return
-  const taken = loadInbox()
-  const items = taken.filter(stillNews)
-  const day = withDay && dayNoteDue(contact)
-  if (!items.length && !day) {
-    if (taken.length) writeJson(file('inbox.json'), loadInbox().slice(taken.length))
-    return
-  }
-  writing = true
-  changed()
-  try {
-    const memoryFile = join(contactDir(contact), 'memory.md')
-    const memory = existsSync(memoryFile) ? readFileSync(memoryFile, 'utf8') : ''
-    const prompt = notesPrompt({ contact: person, memory, items, day })
-    const model = await modelFor(getSettings().callModel, 'call')
-    const res = await runAgent({ cwd: contactDir(contact), prompt, model, effort: getSettings().callEffort, write: false })
-    if (res.isError) throw new Error(res.text)
-    const json = JSON.parse(res.text.slice(res.text.indexOf('{'), res.text.lastIndexOf('}') + 1))
-    const fresh: RoomNote[] = []
-    const used = new Set<number>()
-    for (const n of Array.isArray(json.notes) ? json.notes : []) {
-      const nums: number[] = (Array.isArray(n.items) ? n.items : []).map(Number).filter((i: number) => items[i - 1] && !used.has(i))
-      if (!nums.length || typeof n.zh !== 'string' || !n.zh.trim()) continue
-      nums.forEach((i) => used.add(i))
-      const facts = nums.map((i) => items[i - 1])
-      fresh.push({
-        id: randomUUID(),
-        at: facts.map((f) => f.at).sort().pop()!,
-        kind: 'news',
-        ...(person.language !== 'zh' && typeof n.say === 'string' && n.say.trim() ? { say: n.say.trim() } : {}),
-        zh: n.zh.trim(),
-        links: dedupeLinks(facts.flatMap((f) => f.links))
-      })
-    }
-    // Whatever she left out still gets said, in the app's own words.
-    for (const [i, f] of items.entries()) if (!used.has(i + 1)) fresh.push({ id: randomUUID(), at: f.at, kind: 'news', zh: f.text, links: f.links })
-    if (day && typeof json.day?.zh === 'string' && json.day.zh.trim()) {
-      fresh.push({
-        id: randomUUID(),
-        at: new Date().toISOString(),
-        kind: 'day',
-        ...(person.language !== 'zh' && typeof json.day.say === 'string' && json.day.say.trim() ? { say: json.day.say.trim() } : {}),
-        zh: json.day.zh.trim(),
-        links: []
-      })
-      away.lasted = 0
-    }
-    const cutoff = Date.now() - KEEP_NOTES
-    const notes = [...loadNotes(contact), ...fresh].filter((n) => Date.parse(n.at) >= cutoff).sort((a, b) => a.at.localeCompare(b.at))
-    writeJson(notesFile(contact), notes)
-    // Facts that came in while she was writing wait for the next note.
-    writeJson(file('inbox.json'), loadInbox().slice(taken.length))
-  } catch {
-    // The facts stay in the inbox and go into the next note.
-  } finally {
-    writing = false
-    changed()
-    schedule()
-    if (again !== undefined) {
-      const day = again
-      again = undefined
-      void write(day)
-    }
-  }
-}
-
-function dedupeLinks(links: RoomLink[]): RoomLink[] {
-  const seen = new Set<string>()
-  return links.filter((l) => {
-    const k = JSON.stringify(l)
-    return !seen.has(k) && !!seen.add(k)
-  })
-}
-
-/** Papers that just finished or failed while no call was open become facts; during a call she says them herself. */
-const known = new Map<string, PaperMeta['status']>()
-export function roomPaper(meta: PaperMeta): void {
-  const before = known.get(meta.id)
-  known.set(meta.id, meta.status)
-  if (before !== 'processing' || callActive()) return
-  const title = meta.titleZh || meta.title
-  if (meta.status === 'ready') addFact(`《${title}》翻译好了`, [{ kind: 'paper', paper: meta.id }])
-  if (meta.status === 'error') addFact(`《${title}》处理失败了`, [{ kind: 'paper', paper: meta.id }])
 }
 
 /* ---------- the study timer ---------- */
@@ -388,11 +233,17 @@ function endStudy(): void {
   changed()
 }
 
+const studyListeners: ((minutes: number, withContact?: string) => void)[] = []
+/** A pomodoro ran to its end: how many minutes of focus, and with whom on the call. */
+export const onStudyDone = (fn: (minutes: number, withContact?: string) => void) => studyListeners.push(fn)
+
 function finishStudy(): void {
   if (!study) return
   const { plan } = study
   const minutes = Math.round(focused / MINUTE)
+  const withContact = study.with
   endStudy()
+  for (const fn of studyListeners) fn(minutes, withContact)
   studyNews(plan.rounds > 1 ? `一起自习结束了，${plan.rounds} 轮，一共专注了 ${minutes} 分钟` : `一起自习的 ${minutes} 分钟到了`)
 }
 
@@ -442,11 +293,7 @@ async function journal(year: number, month: number): Promise<JournalDay[]> {
 /* ---------- the room as the page sees it ---------- */
 
 export async function roomView(): Promise<RoomView> {
-  const contact = noteWriter()
   return {
-    contact,
-    notes: contact ? loadNotes(contact).slice().reverse() : [],
-    writing,
     wallpaper: wallpaperUrl(),
     reading: readingNow(),
     quote: await quoteOfTheDay()
@@ -463,42 +310,11 @@ function changed(): void {
 export function initRoom(o: { send: (channel: string, payload?: unknown) => void; window: () => BrowserWindow | undefined }): void {
   send = o.send
   mainWindow = o.window
-  for (const p of listPapers()) known.set(p.id, p.status)
-  onMissedEvent(addFact)
-  schedule()
-
-  // Time away from the app, also across a quit, decides whether a note about her day is due.
-  const seen = file('seen.json')
-  const lastSeen = readJson<{ at?: number }>(seen, {}).at
-  if (lastSeen) away = { since: lastSeen, lasted: Date.now() - lastSeen }
-  const markSeen = () => writeJson(seen, { at: Date.now() })
-  setInterval(markSeen, 10 * MINUTE)
-  app.on('before-quit', markSeen)
-  app.on('did-resign-active', () => {
-    away = { since: Date.now(), lasted: away.lasted }
-    markSeen()
-  })
-  app.on('did-become-active', () => {
-    if (away.since) away = { since: 0, lasted: Math.max(away.lasted, Date.now() - away.since) }
-  })
 
   ipcMain.on('call:reading', (_e, id: string | null) => {
     if (id) recordOpen(id)
   })
   ipcMain.handle('room:view', () => roomView())
-  // Coming into the room: what is waiting gets written now rather than in a few minutes.
-  ipcMain.handle('room:visit', () => {
-    const contact = noteWriter()
-    if (loadInbox().length || (contact && dayNoteDue(contact))) void write(true)
-  })
-  ipcMain.handle('room:read', () => {
-    const contact = noteWriter()
-    if (!contact) return
-    const notes = loadNotes(contact)
-    if (!notes.some((n) => !n.read)) return
-    writeJson(notesFile(contact), notes.map((n) => ({ ...n, read: true })))
-    changed()
-  })
   ipcMain.handle('room:chooseWallpaper', () => chooseWallpaper())
   ipcMain.handle('room:clearWallpaper', () => {
     clearWallpaper()

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFile
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import type { Annotation, ChatState, PaperMeta, PaperDoc } from '../shared/types'
+import type { Annotation, ArxivPeek, ChatState, PaperMeta, PaperDoc } from '../shared/types'
 import { getSettings } from './settings'
 import { parseDoc } from '../shared/doc'
 
@@ -113,6 +113,43 @@ const decode = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
+/** What arXiv's API says about a paper; asked once per id while the app runs. */
+const entries = new Map<string, Promise<{ title: string; authors: string[]; venue: string; year: string; abstract: string }>>()
+function arxivEntry(arxiv: string) {
+  let entry = entries.get(arxiv)
+  if (!entry) {
+    entry = (async () => {
+      const feed = await fetch(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(arxiv)}`)
+      if (!feed.ok) throw new Error(`arXiv 返回 ${feed.status}`)
+      const xml = await feed.text()
+      const entry = xml.split('<entry>')[1]
+      if (!entry || /<title>Error<\/title>/.test(entry)) throw new Error('arXiv 上找不到这篇论文')
+      const pick = (tag: string) => decode(entry.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1] ?? '')
+      return {
+        title: pick('title'),
+        authors: [...entry.matchAll(/<author>\s*<name>([\s\S]*?)<\/name>/g)].map((m) => decode(m[1])),
+        venue: decode(entry.match(/<arxiv:journal_ref[^>]*>([\s\S]*?)<\/arxiv:journal_ref>/)?.[1] ?? '') || 'arXiv',
+        year: pick('published').slice(0, 4),
+        abstract: pick('summary')
+      }
+    })()
+    entries.set(arxiv, entry)
+    // a failed look is tried again next time
+    entry.catch(() => entries.delete(arxiv))
+  }
+  return entry
+}
+
+/** The paper an id or link points to, before importing it: the library's own copy, or what arXiv says. */
+export async function peekArxiv(input: string): Promise<ArxivPeek | undefined> {
+  const arxiv = parseArxivId(input)
+  if (!arxiv) return undefined
+  const existing = readMeta(arxiv.replace(/\//g, '_'))
+  if (existing) return { arxiv, title: existing.titleZh || existing.title, authors: existing.authors, paper: existing.id }
+  const e = await arxivEntry(arxiv)
+  return { arxiv, title: e.title, authors: e.authors }
+}
+
 export async function importArxiv(input: string): Promise<PaperMeta> {
   const arxiv = parseArxivId(input)
   if (!arxiv) throw new Error('认不出这个 arXiv 编号或链接')
@@ -121,14 +158,7 @@ export async function importArxiv(input: string): Promise<PaperMeta> {
   const existing = readMeta(id)
   if (existing) return existing
 
-  const feed = await fetch(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(arxiv)}`)
-  if (!feed.ok) throw new Error(`arXiv 返回 ${feed.status}`)
-  const xml = await feed.text()
-  const entry = xml.split('<entry>')[1]
-  if (!entry || /<title>Error<\/title>/.test(entry)) throw new Error('arXiv 上找不到这篇论文')
-  const pick = (tag: string) => decode(entry.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`))?.[1] ?? '')
-  const authors = [...entry.matchAll(/<author>\s*<name>([\s\S]*?)<\/name>/g)].map((m) => decode(m[1]))
-  const venue = decode(entry.match(/<arxiv:journal_ref[^>]*>([\s\S]*?)<\/arxiv:journal_ref>/)?.[1] ?? '') || 'arXiv'
+  const { title, authors, venue, year, abstract } = await arxivEntry(arxiv)
 
   const pdf = await fetch(`https://arxiv.org/pdf/${arxiv}`)
   if (!pdf.ok) throw new Error(`下载 PDF 失败（${pdf.status}）`)
@@ -137,13 +167,7 @@ export async function importArxiv(input: string): Promise<PaperMeta> {
 
   mkdirSync(paperDir(id), { recursive: true })
   writeFileSync(join(paperDir(id), 'paper.pdf'), bytes)
-  const meta = newMeta(id, pick('title'), {
-    authors,
-    arxiv,
-    venue,
-    year: pick('published').slice(0, 4),
-    abstract: pick('summary')
-  })
+  const meta = newMeta(id, title, { authors, arxiv, venue, year, abstract })
   writeMeta(meta)
   return meta
 }

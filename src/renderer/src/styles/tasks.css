@@ -630,6 +630,17 @@
 .qp-money .val.amber {
   color: hsl(32 90% 42%);
 }
+.qb-text.out {
+  color: hsl(var(--destructive));
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+.qp-out {
+  margin-left: auto;
+  color: hsl(var(--destructive));
+  font-size: 12.5px;
+  font-weight: 400;
+}
 .qb-text.red,
 .qp-row.red .pct,
 .qp-money .val.red {

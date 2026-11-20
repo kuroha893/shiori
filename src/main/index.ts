@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Annotation, ChatEvent, GlossaryEntry, PaperMeta, Settings, TaskAction } from '../shared/types'
@@ -7,7 +7,7 @@ import { getSettings, saveSettings } from './settings'
 import { inTerminal, openLogin } from './claude'
 import { closeCodex, openCodexLogin } from './codex'
 import { checkDeepseekKey, serviceStatus } from './ai'
-import { acceptSuggestion, createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
+import { createFolder, deleteFolder, loadFolders, renameFolder } from './folders'
 import { cancel, enqueue, initJobs, pendingFromPapers, prepare, restart, startAppendix, startGuide } from './jobs'
 import { addTask, forgetPaper, initTasks, loadTasks, taskAction, taskList } from './tasks'
 import { initQuota, quotaSoon, quotaView, readQuota } from './quota'
@@ -20,7 +20,8 @@ import { checkFishKey, endCall, initCall, placeCall, startCall, watchPaper } fro
 import { contactAsset, initContacts } from './contacts'
 import { initConferences, markFile } from './conferences'
 import { initOpenReview } from './openreview'
-import { initRoom, roomPaper, wallpaperFile } from './room'
+import { initRoom, wallpaperFile } from './room'
+import { initPhone, phoneLibraryChanged, phonePaper } from './phone'
 import { initNowPlaying } from './nowplaying'
 
 // Development: a separate profile (settings + default library) so tests don't touch the real one.
@@ -79,7 +80,7 @@ const send = (channel: string, payload: unknown) => main?.webContents.send(chann
 const paperChanged = (meta: PaperMeta) => {
   send('paper:changed', meta)
   watchPaper(meta)
-  roomPaper(meta)
+  phonePaper(meta)
 }
 const foldersChanged = () => send('folders:changed', loadFolders())
 /** The task list of the library now in use */
@@ -102,6 +103,7 @@ function registerIpc(): void {
       lib.ensureLibrary()
       loadGlossary()
       reloadTasks()
+      phoneLibraryChanged()
     }
     return s
   })
@@ -112,6 +114,7 @@ function registerIpc(): void {
     lib.ensureLibrary()
     loadGlossary()
     reloadTasks()
+    phoneLibraryChanged()
     return s
   })
 
@@ -131,11 +134,6 @@ function registerIpc(): void {
   })
   ipcMain.handle('folders:delete', (_e, id: string) => {
     deleteFolder(id).forEach(paperChanged)
-    foldersChanged()
-  })
-  ipcMain.handle('papers:acceptSuggestion', (_e, id: string) => {
-    const meta = acceptSuggestion(id)
-    if (meta) paperChanged(meta)
     foldersChanged()
   })
 
@@ -164,6 +162,12 @@ function registerIpc(): void {
     const out: PaperMeta[] = []
     for (const p of paths.filter((p) => p.toLowerCase().endsWith('.pdf'))) out.push(await addPdf(p))
     return out
+  })
+  ipcMain.handle('papers:peekArxiv', (_e, input: string) => lib.peekArxiv(input))
+  // An arXiv id or link on the clipboard, offered when the import box opens
+  ipcMain.handle('clipboard:arxiv', async () => {
+    const text = (await clipboard.readText()).trim()
+    return text.length < 300 && lib.parseArxivId(text) ? text : undefined
   })
   ipcMain.handle('papers:importArxiv', async (_e, input: string) => {
     const meta = await lib.importArxiv(input)
@@ -215,7 +219,16 @@ app.whenReady().then(() => {
   app.setName('Shiori')
   // shiori://paper/<id>/<path> serves files of a paper folder (PDF, figures, thumbnails); shiori://contact/<id>/<path> a contact's picture and character;
   // shiori://conf/<id>/mark a conference's downloaded mark; shiori://room/wallpaper the wallpaper of 大厅.
-  protocol.handle('shiori', (req) => {
+  // Every picture is marked shareable: the page reads pixels from them on a canvas (the lobby's brightness, the ink
+  // of words on the phone's glass), which a picture without the mark would forbid.
+  const shareable = async (res: Response | Promise<Response>): Promise<Response> => {
+    const r = await res
+    const headers = new Headers(r.headers)
+    headers.set('Access-Control-Allow-Origin', '*')
+    return new Response(r.body, { status: r.status, statusText: r.statusText, headers })
+  }
+  protocol.handle('shiori', (req) => shareable(serve(req)))
+  const serve = (req: Request): Response | Promise<Response> => {
     const u = new URL(req.url)
     if (u.host === 'contact') {
       const [id, ...rest] = u.pathname.slice(1).split('/').map(decodeURIComponent)
@@ -225,12 +238,7 @@ app.whenReady().then(() => {
     if (u.host === 'room') {
       const file = u.pathname === '/wallpaper' && wallpaperFile()
       if (!file) return new Response('not found', { status: 404 })
-      // The room reads the picture's brightness from a canvas, which needs it marked as shareable.
-      return net.fetch(pathToFileURL(file).toString()).then((res) => {
-        const headers = new Headers(res.headers)
-        headers.set('Access-Control-Allow-Origin', '*')
-        return new Response(res.body, { status: res.status, headers })
-      })
+      return net.fetch(pathToFileURL(file).toString())
     }
     if (u.host === 'conf') {
       const file = markFile(decodeURIComponent(u.pathname.slice(1).split('/')[0]))
@@ -243,7 +251,7 @@ app.whenReady().then(() => {
     } catch {
       return new Response('forbidden', { status: 403 })
     }
-  })
+  }
   lib.ensureLibrary()
   loadGlossary()
   registerIpc()
@@ -272,6 +280,7 @@ app.whenReady().then(() => {
   initOpenReview({ send, window: () => main })
   initConferences({ send, paperChanged })
   initRoom({ send, window: () => main })
+  initPhone({ send, papers: lib.listPapers() })
   initNowPlaying()
   nativeTheme.on('updated', () => main?.setBackgroundColor(bg()))
   app.on('activate', () => {

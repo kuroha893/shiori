@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Folder, PaperMeta } from '../shared/types'
-import { listPapers, readMeta, root, updateMeta } from './library'
+import { listPapers, root, updateMeta } from './library'
 
 /* Research directions live in <library>/folders.json; each paper lists the ids of the ones it belongs to. */
 
@@ -55,13 +55,4 @@ export function deleteFolder(id: string): PaperMeta[] {
 
 export function findFolder(name: string): Folder | undefined {
   return loadFolders().find((f) => same(f.name, name))
-}
-
-/** File the paper where the suggestion says, creating the direction if it is a new one. */
-export function acceptSuggestion(id: string): PaperMeta | undefined {
-  const meta = readMeta(id)
-  const s = meta?.suggestion
-  if (!meta || !s) return meta
-  const folder = loadFolders().find((f) => f.id === s.folderId) ?? findFolder(s.name) ?? createFolder(s.name)
-  return updateMeta(id, { folders: [...new Set([...(meta.folders ?? []), folder.id])], suggestion: undefined })
 }

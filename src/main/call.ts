@@ -2,9 +2,9 @@ import { app, BrowserWindow, ipcMain, net, screen, shell } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { CallLine, CallMood, CallState, PaperMeta, PastCall, RoomLink } from '../shared/types'
+import type { CallLine, CallMood, CallState, PaperMeta, PastCall } from '../shared/types'
 import type { Conversation } from './claude'
-import { modelFor, runAgent, talkTo } from './ai'
+import { modelFor, runAgent, serviceStatus, talkTo } from './ai'
 import { listPapers, readMeta } from './library'
 import { keepOnTop, petBounds } from './pet'
 import { getSettings, saveSettings } from './settings'
@@ -182,17 +182,26 @@ async function synthesize(text: string): Promise<{ audio: Uint8Array; type: stri
       body: JSON.stringify({ text, reference_id: voice, format: 'mp3', latency: 'balanced', language })
     })
     if (!res.ok) {
-      const reason = { 401: 'API 密钥不对', 402: '额度不够了', 404: '找不到这个音色' }[res.status] ?? `服务返回 ${res.status}`
-      update({ notice: `Fish Audio：${reason}，先只显示字幕` })
+      // A key, balance or voice problem is the owner's to fix; a server hiccup just costs this line its voice.
+      const trouble = ({ 401: 'key', 402: 'balance', 404: 'voice' } as const)[res.status as 401 | 402 | 404]
+      if (trouble) for (const fn of voiceListeners) fn(trouble)
       return undefined
     }
-    if (state.notice) update({ notice: undefined })
+    for (const fn of voiceListeners) fn(undefined)
     return { audio: new Uint8Array(await res.arrayBuffer()), type: res.headers.get('content-type') ?? 'audio/mpeg' }
-  } catch (e) {
-    update({ notice: `Fish Audio 连不上（${(e as Error).message}），先只显示字幕` })
+  } catch {
     return undefined
   }
 }
+
+export type VoiceTrouble = 'key' | 'balance' | 'voice'
+const voiceListeners: ((t: VoiceTrouble | undefined) => void)[] = []
+/** Fish Audio refused for a reason the owner has to fix, or (undefined) spoke again. */
+export const onVoiceTrouble = (fn: (t: VoiceTrouble | undefined) => void) => voiceListeners.push(fn)
+
+const failListeners: (() => void)[] = []
+/** A turn of hers couldn't reach her model. */
+export const onTurnFailed = (fn: () => void) => failListeners.push(fn)
 
 /** One output line: "[tone] words ||| subtitle". Anything else, such as (silent) or a stray fragment, says nothing. */
 export function parseLine(raw: string): { tone?: string; say: string; zh: string } | undefined {
@@ -234,8 +243,12 @@ async function runTurn(content: string, turnGeneration: number, turn: { dropped:
     })
     emit(buffer)
     await delivered
-  } catch (e) {
-    update({ notice: `连不上模型：${(e as Error).message}` })
+  } catch {
+    // No error text in the call: what went wrong (signed out, allowance gone) arrives as a notice in the phone, and
+    // what you said is marked as not delivered.
+    if (isReply) push('call:failed')
+    void serviceStatus(true)
+    for (const fn of failListeners) fn()
   }
 }
 
@@ -281,14 +294,16 @@ function settleMood(): void {
   }
 }
 
-let missed: (text: string, links: RoomLink[]) => void = () => {}
-/** Where events go while no call is open: 大厅, where she writes them down as notes. */
-export const onMissedEvent = (fn: typeof missed) => (missed = fn)
 export const callActive = () => state.active
+/** Who is on the call, if anyone */
+export const callContact = () => (state.active ? contact : undefined)
 
-/** Something happened in the app; she says so if a call is open, and leaves a note otherwise. */
-export function callEvent(text: string, links: RoomLink[] = []): void {
-  if (!state.active) return missed(text, links)
+/**
+ * The app just told the owner something in a notice. On a call she hears it too, so she can react the way a friend
+ * would; the facts are the notice's to tell, not hers.
+ */
+export function callEvent(text: string): void {
+  if (!state.active) return
   record({ who: 'event', text })
   speak(`[event] ${text}`)
 }
@@ -327,8 +342,6 @@ export function watchPaper(meta: PaperMeta): void {
   if (!state.active) return
   const title = meta.titleZh || meta.title
   if (!before) return react(`added:${meta.id}`, 'they just added a new paper to the shelf')
-  if (before.status === 'processing' && meta.status === 'ready') callEvent(`《${title}》翻译好了`)
-  if (before.status === 'processing' && meta.status === 'error') callEvent(`《${title}》处理失败了`)
   if (!before.finished && meta.finished) react(`finished:${meta.id}`, `they just finished reading 《${title}》`, true)
   if (!before.likedAt && meta.likedAt) react(`liked:${meta.id}`, `they just gave 《${title}》 a heart`)
   if (reading?.id === meta.id && Math.abs((before.readPos?.ratio ?? 0) - (meta.readPos?.ratio ?? 0)) > 0.002) {

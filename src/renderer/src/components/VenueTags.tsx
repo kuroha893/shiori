@@ -14,7 +14,8 @@ const logoSvg = (name: string) => LOGOS[`../assets/orgs/${name}.svg`]
  * A technical report is solid and neutral, its organisation's logo before the name.
  * The chip is the CCF rank, or Findings / Workshop, which CCF doesn't rank, or Tech Report.
  */
-export function VenueTags({ venue, year }: { venue?: string; year?: string }) {
+/** `chip: false` leaves out the chip, where there is room for the pill only. */
+export function VenueTags({ venue, year, chip: withChip = true }: { venue?: string; year?: string; chip?: boolean }) {
   const t = venueTag(venue, year)
   if (!t) return null
   if (!t.label) return <span className="vt-year-only faint">{t.year}</span>
@@ -36,7 +37,7 @@ export function VenueTags({ venue, year }: { venue?: string; year?: string }) {
         <span className="vt-name">{t.label}</span>
         {t.year && <span className="vt-year">{t.year}</span>}
       </span>
-      {chip && <span className={`vt-chip ${t.report ? 'report' : t.track ? 'track' : `ccf-${t.ccf!.toLowerCase()}`}`}>{chip}</span>}
+      {withChip && chip && <span className={`vt-chip ${t.report ? 'report' : t.track ? 'track' : `ccf-${t.ccf!.toLowerCase()}`}`}>{chip}</span>}
     </span>
   )
 }

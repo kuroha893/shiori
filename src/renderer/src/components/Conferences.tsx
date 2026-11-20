@@ -8,7 +8,7 @@ import { Icon } from './Icon'
 import { Menu, useDismiss, type MenuItem } from './Chrome'
 import { errorText, useFolders } from './Folders'
 import { VenueTags } from './VenueTags'
-import { PaperText } from './PaperText'
+import { PaperText, PaperTitle } from './PaperText'
 import type { Toast } from './App'
 
 /*
@@ -1016,9 +1016,9 @@ const PaperRow = memo(function PaperRow({
       <div className="cf-paper-main">
         <h3>
           {p.fresh && <i className="cf-dot" />}
-          <PaperText text={p.titleZh || p.title} zh={!!p.titleZh} />
+          <PaperTitle paper={p} />
         </h3>
-        {p.titleZh && <PaperText className="cf-paper-en" text={p.title} />}
+        <PaperTitle className="cf-paper-en" paper={p} other />
         <div className="cf-meta">
           {showEdition && <span className="cf-tag edition">{p.editionName}</span>}
           {kind && <span className={`cf-tag ${kind}`}>{p.kind}</span>}
@@ -1511,8 +1511,8 @@ export function LaterCard({ item, ready, toast }: { item: LaterItem; ready: bool
   return (
     <article className="paper card later-card">
       <div className="paper-body">
-        <PaperText as="h3" text={item.titleZh || item.title} zh={!!item.titleZh} />
-        {item.titleZh && <PaperText as="p" className="paper-en" text={item.title} />}
+        <PaperTitle as="h3" paper={item} />
+        <PaperTitle as="p" className="paper-en" paper={item} other />
         <p className="paper-authors muted">
           {item.authors.slice(0, 3).join(', ')}
           {item.authors.length > 3 && <span className="cf-plus">+{item.authors.length - 3}</span>}

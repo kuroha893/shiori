@@ -25,7 +25,8 @@ const callBridge = {
   onClear: (fn: () => void) => on('call:clear', fn),
   onDropUnprompted: (fn: () => void) => on('call:dropUnprompted', fn),
   onEnded: (fn: () => void) => on('call:ended', fn),
-  onMoodSet: (fn: (mood: CallMood) => void) => on('call:moodSet', fn)
+  onMoodSet: (fn: (mood: CallMood) => void) => on('call:moodSet', fn),
+  onFailed: (fn: () => void) => on('call:failed', fn)
 }
 
 contextBridge.exposeInMainWorld('callBridge', callBridge)

@@ -4,7 +4,6 @@ import { shownVenue } from '../../../shared/venue'
 import { fileUrl } from '../api'
 import { renderMarkdown } from '../lib/markdown'
 import { offsetsToRange } from '../lib/anchors'
-import { Suggestion, useFolders } from './Folders'
 import { Icon } from './Icon'
 import { PaperVenue } from './VenueTags'
 
@@ -61,7 +60,6 @@ interface Props {
   onPeek: (b: Block) => void
   onZoom: (src: string) => void
   onGuide: () => void
-  toast: (t: string) => void
   footer: ReactNode
 }
 
@@ -216,8 +214,7 @@ export function useHighlights(root: React.RefObject<HTMLElement | null>, annotat
   }, [annotations, ...deps])
 }
 
-export function Article({ paper, blocks, view, annotations, onJump, onPeek, onZoom, onGuide, footer, toast }: Props) {
-  const folders = useFolders()
+export function Article({ paper, blocks, view, annotations, onJump, onPeek, onZoom, onGuide, footer }: Props) {
   const ref = useRef<HTMLElement>(null)
   const [preview, setPreview] = useState<{ id: string; rect: DOMRect }>()
   const hoverTimer = useRef<number>(undefined)
@@ -283,7 +280,6 @@ export function Article({ paper, blocks, view, annotations, onJump, onPeek, onZo
             </a>
           )}
         </div>
-        <Suggestion paper={paper} folders={folders} toast={toast} />
       </header>
 
       {blocks.map((b) => (

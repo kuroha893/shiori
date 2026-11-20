@@ -378,6 +378,22 @@ body,
   background: rgba(169, 211, 255, 0.24);
   color: #e8f3ff;
 }
+/* didn't reach her: dimmed, with a small red mark at its side */
+.call-line.you.failed {
+  position: relative;
+  opacity: 0.6;
+}
+.call-line.you.failed::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: #ff5a4e;
+}
 .call-status .call-time {
   min-width: 0;
   font-size: inherit;

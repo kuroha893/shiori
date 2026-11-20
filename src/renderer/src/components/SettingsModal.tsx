@@ -197,6 +197,21 @@ export function SettingsModal(props: {
               更改
             </button>
           </div>
+          <div className="set-row">
+            <label>论文标题</label>
+            <div className="seg">
+              {(
+                [
+                  ['zh', '翻译'],
+                  ['en', '原文']
+                ] as const
+              ).map(([v, label]) => (
+                <button key={v} className={s.paperTitle === v ? 'on' : ''} onClick={() => props.onChange({ paperTitle: v })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <OpenReviewRow />
         </div>
       </section>

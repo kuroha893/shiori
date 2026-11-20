@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { PaperMeta, Task, TaskKind, TaskList } from '../../../shared/types'
 import { api, fileUrl } from '../api'
 import { Icon } from './Icon'
-import { PaperText } from './PaperText'
+import { PaperTitle } from './PaperText'
 import { Kept } from './Chrome'
 
 /*
@@ -240,7 +240,7 @@ function TaskPanel(props: { list: TaskList; papers: PaperMeta[]; onDrag: (on: bo
         </span>
         <span className="tq-thumb">{p.pages ? <img src={`${fileUrl(p.id, 'thumb.png')}?v=${p.pages}`} alt="" draggable={false} /> : <Icon name="file" size={14} />}</span>
         <div className="tq-main">
-          <PaperText as="div" className="tq-title" text={p.titleZh || p.title} zh={!!p.titleZh} />
+          <PaperTitle as="div" className="tq-title" paper={p} />
           <div className="tq-meta">
             <span className="tq-kind">
               <Icon name={KIND[t.kind][0]} size={12} />

@@ -209,17 +209,32 @@ function QuotaButton() {
   }, [open])
 
   const c = compactOf(view)
-  if (!c) return null
+  // A service in use that is signed out takes the allowance's place, in red, until it is signed in again.
+  const out = view.signedOut ?? []
+  if (!c && !out.length) return null
   return (
     <div className="qb" ref={box}>
       <button className={`qb-btn ${open ? 'on' : ''}`} title="额度" onClick={() => setOpen((v) => !v)}>
-        {view.inUse.length > 1 && (
-          <span className="qb-mark">
-            <ServiceLogo provider={c.provider} />
-          </span>
+        {out.length ? (
+          <>
+            <span className="qb-mark">
+              <ServiceLogo provider={out[0]} />
+            </span>
+            <span className="qb-text out">未登录</span>
+          </>
+        ) : (
+          c && (
+            <>
+              {view.inUse.length > 1 && (
+                <span className="qb-mark">
+                  <ServiceLogo provider={c.provider} />
+                </span>
+              )}
+              <Battery left={c.left ?? (c.level === 'red' ? 0 : c.level === 'amber' ? 0.2 : 1)} level={c.level} />
+              <span className={`qb-text ${c.level}`}>{c.text}</span>
+            </>
+          )
         )}
-        <Battery left={c.left ?? (c.level === 'red' ? 0 : c.level === 'amber' ? 0.2 : 1)} level={c.level} />
-        <span className={`qb-text ${c.level}`}>{c.text}</span>
       </button>
       {open && (
         <div className="qp">
@@ -230,6 +245,18 @@ function QuotaButton() {
             </button>
           </div>
           <div className="qp-body">
+            {out.map((p) => (
+              <div className="qp-svc" key={p}>
+                <div className="qp-name">
+                  <ServiceLogo provider={p} />
+                  {PROVIDER_NAMES[p]}
+                  <span className="qp-out">未登录</span>
+                  <button className="btn sm" onClick={() => api.serviceLogin(p)}>
+                    登录
+                  </button>
+                </div>
+              </div>
+            ))}
             {view.services.map((q) => (
               <div className="qp-svc" key={q.provider}>
                 <div className="qp-name">

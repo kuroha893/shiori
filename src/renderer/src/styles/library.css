@@ -16,6 +16,9 @@
   gap: 8px;
   margin-left: auto;
 }
+.lib-bar + .topbar-actions {
+  margin-left: 0;
+}
 /* The library's name heads its sidebar, under the traffic lights, and stays put while the sidebar scrolls. */
 .brand {
   position: sticky;
@@ -153,58 +156,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.paper-suggest {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: hsl(var(--muted-foreground));
-}
-.paper-suggest-text {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.paper-suggest-text em {
-  margin-left: 4px;
-  font-style: normal;
-  font-size: 11px;
-  color: hsl(var(--faint-foreground));
-}
-.paper-suggest .btn {
-  flex: none;
-}
-.paper-suggest-x {
-  flex: none;
-  width: 22px;
-  height: 22px;
-}
 .lib-inner {
   width: min(1080px, 100% - 64px);
   margin: 0 auto;
-  padding: 28px 0 80px;
-}
-
-.lib-hero h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: bold;
-  letter-spacing: 0.01em;
-}
-.lib-hero p {
-  margin: 10px 0 0;
-  font-size: 14.5px;
-}
-/* the stats sit apart by space alone */
-.lib-hero p span + span {
-  margin-left: 18px;
-}
-.lib-hero b {
-  color: hsl(var(--foreground));
-  font-weight: 600;
+  padding: 12px 0 80px;
 }
 
 .ai-banner {
@@ -235,35 +190,6 @@
   font-weight: 600;
 }
 
-.import {
-  margin-top: 22px;
-  padding: 14px;
-  box-shadow: var(--shadow);
-}
-.import-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.import-input {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--background));
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.import-input:focus-within {
-  border-color: hsl(var(--foreground) / 0.35);
-  box-shadow: 0 0 0 3px hsl(var(--foreground) / 0.06);
-}
-.import .btn {
-  height: 36px;
-}
 input.bare {
   flex: 1;
   min-width: 0;
@@ -278,26 +204,6 @@ input.bare {
 input.bare::placeholder {
   color: hsl(var(--faint-foreground));
 }
-.import-or {
-  font-size: 12px;
-}
-.import-hint {
-  margin: 10px 2px 0;
-  font-size: 12px;
-}
-
-.lib-tools {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 34px 0 14px;
-}
-.lib-search {
-  width: 240px;
-  margin-left: auto;
-  height: 32px;
-}
-
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
@@ -1642,4 +1548,418 @@ input.gloss-en {
 }
 .welcome .btn.primary:disabled {
   opacity: 0.45;
+}
+
+/* ---------- 书库's tools in the top bar, as in Finder's toolbar: views, grouping, search, 导入 ---------- */
+
+.lib-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  /* search starts where the papers do (measured, --shelf-left), less the top bar's room for the traffic lights */
+  margin-left: calc(var(--shelf-left, 236px) - 92px);
+}
+.lib-find {
+  height: 40px;
+  border-radius: 14px;
+}
+/* views, grouping and 导入 are pieces in the status area's tray, sized like the pieces already there */
+.lib-views button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lib-group-btn {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  gap: 3px;
+  padding: 0 9px;
+}
+.lib-groupby,
+.imp {
+  position: relative;
+}
+.group-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 168px;
+  transform-origin: top left;
+}
+.group-menu .ck {
+  display: inline-flex;
+  width: 16px;
+}
+.group-menu .ck svg {
+  color: hsl(var(--foreground));
+}
+.group-menu hr {
+  height: 1px;
+  margin: 5px 8px;
+  border: 0;
+  background: hsl(var(--border));
+}
+.lib-find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  padding: 0 12px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--muted-foreground));
+}
+.lib-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 13.5px;
+  user-select: text;
+}
+.lib-find input::placeholder {
+  color: hsl(var(--faint-foreground));
+}
+.imp-btn {
+  height: 32px;
+  gap: 5px;
+  padding: 0 12px;
+  border-radius: 10px;
+  box-shadow: var(--piece-shadow);
+}
+
+/* 导入: an arXiv id or link with the paper it points to, and PDFs from disk */
+.imp-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 440px;
+  overflow: hidden;
+  border-radius: 16px;
+  transform-origin: top right;
+}
+.imp-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 14px 14px;
+}
+.imp-field .vt {
+  flex: none;
+}
+.imp-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: 15px var(--font-mono);
+  user-select: text;
+}
+.imp-field input::placeholder {
+  color: hsl(var(--faint-foreground));
+  font-family: var(--font-ui);
+}
+.imp-prev {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 62px;
+  margin: 0 10px 10px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 11px;
+  background: hsl(var(--muted) / 0.55);
+}
+.imp-prev > div {
+  flex: 1;
+  min-width: 0;
+}
+.imp-prev b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.imp-prev span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.imp-prev .btn {
+  flex: none;
+}
+.imp-prev .imp-err {
+  margin: 0;
+  color: hsl(var(--destructive));
+  font-size: 13px;
+}
+.imp-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.imp-wait i {
+  display: block;
+  width: 70%;
+  height: 11px;
+  border-radius: 6px;
+  background: hsl(var(--foreground) / 0.08);
+  animation: impWait 1.2s ease-in-out infinite alternate;
+}
+.imp-wait i + i {
+  width: 45%;
+}
+@keyframes impWait {
+  to {
+    opacity: 0.4;
+  }
+}
+.imp-pdf {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: default;
+}
+.imp-pdf:hover {
+  background: hsl(var(--accent));
+}
+.imp-pdf svg {
+  color: hsl(var(--muted-foreground));
+}
+
+/* ---------- 封面: first pages large, titles under them ---------- */
+
+.cv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 28px 22px;
+  padding: 4px 0 8px;
+}
+.cv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  animation: fadeIn 0.35s ease both;
+}
+.cv-thumb {
+  position: relative;
+  aspect-ratio: 0.72;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.08), 0 6px 18px -4px hsl(0 0% 0% / 0.16);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.cv.clickable:hover .cv-thumb {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px hsl(0 0% 0% / 0.08), 0 12px 26px -6px hsl(0 0% 0% / 0.22);
+}
+.cv-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+.cv-thumb > svg {
+  margin: auto;
+}
+:root[data-theme='dark'] .cv-thumb img,
+:root[data-theme='dark'] .ls-thumb img {
+  opacity: 0.88;
+}
+.cv-read {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: hsl(var(--primary));
+}
+.cv-heart {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: hsl(0 0% 100% / 0.9);
+  color: hsl(var(--destructive));
+  box-shadow: 0 1px 4px hsl(0 0% 0% / 0.15);
+}
+.cv-heart svg {
+  fill: currentColor;
+}
+.cv-state {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cv-state .pill {
+  background: hsl(var(--card));
+}
+.cv-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+.cv-meta h4 {
+  display: -webkit-box;
+  /* always two lines' room, so every title's backing and tag line up across a row */
+  min-height: 2.8em;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/* over the wallpaper the title gets a frosted backing, so a busy picture can't swallow it */
+html.walled .cv-meta {
+  margin: 0 -8px;
+  padding: 8px 10px 9px;
+  border-radius: 11px;
+  background: hsl(var(--background) / 0.62);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* ---------- 列表: one line a paper ---------- */
+
+.ls {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+}
+.ls-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 168px 110px 74px 96px;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 12px 9px 16px;
+  border-top: 1px solid hsl(var(--border));
+}
+.ls-row:first-child {
+  border-top: 0;
+}
+.ls-row.clickable:hover {
+  background: hsl(var(--accent) / 0.6);
+}
+.ls-thumb {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 0 0 1px hsl(var(--border));
+}
+.ls-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+.ls-title {
+  min-width: 0;
+}
+.ls-title b,
+.ls-title span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ls-title b {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.ls-title span {
+  margin-top: 2px;
+  font-size: 12.5px;
+}
+.ls-venue,
+.ls-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ls-state .read-progress {
+  width: 100%;
+}
+.ls-date {
+  font-size: 12.5px;
+  text-align: right;
+}
+.ls-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ls-row .heart:not(.on),
+.ls-row .later:not(.on),
+.ls-row .more {
+  opacity: 0;
+}
+.ls-row:hover .heart,
+.ls-row:hover .later,
+.ls-row:hover .more {
+  opacity: 1;
+}
+
+/*
+ * The middle of the top bar belongs to the 书库/会议 switch: its wake-up zone keeps its full width (it is also what keeps
+ * that part of the bar out of the window's drag area), and the tools sit above it, so where they overlap in narrow
+ * windows a click lands on the tool. Narrow windows: 导入 keeps only its plus and search narrows.
+ */
+.lib-find,
+.lib .topbar .topbar-actions {
+  position: relative;
+  z-index: 2;
+}
+.topbar:has(.lib-bar) .space-switch {
+  z-index: 3;
+}
+@media (max-width: 1240px) {
+  .lib-find {
+    width: 170px;
+  }
+  .imp-btn .imp-label {
+    display: none;
+  }
+  .imp-btn {
+    padding: 0 12px;
+  }
+}
+@media (max-width: 1080px) {
+  .lib-find {
+    width: 130px;
+  }
 }

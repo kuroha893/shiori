@@ -1,21 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import type { PaperMeta, Settings } from '../../../shared/types'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import type { PaperMeta, Settings, SystemNotice } from '../../../shared/types'
 import { shownVenue } from '../../../shared/venue'
 import { plainText } from '../../../shared/tex'
-import { modelLabel, pickModel, type ServiceStatus } from '../../../shared/models'
-import { api, fileUrl } from '../api'
+import { pickModel, type ServiceStatus } from '../../../shared/models'
+import { api } from '../api'
 import { Icon } from './Icon'
-import { CallLauncher, HeartButton, Kept, LaterButton, Menu, ThemeButton, type MenuItem } from './Chrome'
+import { Menu, ThemeButton, type MenuItem } from './Chrome'
+import { PhoneLauncher } from './Phone'
 import { StatusBlock } from './Quota'
 import { Conferences, LaterCard, useConfOverview, useLater } from './Conferences'
-import { errorText, NameInput, setPaperFolders, Suggestion, useFolders } from './Folders'
-import { PaperVenue } from './VenueTags'
-import { PaperText } from './PaperText'
+import { errorText, NameInput, setPaperFolders, useFolders } from './Folders'
+import { dayLabel, ImportButton, PAPER_DRAG, PaperCard, Shelf, ShelfSearch, ShelfTools, StickyGroups, type ItemProps } from './Shelf'
 import { Room } from './Room'
 import brand from '../assets/brand.png'
+import { titlesOf } from '../lib/titles'
 import type { Toast } from './App'
-
-type Filter = 'all' | 'todo' | 'busy' | 'ready' | 'done'
 
 /** 书库, 大厅 or 会议; kept by the app so closing a paper goes back to where it was opened. The switch holds 书库 and
  * 会议; the brand at the top of the library goes to 大厅. */
@@ -24,23 +23,6 @@ const SPACES: { id: Space; label: string }[] = [
   { id: 'lib', label: '书库' },
   { id: 'conf', label: '会议' }
 ]
-
-const PAPER_DRAG = 'application/x-shiori-paper'
-
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: '全部' },
-  { id: 'ready', label: '可阅读' },
-  { id: 'busy', label: '处理中' },
-  { id: 'todo', label: '未处理' },
-  { id: 'done', label: '已读完' }
-]
-
-const matches = (p: PaperMeta, f: Filter) =>
-  f === 'all' ||
-  (f === 'ready' && p.status === 'ready' && !p.finished) ||
-  (f === 'busy' && (p.status === 'processing' || p.status === 'queued')) ||
-  (f === 'todo' && (p.status === 'new' || p.status === 'error')) ||
-  (f === 'done' && !!p.finished)
 
 export function Library(props: {
   papers: PaperMeta[]
@@ -55,10 +37,7 @@ export function Library(props: {
 }) {
   const { papers, settings, services, toast, space, onSpace: setSpace } = props
   const [confStart, setConfStart] = useState<{ conf: string; year: number }>()
-  const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
-  const [arxiv, setArxiv] = useState('')
-  const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
   const folders = useFolders()
@@ -67,6 +46,24 @@ export function Library(props: {
   const later = useLater()
   const laterCount = papers.filter((p) => p.laterAt).length + later.length
   const overview = useConfOverview()
+  /** A notice's button in the phone: open what it is about, or sign in */
+  const phoneAction = (n: SystemNotice) => {
+    const a = n.action
+    if (!a) return
+    if (a.kind === 'paper') return props.onOpen(a.paper)
+    if (a.kind === 'edition') {
+      setConfStart({ conf: a.conf, year: a.year })
+      return setSpace('conf')
+    }
+    if (a.kind === 'later') {
+      setPlace('later')
+      return setSpace('lib')
+    }
+    if (a.kind === 'login') return a.provider === 'deepseek' ? props.onOpenSettings() : void api.serviceLogin(a.provider)
+    if (a.kind === 'openreview') return void api.openReviewSignIn()
+    if (a.kind === 'settings') return props.onOpenSettings()
+    if (a.kind === 'retry') return void api.phoneAct(n.id)
+  }
   // The liked and later lists disappear with their last paper.
   const place = (chosenPlace === 'liked' && !likedCount) || (chosenPlace === 'later' && !laterCount) ? 'all' : chosenPlace
   // A PDF that turned up for a 稍后再看 paper stays marked until the owner leaves the list.
@@ -87,6 +84,18 @@ export function Library(props: {
   const [creating, setCreating] = useState<{ paper?: string }>()
   const [renaming, setRenaming] = useState<string>()
   const [dropOn, setDropOn] = useState<string>()
+  // The top bar's search lines up with the papers' left edge, wherever the centred column and the scrollbar put it.
+  const inner = useRef<HTMLDivElement>(null)
+  const [shelfLeft, setShelfLeft] = useState<number>()
+  useEffect(() => {
+    const el = inner.current
+    if (!el) return
+    const measure = () => setShelfLeft(Math.round(el.getBoundingClientRect().left))
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    measure()
+    return () => ro.disconnect()
+  }, [space])
 
   const processWith = services && pickModel(settings.processModel, services.models, 'process')
   const ready = !!processWith
@@ -95,19 +104,6 @@ export function Library(props: {
     if (!list.length) return
     if (ready) list.filter((m) => m.status === 'new').forEach((m) => api.processPaper(m.id))
     toast(ready ? `已导入 ${list.length} 篇，开始在后台处理` : `已导入 ${list.length} 篇。接入模型服务后即可处理`)
-  }
-
-  const importArxiv = async () => {
-    if (!arxiv.trim() || busy) return
-    setBusy(true)
-    try {
-      afterImport([await api.importArxiv(arxiv)])
-      setArxiv('')
-    } catch (e) {
-      toast(errorText(e))
-    } finally {
-      setBusy(false)
-    }
   }
 
   const onDrop = async (e: DragEvent) => {
@@ -128,17 +124,9 @@ export function Library(props: {
     return papers.filter(
       (p) =>
         inPlace(p) &&
-        matches(p, filter) &&
         (!q || [plainText(p.title), p.titleZh && plainText(p.titleZh), p.authors.join(' '), shownVenue(p).venue, p.tags.join(' ')].some((s) => s?.toLowerCase().includes(q)))
     )
-  }, [papers, filter, query, place])
-
-  const thisMonth = new Date().toISOString().slice(0, 7)
-  const stats = {
-    total: papers.length,
-    done: papers.filter((p) => p.finished).length,
-    month: papers.filter((p) => p.readAt?.startsWith(thisMonth)).length
-  }
+  }, [papers, query, place])
 
   const fileUnder = (p: PaperMeta, id: string) => {
     const now = p.folders ?? []
@@ -226,11 +214,18 @@ export function Library(props: {
           icon: 'trash',
           danger: true,
           onClick: () => {
-            if (confirm(`把「${p.titleZh || p.title}」连同批注和对话移到废纸篓？`)) api.trashPaper(p.id)
+            if (confirm(`把「${titlesOf(p).main}」连同批注和对话移到废纸篓？`)) api.trashPaper(p.id)
           }
         }
       ]
     })
+
+  const item: ItemProps = {
+    onOpen: (p) => props.onOpen(p.id),
+    onProcess: (p) => (ready ? api.processPaper(p.id) : props.onOpenSettings()),
+    onMenu: (p, x, y) => openMenu(p, x, y),
+    folderNames: (p) => folders.filter((f) => p.folders?.includes(f.id)).map((f) => f.name)
+  }
 
   return (
     <div
@@ -242,34 +237,36 @@ export function Library(props: {
       onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
       onDrop={onDrop}
     >
-      <CallLauncher />
+      {space !== 'room' && <PhoneLauncher papers={papers} onAction={phoneAction} />}
       <header className="topbar drag">
-        <SpaceSwitch space={space} onChange={setSpace} fresh={space !== 'conf' && !!overview?.fresh} />
+        {space === 'lib' && <ShelfSearch left={shelfLeft} query={query} onQuery={setQuery} />}
         <div className="topbar-actions">
+          {space === 'lib' && (
+            <ShelfTools
+              view={settings.libraryView}
+              group={settings.libraryGroup}
+              arrange={place !== 'later'}
+              onView={(libraryView) => props.onSettings({ libraryView })}
+              onGroup={(libraryGroup) => props.onSettings({ libraryGroup })}
+              importer={<ImportButton onImported={afterImport} onOpen={props.onOpen} toast={toast} />}
+            />
+          )}
           <StatusBlock papers={papers} music={space !== 'room'} />
           <ThemeButton theme={settings.theme} onChange={(theme) => props.onSettings({ theme })} />
           <button className="icon-btn bordered no-drag" title="设置" onClick={props.onOpenSettings}>
             <Icon name="settings" />
           </button>
         </div>
+        {/*
+          Last in the bar: the window's drag area is worked out in document order, later regions over earlier ones, and
+          drag is inherited, so the tools' row (drag between its pieces) would otherwise cover the switch's no-drag zone.
+        */}
+        <SpaceSwitch space={space} onChange={setSpace} fresh={space !== 'conf' && !!overview?.fresh} />
       </header>
 
       <div className="lib-body">
       {space === 'room' ? (
-        <Room
-          papers={papers}
-          wall={settings.wallpaperIn.includes('room')}
-          onOpenPaper={props.onOpen}
-          onLink={(l) => {
-            if (l.kind === 'paper') return props.onOpen(l.paper)
-            if (l.kind === 'edition') {
-              setConfStart({ conf: l.conf, year: l.year })
-              return setSpace('conf')
-            }
-            setPlace('later')
-            setSpace('lib')
-          }}
-        />
+        <Room papers={papers} wall={settings.wallpaperIn.includes('room')} onOpenPaper={props.onOpen} onAction={phoneAction} />
       ) : space === 'conf' ? (
         <Conferences key={confStart ? `${confStart.conf}/${confStart.year}` : 'home'} start={confStart} overview={overview} library={papers} ready={ready} onOpenPaper={props.onOpen} toast={toast} />
       ) : (
@@ -338,22 +335,7 @@ export function Library(props: {
           {!folders.length && !creating && <p className="lib-side-hint faint">点 + 新建分类，再把论文拖进来。</p>}
         </aside>
       <main className="lib-scroll">
-        <div className="lib-inner">
-          <section className="lib-hero fade-in">
-            <h1>论文书架</h1>
-            <p className="muted">
-              {stats.total ? (
-                <>
-                  <span>共 <b>{stats.total}</b> 篇</span>
-                  <span>已读完 <b>{stats.done}</b> 篇</span>
-                  <span>本月读过 <b>{stats.month}</b> 篇</span>
-                </>
-              ) : (
-                '把论文放进来，Shiori 会在后台把它整理成一篇排好版的中文文章。'
-              )}
-            </p>
-          </section>
-
+        <div className="lib-inner" ref={inner}>
           {services && !ready && (
             <button className="ai-banner card fade-in" onClick={props.onOpenSettings}>
               <Icon name="sparkles" size={18} />
@@ -365,64 +347,21 @@ export function Library(props: {
             </button>
           )}
 
-          <section className="import card fade-in">
-            <div className="import-row">
-              <div className="import-input">
-                <Icon name="search" className="faint" />
-                <input
-                  className="bare"
-                  placeholder="粘贴 arXiv 编号或链接，例如 2310.06825"
-                  value={arxiv}
-                  onChange={(e) => setArxiv(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && importArxiv()}
-                />
-              </div>
-              <button className="btn primary" disabled={!arxiv.trim() || busy} onClick={importArxiv}>
-                {busy ? '下载中…' : '导入'}
-              </button>
-              <span className="import-or faint">或</span>
-              <button className="btn" onClick={async () => afterImport(await api.importDialog())}>
-                <Icon name="file" />
-                选择 PDF
-              </button>
-            </div>
-            <p className="import-hint faint">也可以直接把 PDF 拖进窗口。导入后{processWith ? `自动用 ${modelLabel(processWith)} ` : ''}转写全文并翻译成中文。</p>
-          </section>
-
-          {papers.length > 0 && (
-            <div className="lib-tools fade-in">
-              <div className="seg">
-                {FILTERS.map((f) => (
-                  <button key={f.id} className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-              <input className="input lib-search" placeholder="搜索标题、作者、会议…" value={query} onChange={(e) => setQuery(e.target.value)} />
-            </div>
+          {place !== 'later' ? (
+            <Shelf papers={shown} view={settings.libraryView} group={settings.libraryGroup} {...item} />
+          ) : (
+            <LaterDays
+              marked={[
+                ...shown.map((p) => ({ at: p.laterAt ?? '', node: (i: number) => <PaperCard key={p.id} paper={p} index={i} {...item} /> })),
+                ...later.map((it) => ({ at: it.addedAt, node: () => <LaterCard key={it.ref} item={it} ready={ready} toast={toast} /> }))
+              ]}
+            />
           )}
-
-          {(() => {
-            const card = (p: PaperMeta, i: number) => (
-              <PaperCard
-                key={p.id}
-                paper={p}
-                index={i}
-                folderNames={folders.filter((f) => p.folders?.includes(f.id)).map((f) => f.name)}
-                suggestion={<Suggestion paper={p} folders={folders} toast={toast} />}
-                onOpen={() => p.status === 'ready' && props.onOpen(p.id)}
-                onProcess={() => (ready ? api.processPaper(p.id) : props.onOpenSettings())}
-                onMenu={(x, y) => openMenu(p, x, y)}
-              />
-            )
-            if (place !== 'later') return <section className="grid">{shown.map(card)}</section>
-            const marked = [
-              ...shown.map((p) => ({ at: p.laterAt ?? '', node: (i: number) => card(p, i) })),
-              ...later.map((item) => ({ at: item.addedAt, node: () => <LaterCard key={item.ref} item={item} ready={ready} toast={toast} /> }))
-            ]
-            return <LaterDays marked={marked} />
-          })()}
-          {papers.length > 0 && !shown.length && !(place === 'later' && later.length) && <p className="empty faint">没有符合条件的论文</p>}
+          {!papers.length ? (
+            <p className="empty faint">暂无论文</p>
+          ) : (
+            !shown.length && !(place === 'later' && later.length) && <p className="empty faint">没有符合条件的论文</p>
+          )}
         </div>
       </main>
       </>
@@ -442,197 +381,20 @@ export function Library(props: {
   )
 }
 
-/** 今天, 昨天, or the day itself; the year only when it isn't this one. */
-function dayLabel(d: Date, now: Date): string {
-  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
-  const back = Math.round((day(now) - day(d)) / 864e5)
-  if (back === 0) return '今天'
-  if (back === 1) return '昨天'
-  return `${d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()} 年 ` : ''}${d.getMonth() + 1} 月 ${d.getDate()} 日`
-}
-
-/**
- * 稍后再看, newest first, one group per day it was marked on. A day's header sticks while you are inside that day;
- * the sticky state is set on the DOM directly, since it changes with every scroll.
- */
-function LaterDays({ marked }: { marked: { at: string; node: (i: number) => ReactNode }[] }) {
-  const root = useRef<HTMLDivElement>(null)
-  const days = useMemo(() => {
+/** 稍后再看, newest first, one group per day it was marked on. */
+function LaterDays({ marked }: { marked: { at: string; node: (i: number) => React.ReactNode }[] }) {
+  const groups = useMemo(() => {
     const now = new Date()
-    const out: { label: string; items: typeof marked }[] = []
+    const out: { key: string; items: typeof marked }[] = []
     for (const m of [...marked].sort((a, b) => b.at.localeCompare(a.at))) {
-      const label = dayLabel(new Date(m.at), now)
-      if (out.at(-1)?.label === label) out.at(-1)!.items.push(m)
-      else out.push({ label, items: [m] })
+      const key = dayLabel(new Date(m.at), now)
+      if (out.at(-1)?.key === key) out.at(-1)!.items.push(m)
+      else out.push({ key, items: [m] })
     }
     return out
   }, [marked])
-  useEffect(() => {
-    const scroller = root.current?.closest('.lib-scroll')
-    if (!scroller) return
-    const spy = () => {
-      const top = scroller.getBoundingClientRect().top
-      for (const s of root.current!.querySelectorAll<HTMLElement>(':scope > .later-day')) {
-        const h = s.querySelector<HTMLElement>(':scope > .later-th')!
-        const r = s.getBoundingClientRect()
-        const stuck = r.top < top + 1 && r.bottom > top
-        if (stuck !== h.classList.contains('stuck')) {
-          // The stuck bar is shorter; make up the difference below it so the cards don't jump (see Stream in 会议).
-          const before = h.getBoundingClientRect().height
-          h.classList.toggle('stuck', stuck)
-          h.style.marginBottom = stuck ? `${before - h.getBoundingClientRect().height}px` : ''
-        }
-      }
-    }
-    spy()
-    scroller.addEventListener('scroll', spy, { passive: true })
-    return () => scroller.removeEventListener('scroll', spy)
-  }, [days])
   let i = 0
-  return (
-    <div className="later-days" ref={root}>
-      {days.map((d) => (
-        <section key={d.label} className="later-day">
-          <div className="later-th">
-            <span className="later-th-label">
-              <h2>{d.label}</h2>
-              <span className="n">{d.items.length}</span>
-            </span>
-          </div>
-          <div className="grid">{d.items.map((m) => m.node(i++))}</div>
-        </section>
-      ))}
-    </div>
-  )
-}
-
-function PaperCard({
-  paper: p,
-  index,
-  folderNames,
-  suggestion,
-  onOpen,
-  onProcess,
-  onMenu
-}: {
-  paper: PaperMeta
-  index: number
-  folderNames: string[]
-  suggestion: ReactNode
-  onOpen: () => void
-  onProcess: () => void
-  onMenu: (x: number, y: number) => void
-}) {
-  const busy = p.status === 'processing' || p.status === 'queued'
-  const ratio = p.readPos?.ratio ?? 0
-  return (
-    <article
-      className={`paper card ${p.status === 'ready' ? 'clickable' : ''}`}
-      style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-      onClick={onOpen}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData(PAPER_DRAG, p.id)}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        onMenu(e.clientX, e.clientY)
-      }}
-    >
-      <div className="paper-thumb">
-        {p.pages ? <img src={`${fileUrl(p.id, 'thumb.png')}?v=${p.pages}`} alt="" draggable={false} /> : <Icon name="file" size={22} />}
-      </div>
-      <div className="paper-body">
-        <PaperText as="h3" text={p.titleZh || p.title} zh={!!p.titleZh} />
-        {p.titleZh && <PaperText as="p" className="paper-en" text={p.title} />}
-        {p.authors.length > 0 && (
-          <p className="paper-authors muted">
-            {p.authors.slice(0, 4).join(', ')}
-            {p.authors.length > 4 && ` 等 ${p.authors.length} 人`}
-          </p>
-        )}
-        {folderNames.length > 0 && (
-          <p className="paper-folders">
-            {folderNames.map((n) => (
-              <span key={n}>{n}</span>
-            ))}
-          </p>
-        )}
-        {suggestion}
-        <div className="paper-foot">
-          {shownVenue(p).venue || shownVenue(p).year ? <PaperVenue paper={p} /> : <span className="mono faint">{p.pages ? `${p.pages} 页` : ''}</span>}
-          <span className="spacer" />
-          {p.status === 'ready' &&
-            (p.finished ? (
-              <span className="pill ok">
-                <Icon name="check" size={12} />
-                已读完
-              </span>
-            ) : ratio > 0.01 ? (
-              <span className="read-progress" title={`读到 ${Math.round(ratio * 100)}%`}>
-                <i style={{ width: `${Math.round(ratio * 100)}%` }} />
-              </span>
-            ) : (
-              <span className="pill">未开始</span>
-            ))}
-          {busy && (
-            <span className="pill busy">
-              {p.status === 'queued' && p.kept !== undefined ? <Kept share={p.kept} bare /> : <span className="dot" />}
-              {p.status === 'queued' ? '排队中' : `${Math.round((p.progress ?? 0) * 100)}%`}
-            </span>
-          )}
-          {p.status === 'error' && (
-            <span className="pill err" title={p.error}>
-              {p.kept !== undefined ? (
-                <Kept share={p.kept} />
-              ) : (
-                <>
-                  <span className="dot" />
-                  处理失败
-                </>
-              )}
-            </span>
-          )}
-          {p.status === 'new' && p.kept !== undefined && (
-            <span className="pill">
-              <Kept share={p.kept} />
-            </span>
-          )}
-          {(p.status === 'new' || p.status === 'error') && (
-            <button
-              className="btn sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                onProcess()
-              }}
-            >
-              <Icon name="play" size={12} />
-              {p.kept !== undefined ? '继续' : p.status === 'error' ? '重试' : '处理'}
-            </button>
-          )}
-          <LaterButton paper={p} />
-          <HeartButton paper={p} />
-          <button
-            className="icon-btn more"
-            onClick={(e) => {
-              e.stopPropagation()
-              const r = e.currentTarget.getBoundingClientRect()
-              onMenu(r.left - 150, r.bottom + 4)
-            }}
-          >
-            <Icon name="more" />
-          </button>
-        </div>
-        {busy && !(p.status === 'queued' && p.kept !== undefined) && (
-          <div className="paper-stage">
-            <span className="faint">{p.stage}</span>
-            <span className="bar">
-              <i style={{ width: `${Math.max(3, Math.round((p.progress ?? 0) * 100))}%` }} />
-            </span>
-          </div>
-        )}
-        {p.status === 'error' && p.error && <p className="paper-error">{p.error}</p>}
-      </div>
-    </article>
-  )
+  return <StickyGroups groups={groups.map((g) => ({ key: g.key, count: g.items.length, body: <div className="grid">{g.items.map((m) => m.node(i++))}</div> }))} />
 }
 
 /**

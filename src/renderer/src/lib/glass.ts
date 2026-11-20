@@ -11,12 +11,19 @@ interface Kind {
   scale: number
   /** the element's glass is a layer this much larger on each side */
   pad?: number
+  /** how much the picture behind is softened, for words that sit on the glass */
+  blur?: number
+  /** a large pane: the bent rim stays this sharp, and only the middle takes `blur` */
+  rim?: number
+  /** a rounded edge like thick glass: bent hardest at the very rim, the bend falling away quickly inside it */
+  convex?: boolean
 }
 
 const KINDS: Kind[] = [
   { sel: '.topbar .topbar-actions', bezel: 10, scale: 22 },
   { sel: '.reader-nav', bezel: 10, scale: 22 },
-  { sel: '.space-switch', bezel: 8, scale: 18 }
+  { sel: '.space-switch', bezel: 8, scale: 18 },
+  { sel: '.lib-bar .lib-find', bezel: 8, scale: 18 }
 ]
 
 /** Signed distance from a rounded rectangle's edge (negative inside), for a w×h box with corner radius r. */
@@ -28,8 +35,23 @@ function edge(w: number, h: number, r: number) {
   }
 }
 
+/** How hard the picture bends at t (1 at the rim, 0 where the bevel ends). */
+const smooth = (t: number): number => t * t * (3 - 2 * t)
+const rounded = (t: number): number => 0.4 * (t / Math.sqrt(1 - 0.96 * t * t)) * Math.sqrt(0.04) + 0.6 * smooth(t)
+
+/** Maps already drawn, kept for the life of the page: a pane that comes and goes (the phone) gets its lens at once. */
+const drawn = new Map<string, string>()
+const once = (key: string, draw: () => string): string => {
+  let url = drawn.get(key)
+  if (!url) drawn.set(key, (url = draw()))
+  return url
+}
+
 /** A displacement map for a w×h lens: neutral grey inside, and near the rim pointing inward, strongest at the edge. */
-function lensMap(w: number, h: number, r: number, bezel: number): string {
+function lensMap(w: number, h: number, r: number, bezel: number, convex = false): string {
+  return once(`lens ${w} ${h} ${r} ${bezel} ${convex}`, () => drawLens(w, h, r, bezel, convex))
+}
+function drawLens(w: number, h: number, r: number, bezel: number, convex: boolean): string {
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
@@ -49,7 +71,7 @@ function lensMap(w: number, h: number, r: number, bezel: number): string {
       const ny = sdf(px, py + 0.5) - sdf(px, py - 0.5)
       const n = Math.hypot(nx, ny) || 1
       const t = 1 - depth / bezel
-      const f = t * t * (3 - 2 * t)
+      const f = convex ? rounded(t) : smooth(t)
       // feDisplacementMap samples at p + scale·(channel − ½): against the normal pulls the picture in from the rim
       const i = (y * w + x) * 4
       d[i] = 128 - (nx / n) * f * 127
@@ -59,9 +81,38 @@ function lensMap(w: number, h: number, r: number, bezel: number): string {
   return canvas.toDataURL()
 }
 
+/** Where a w×h lens is bent: white, opaque at the rim and fading out a little past the bezel. */
+function rimMask(w: number, h: number, r: number, bezel: number): string {
+  return once(`rim ${w} ${h} ${r} ${bezel}`, () => drawRim(w, h, r, bezel))
+}
+function drawRim(w: number, h: number, r: number, bezel: number): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')!
+  const img = ctx.createImageData(w, h)
+  const d = img.data
+  const sdf = edge(w, h, r)
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const depth = -sdf(x + 0.5, y + 0.5)
+      if (depth <= 0) continue
+      const t = Math.max(0, 1 - depth / (bezel * 1.1))
+      const i = (y * w + x) * 4
+      d[i] = d[i + 1] = d[i + 2] = 255
+      d[i + 3] = Math.round(smooth(t) * 255)
+    }
+  ctx.putImageData(img, 0, 0)
+  return canvas.toDataURL()
+}
+
+/** The phone is one pane of clear glass with a rounded edge; what sits on it is flat. */
+export const PHONE_KINDS: Kind[] = [{ sel: '.ph-ground', bezel: 40, scale: 110, blur: 6, rim: 1, convex: true }]
+
 /** Starts the glass on the page; returns a function that takes it away again. */
-export function startGlass(): () => void {
+export function startGlass(kinds: Kind[] = KINDS): () => void {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  const prefix = kinds === KINDS ? 'glass-lens' : 'phone-lens'
   svg.setAttribute('width', '0')
   svg.setAttribute('height', '0')
   svg.setAttribute('aria-hidden', 'true')
@@ -70,16 +121,28 @@ export function startGlass(): () => void {
 
   const filters = new Map<string, string>()
   const filterFor = (w: number, h: number, r: number, k: Kind): string => {
-    const key = `${w}x${h}r${r}b${k.bezel}s${k.scale}`
+    const key = `${w}x${h}r${r}b${k.bezel}s${k.scale}f${k.blur ?? 0.4}m${k.rim ?? ''}${k.convex ? 'c' : ''}`
     let id = filters.get(key)
     if (id) return id
-    id = `glass-lens-${filters.size}`
+    id = `${prefix}-${filters.size}`
+    const image = (href: string, result: string): string =>
+      `<feImage href="${href}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="${result}"/>`
+    const blur = `<feGaussianBlur in="SourceGraphic" stdDeviation="${k.blur ?? 0.4}" result="b"/>`
+    const bend = (from: string, result: string): string =>
+      image(lensMap(w, h, r, k.bezel, k.convex), 'm') + `<feDisplacementMap in="${from}" in2="m" scale="${k.scale}" xChannelSelector="R" yChannelSelector="G" result="${result}"/>`
+    // a pane with a rim: the bent rim is sharp and laid over the frosted middle
+    const body =
+      k.rim === undefined
+        ? blur + bend('b', 'd')
+        : blur +
+          `<feGaussianBlur in="SourceGraphic" stdDeviation="${k.rim}" result="s"/>` +
+          bend('s', 'bent') +
+          image(rimMask(w, h, r, k.bezel), 'mask') +
+          `<feComposite in="bent" in2="mask" operator="in" result="rim"/><feComposite in="rim" in2="b" operator="over" result="d"/>`
     svg.insertAdjacentHTML(
       'beforeend',
       `<filter id="${id}" x="0" y="0" width="${w}" height="${h}" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
-        `<feGaussianBlur in="SourceGraphic" stdDeviation="0.4" result="b"/>` +
-        `<feImage href="${lensMap(w, h, r, k.bezel)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="m"/>` +
-        `<feDisplacementMap in="b" in2="m" scale="${k.scale}" xChannelSelector="R" yChannelSelector="G" result="d"/>` +
+        body +
         `<feColorMatrix in="d" type="saturate" values="1.5"/></filter>`
     )
     filters.set(key, id)
@@ -101,11 +164,13 @@ export function startGlass(): () => void {
 
   // the switch and the block come and go with pages
   const scan = (): void => {
-    for (const k of KINDS)
+    for (const k of kinds)
       for (const el of document.querySelectorAll<HTMLElement>(k.sel))
         if (!kindOf.has(el)) {
           kindOf.set(el, k)
           sizes.observe(el)
+          // now, not a frame later: a pane that has just appeared should be glass from its first frame
+          lens(el)
         }
     for (const el of [...kindOf.keys()])
       if (!el.isConnected) {

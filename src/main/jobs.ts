@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto'
 import type { AppendixState, PaperMeta, TaskKind } from '../shared/types'
 import { parseDoc } from '../shared/doc'
 import { listPapers, paperDir, readDocSource, readMeta, updateMeta } from './library'
-import { findFolder, loadFolders } from './folders'
 import { glossaryPrompt } from './glossary'
 import { modelFor, runAgent, type Activity } from './ai'
 import { parseModel } from '../shared/models'
@@ -329,10 +328,8 @@ async function finish(id: string, dir: string, figs: string[], verify?: () => Pr
 async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
   const dir = paperDir(id)
   const next = join(dir, 'summary.next.md')
-  const suggestion = join(dir, 'suggestion.json')
   const venue = join(dir, 'venue.json')
   rmSync(next, { force: true })
-  rmSync(suggestion, { force: true })
   rmSync(venue, { force: true })
   const meta = readMeta(id)
   const model = await modelFor(getSettings().processModel, 'process')
@@ -342,7 +339,6 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
     cwd: dir,
     prompt: guidePrompt({
       glossary: glossaryPrompt(),
-      folders: loadFolders().map((f) => f.name),
       source,
       preprint: meta && awaitingVenue(meta) ? { arxiv: meta.arxiv } : undefined
     }),
@@ -350,25 +346,13 @@ async function writeGuide(id: string, signal: AbortSignal): Promise<void> {
     effort: getSettings().processEffort,
     write: true,
     search: true,
-    files: ['summary.next.md', 'suggestion.json', 'venue.json'],
+    files: ['summary.next.md', 'venue.json'],
     signal
   })
   if (result.isError) throw new Error(result.text || '处理失败')
   if (!existsSync(next)) throw new Error('没有写出导读')
   renameSync(next, join(dir, 'summary.md'))
-  applySuggestion(id, suggestion)
   applyFoundVenue(id, venue)
-}
-
-/** A paper already filed by the owner gets no suggestion. */
-function applySuggestion(id: string, file: string): void {
-  try {
-    const name = String(JSON.parse(readFileSync(file, 'utf8')).name ?? '').trim()
-    if (name && !readMeta(id)?.folders?.length) set(id, { suggestion: { name, folderId: findFolder(name)?.id } })
-  } catch {
-    /* the guide is what matters; no suggestion this time */
-  }
-  rmSync(file, { force: true })
 }
 
 

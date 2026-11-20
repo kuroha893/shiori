@@ -1254,7 +1254,8 @@ html.walled-room .topbar .topbar-actions::before {
   box-shadow: var(--glass-rim), var(--glass-drop);
 }
 html.walled .space-switch,
-html.walled-room .space-switch {
+html.walled-room .space-switch,
+html.walled .lib-find {
   border-color: transparent;
   background: var(--glass-tint);
   backdrop-filter: var(--lens, none);

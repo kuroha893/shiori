@@ -20,7 +20,7 @@ import { SEARCH_MODEL, editionRef, normTitle, searchScore } from '../../shared/c
 import { TIDY_VERSION, applyFixes, tidyTex } from '../../shared/tex'
 import { importDownloaded, listPapers as libraryPapers, readMeta, updateMeta } from '../library'
 import { loadFolders } from '../folders'
-import { callEvent } from '../call'
+import { notice } from '../phone'
 import { prepare } from '../jobs'
 import * as S from './store'
 import { LINKS_VERSION, PAIRS_VERSION, authorList, findAmbiguous, leftoversOf, mergeChannel, mergeSame, runChannel, scriptFile } from './scripts'
@@ -433,7 +433,7 @@ export async function fetchEdition(conf: string, year: number): Promise<void> {
       total.pdfs && `新增 PDF ${total.pdfs} 篇`
     ].filter(Boolean)
     S.logEdition(conf, year, parts.length ? `抓取完成，共 ${papers.length} 篇：${parts.join('，')}` : `抓取完成，没有变化（共 ${papers.length} 篇）`)
-    if (!before && papers.length && !e.past) callEvent(`${e.name} 的录用论文出来了，已经抓到 ${papers.length} 篇`, [{ kind: 'edition', conf, year }])
+    if (!before && papers.length && !e.past) notice({ kind: 'edition', title: `${e.name} 放榜了`, count: papers.length, action: { kind: 'edition', conf, year } }, `${e.name} 的录用论文出来了，已经抓到 ${papers.length} 篇`)
     if (pdfKeys.length) pdfArrived(conf, year, pdfKeys)
     checkComplete(conf, year)
   })
@@ -499,7 +499,7 @@ async function lookForCopies(conf: string, year: number): Promise<void> {
     if (arxiv && p.noCopy && item) {
       item.pdfNew = true
       S.saveLater(later)
-      callEvent(`稍后再看里的《${item.titleZh || item.title}》在 arXiv 上找到了，可以导入了`, [{ kind: 'later' }])
+      notice({ kind: 'later', title: item.titleZh || item.title, action: { kind: 'later' } }, `稍后再看里的《${item.titleZh || item.title}》在 arXiv 上找到了，可以导入了`)
     }
     markPaper(e, p.key, arxiv ? { arxiv } : { noCopy: new Date().toISOString() }, true)
     if (item) send('later:changed')
@@ -585,7 +585,7 @@ function pdfArrived(conf: string, year: number, keys: string[]): void {
     item.pdf = papers.get(key)?.pdf
     item.pdfNew = true
     any = true
-    callEvent(`稍后再看里的《${item.titleZh || item.title}》有 PDF 了，可以导入了`, [{ kind: 'later' }])
+    notice({ kind: 'later', title: item.titleZh || item.title, action: { kind: 'later' } }, `稍后再看里的《${item.titleZh || item.title}》有 PDF 了，可以导入了`)
   }
   if (any) {
     S.saveLater(later)
@@ -1008,7 +1008,7 @@ function published(conf: string, year: number): void {
   }
   if (any) S.saveLater(later)
   send('later:changed')
-  callEvent(`${e.name} 的论文在 OpenReview 上公开了`, [{ kind: 'edition', conf, year }])
+  notice({ kind: 'openreview-public', title: e.name, action: { kind: 'edition', conf, year } }, `${e.name} 的论文在 OpenReview 上公开了`)
   changed()
 }
 

@@ -7,10 +7,10 @@ import { Article } from './Article'
 import { COLORS, NotePopover, SelectionMenu, type Selected } from './Annotate'
 import { SidePanel, useChat, type Quote, type Tab } from './SidePanel'
 import { Lightbox, PdfPeek } from './Overlays'
-import { CallLauncher, HeartButton, themeOptions, useDismiss } from './Chrome'
+import { HeartButton, themeOptions, useDismiss } from './Chrome'
 import { StatusBlock } from './Quota'
 import { Icon } from './Icon'
-import { PaperText } from './PaperText'
+import { PaperTitle } from './PaperText'
 import type { Toast } from './App'
 
 const EXPLAIN = '请解释这段话：它在说什么、为什么这样说、在论文里起什么作用。涉及的符号和术语也一并说明。'
@@ -328,7 +328,7 @@ export function Reader(props: {
             <Icon name="toc" />
           </button>
         </div>
-        <PaperText as="div" className="reader-title" text={paper.titleZh || paper.title} zh={!!paper.titleZh} />
+        <PaperTitle as="div" className="reader-title" paper={paper} />
         <div className="topbar-actions no-drag">
           <div className="seg">
             {(
@@ -391,7 +391,6 @@ export function Reader(props: {
         )}
 
         <div className="reader-main">
-        <CallLauncher />
         <div className="scroller" ref={scroller} onScroll={onScroll} onMouseUp={onMouseUp}>
           {!doc ? (
             <div className="doc-loading faint">正在打开…</div>
@@ -414,7 +413,6 @@ export function Reader(props: {
                   {finished}
                 </>
               }
-              toast={toast}
             />
           )}
         </div>

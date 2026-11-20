@@ -267,7 +267,7 @@ authors' own pages. Only if a page you actually read says the paper was accepted
 Write nothing else, then reply with the single word DONE.`
 }
 
-export function guidePrompt(o: { glossary: string; folders: string[]; source: Source; preprint?: { arxiv?: string } }): string {
+export function guidePrompt(o: { glossary: string; source: Source; preprint?: { arxiv?: string } }): string {
   return `You are writing the reading guide (导读) of an academic paper for a Chinese reader who has not read it yet.
 The guide is the underdrawing a painter lays down before any detail: it gives a rough but intuitive sense of the
 whole paper and of the line of research it belongs to, so the reader knows what they are looking at when they
@@ -342,12 +342,6 @@ ${GUIDE_SAMPLE}
 ${o.glossary}
 
 Write the guide to summary.next.md.
-
-Then suggest a research direction under which the reader could file this paper. Their directions so far:
-${o.folders.length ? o.folders.map((f) => `- ${f}`).join('\n') : '(none yet)'}
-If one of these fits, use its name exactly. Otherwise propose a short new Chinese name, broad enough to hold several
-related papers yet narrower than the reader's whole field: 幻觉与事实性 or 推理加速, not 大语言模型 and not the name of this
-paper's method. Write it to suggestion.json as {"name": "..."}.
 ${
   o.preprint
     ? `

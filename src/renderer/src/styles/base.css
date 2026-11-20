@@ -244,45 +244,6 @@ button {
 .call-launcher.live .call-launch {
   box-shadow: 0 0 0 3px hsl(146 55% 48% / 0.25), 0 2px 10px rgb(0 0 0 / 0.22);
 }
-/* The padding leaves room for names and shadows, which a scrolling list would otherwise clip. */
-.call-contacts {
-  position: absolute;
-  right: -6px;
-  bottom: 46px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-  max-height: calc(100vh - 110px);
-  padding: 6px 6px 6px 180px;
-  overflow-y: auto;
-  scrollbar-width: none;
-  pointer-events: none;
-}
-.call-contact {
-  position: relative;
-  flex: none;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border: 1px solid hsl(var(--border));
-  border-radius: 50%;
-  background: hsl(var(--accent));
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.22);
-  cursor: default;
-  opacity: 0;
-  transform: translateY(14px) scale(0.92);
-  transition: opacity 0.14s ease-out, transform 0.14s ease-out, box-shadow 0.15s;
-}
-/* From the bottom up, the nearest first. */
-.call-launcher.open .call-contact {
-  pointer-events: auto;
-}
-.call-launcher.open .call-contact {
-  opacity: 1;
-  transform: none;
-  transition: opacity 0.2s ease-out calc(var(--i) * 40ms), transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(var(--i) * 40ms), box-shadow 0.15s;
-}
 .contact-avatar {
   display: block;
   width: 100%;
@@ -300,47 +261,12 @@ button {
   font-size: 15px;
   font-weight: 600;
 }
-.call-contact.on {
-  border-color: var(--call-green);
-  box-shadow: 0 0 0 2px var(--call-green), 0 2px 10px rgb(0 0 0 / 0.22);
-}
 /* Every contact's picture: a thin ring in its own hue, a hairline apart from it */
 .ringed {
   --ring: hsl(var(--hue) 60% 58%);
 }
 :root[data-theme='dark'] .ringed {
   --ring: hsl(var(--hue) 60% 72%);
-}
-.call-contact.ringed:not(.on) {
-  border-color: transparent;
-  outline: 1.5px solid var(--ring);
-  outline-offset: 2px;
-}
-.call-contact-name {
-  position: absolute;
-  right: calc(100% + 8px);
-  top: 50%;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: hsl(var(--popover, var(--card)));
-  border: 1px solid hsl(var(--border));
-  color: hsl(var(--foreground));
-  font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(-50%);
-  pointer-events: none;
-  transition: opacity 0.12s;
-}
-.call-contact:hover .call-contact-name {
-  opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .call-contact,
-  .call-launcher.open .call-contact {
-    transition: opacity 0.1s;
-    transform: none;
-  }
 }
 .icon-btn.heart.on {
   color: hsl(var(--destructive));
@@ -799,4 +725,25 @@ button {
 .vt-pop-foot.draft {
   justify-content: flex-start;
   margin: 10px 0 0;
+}
+
+/* what sits straight on clear glass (lib/ink.ts judges each from what is under it): white words over dark, dark words
+   over light; a tray is a faint light pane over dark and a faint dark one over light. The change fades, never jumps. */
+.glass-ink {
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  transition: color 0.6s ease, text-shadow 0.6s ease;
+}
+.glass-ink[data-ink='dark'] {
+  color: rgb(22 22 28 / 0.86);
+  text-shadow: 0 0 4px rgb(255 255 255 / 0.6);
+}
+.glass-tray {
+  background: rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.28);
+  transition: background-color 0.6s ease, box-shadow 0.6s ease;
+}
+.glass-tray[data-ink='dark'] {
+  background: rgb(20 24 34 / 0.07);
+  box-shadow: inset 0 0 0 0.5px rgb(20 24 34 / 0.14);
 }

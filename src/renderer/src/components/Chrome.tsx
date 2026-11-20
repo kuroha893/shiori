@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { PaperMeta, PetState, Settings } from '../../../shared/types'
+import type { PaperMeta, Settings } from '../../../shared/types'
 import { api } from '../api'
 import type { Contact } from '../../../shared/contacts'
 import { Icon } from './Icon'
@@ -39,46 +39,6 @@ export const ringStyle = (c: Pick<Contact, 'hue'>) => (c.hue !== undefined ? ({ 
 export function ContactAvatar({ contact, src }: { contact: Pick<Contact, 'name' | 'avatar'>; src?: string | null }) {
   const image = src === null ? undefined : src ?? contact.avatar
   return image ? <img className="contact-avatar" src={image} alt="" draggable={false} /> : <span className="contact-avatar letter">{contact.name.trim().slice(0, 1).toUpperCase() || '?'}</span>
-}
-
-/** A green ring that opens the list of people to call; click someone to call them, click again to hang up. */
-export function CallLauncher() {
-  const contacts = useContacts()
-  const [call, setCall] = useState<PetState>({})
-  const [open, setOpen] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  useDismiss(box, () => setOpen(false), open)
-  useEffect(() => {
-    api.petState().then(setCall)
-    return api.onPetChanged(setCall)
-  }, [])
-  return (
-    <div className={`call-launcher no-drag ${open ? 'open' : ''} ${call.contact ? 'live' : ''}`} ref={box}>
-      <div className="call-contacts">
-        {contacts.map((c, i) => (
-          <button
-            key={c.id}
-            className={`call-contact ${call.contact === c.id ? 'on' : ''} ${ringStyle(c) ? 'ringed' : ''}`}
-            style={{ '--i': Math.min(contacts.length - 1 - i, 8), ...ringStyle(c) } as React.CSSProperties}
-            tabIndex={open ? 0 : -1}
-            aria-label={call.contact === c.id ? `挂断${c.name}` : `和${c.name}通话`}
-            onClick={() => {
-              setOpen(false)
-              api.togglePet(c.id).then(setCall)
-            }}
-          >
-            <span className="call-contact-name">{call.contact === c.id ? `挂断${c.name}` : c.name}</span>
-            <ContactAvatar contact={c} />
-          </button>
-        ))}
-      </div>
-      <button className="call-launch" title="联系人" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <i />
-        <i />
-        <i />
-      </button>
-    </div>
-  )
 }
 
 /** Red when the owner likes the paper; click to change your mind. */

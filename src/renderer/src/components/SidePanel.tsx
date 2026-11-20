@@ -6,6 +6,7 @@ import { Icon } from './Icon'
 import { modelLabel, pickModel, type ModelOption } from '../../../shared/models'
 import { ModelPicker } from './ModelPicker'
 import { IMAGE_EXT, NoteEditor } from './NoteEditor'
+import { titlesOf } from '../lib/titles'
 
 // 'notes' are the annotations (批注), 'memo' is the free-form note (笔记).
 export type Tab = 'guide' | 'chat' | 'notes' | 'memo'
@@ -529,9 +530,10 @@ function Notes(p: Props) {
   const [draft, setDraft] = useState('')
 
   const exportMd = () => {
-    const title = p.paper.titleZh || p.paper.title
+    const t = titlesOf(p.paper)
+    const title = t.main
     const lines = [`# ${title}`, '']
-    if (p.paper.titleZh) lines.push(`*${p.paper.title}*`, '')
+    if (t.other) lines.push(`*${t.other}*`, '')
     for (const a of list) {
       lines.push(`> ${a.text.replace(/\n+/g, ' ')}`, '')
       if (a.note) lines.push(a.note, '')

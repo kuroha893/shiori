@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { JournalDay, NowPlaying, PaperMeta, RoomLink, RoomNote, RoomView, StudyPlan, StudyState } from '../../../shared/types'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { JournalDay, NowPlaying, PaperMeta, RoomView, StudyPlan, StudyState, SystemNotice } from '../../../shared/types'
 import type { Contact } from '../../../shared/contacts'
 import { api, fileUrl } from '../api'
-import { ContactAvatar, Menu, useContacts, type MenuItem } from './Chrome'
+import { ContactAvatar, Menu, type MenuItem } from './Chrome'
 import { Icon } from './Icon'
-import { PaperText } from './PaperText'
+import { PaperText, PaperTitle } from './PaperText'
 import { startGlass } from '../lib/glass'
+import { PhoneDock } from './Phone'
 
 /*
- * 大厅 (the lobby): the owner's wallpaper, a clock, what is playing, and two drawers that wait at the edges with bookmarks sticking
- * out. Left is the owner's own (the paper being read, a highlight, 稍后再看; the journal); right is the contact's
- * (her notes; studying together).
+ * 大厅 (the lobby): the owner's desk. The wallpaper, a clock, what is playing, a drawer at the left edge with bookmarks
+ * sticking out (the paper being read, a highlight, 稍后再看; the journal), and the phone waiting at the right edge.
  */
 
 type Side = 'left' | 'right'
@@ -20,14 +20,13 @@ const WEEK = '日一二三四五六'
 const pad = (n: number) => String(n).padStart(2, '0')
 const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => void; onLink: (l: RoomLink) => void; /** the owner wants the wallpaper here */ wall: boolean }) {
+export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => void; onAction: (n: SystemNotice) => void; /** the owner wants the wallpaper here */ wall: boolean }) {
   const { papers } = props
   const [view, setView] = useState<RoomView>()
-  const [drawers, setDrawers] = useState<Record<Side, DrawerState>>({ left: 'closed', right: 'closed' })
-  const [pages, setPages] = useState<Record<Side, string>>({ left: 'read', right: 'notes' })
+  const [drawer, setDrawer] = useState<DrawerState>('closed')
+  const [page, setPage] = useState('read')
+  const [phone, setPhone] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] }>()
-  const contacts = useContacts()
-  const writer = contacts.find((c) => c.id === view?.contact)
 
   // over the room's own wallpaper the switch and the top bar's tray are liquid glass, as on the other pages
   const walled = props.wall && !!view?.wallpaper
@@ -43,23 +42,14 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
 
   useEffect(() => {
     api.roomView().then(setView)
-    api.roomVisit()
-    const off = api.onRoomChanged(setView)
-    // Coming back to the app while in the room counts as coming in, and looks again.
-    const back = () => {
-      api.roomVisit()
-      api.roomView().then(setView)
-    }
-    window.addEventListener('focus', back)
-    return () => {
-      off()
-      window.removeEventListener('focus', back)
-    }
+    return api.onRoomChanged(setView)
   }, [])
 
-  const anyOpen = drawers.left === 'open' || drawers.right === 'open'
-  const setDrawer = useCallback((side: Side, s: DrawerState) => setDrawers((d) => (d[side] === s ? d : { ...d, [side]: s })), [])
-  const closeAll = () => setDrawers({ left: 'closed', right: 'closed' })
+  const anyOpen = drawer === 'open' || phone
+  const closeAll = () => {
+    setDrawer('closed')
+    setPhone(false)
+  }
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -69,18 +59,10 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
     return () => window.removeEventListener('keydown', key)
   }, [])
 
-  // Her notes count as read once their page has been open.
-  const notesShown = drawers.right === 'open' && pages.right === 'notes'
-  useEffect(() => {
-    if (notesShown) return () => void api.roomRead()
-  }, [notesShown])
-
-  // Opening a drawer shows the latest.
+  // Opening the drawer shows the latest.
   useEffect(() => {
     if (anyOpen) api.roomView().then(setView)
   }, [anyOpen])
-
-  const unread = !!view?.notes.some((n) => !n.read)
 
   const wallMenu = (x: number, y: number) =>
     setMenu({
@@ -96,10 +78,13 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
     <div
       className={`room ${anyOpen ? 'focus' : ''}`}
       onPointerDown={(e) => {
-        // Empty space works like a switch: anything open closes, and with everything closed both drawers come out.
+        // Empty space works like a switch: anything open closes, and with everything closed the drawer and the phone come out.
         if (e.target !== e.currentTarget || e.button !== 0) return
         if (anyOpen) closeAll()
-        else setDrawers({ left: 'open', right: 'open' })
+        else {
+          setDrawer('open')
+          setPhone(true)
+        }
       }}
       onContextMenu={(e) => {
         if (e.target !== e.currentTarget) return
@@ -113,39 +98,19 @@ export function Room(props: { papers: PaperMeta[]; onOpenPaper: (id: string) => 
 
       <Drawer
         side="left"
-        state={drawers.left}
-        onState={(s) => setDrawer('left', s)}
-        page={pages.left}
-        onPage={(p) => setPages((x) => ({ ...x, left: p }))}
+        state={drawer}
+        onState={setDrawer}
+        page={page}
+        onPage={setPage}
         marks={[
           { id: 'read', mark: <Icon name="book" size={16} /> },
           { id: 'journal', mark: <Icon name="calendar" size={16} /> }
         ]}
       >
-        {pages.left === 'read' ? <Reading view={view} papers={papers} onOpen={props.onOpenPaper} /> : <Journal papers={papers} onOpen={props.onOpenPaper} />}
+        {page === 'read' ? <Reading view={view} papers={papers} onOpen={props.onOpenPaper} /> : <Journal papers={papers} onOpen={props.onOpenPaper} />}
       </Drawer>
 
-      <Drawer
-        side="right"
-        state={drawers.right}
-        onState={(s) => setDrawer('right', s)}
-        page={pages.right}
-        onPage={(p) => setPages((x) => ({ ...x, right: p }))}
-        marks={[
-          { id: 'notes', mark: writer ? <ContactAvatar contact={writer} /> : <Icon name="note" size={16} />, her: true, dot: unread, busy: !!view?.writing },
-          {
-            id: 'study',
-            mark: (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="13.5" r="7" />
-                <path d="M12 10v3.5l2.2 1.6M10 3h4" />
-              </svg>
-            )
-          }
-        ]}
-      >
-        {pages.right === 'notes' ? <Notes view={view} writer={writer} onLink={props.onLink} /> : <Study writer={writer} />}
-      </Drawer>
+      <PhoneDock papers={papers} open={phone} onOpen={setPhone} onAction={props.onAction} />
 
       {menu && <Menu {...menu} onClose={() => setMenu(undefined)} />}
     </div>
@@ -165,7 +130,7 @@ export function useWallpaper(): string | undefined {
 }
 
 function Wall({ url }: { url?: string }) {
-  return <div className={`room-wall ${url ? '' : 'plain'}`} style={url ? { backgroundImage: `url("${url}")` } : undefined} />
+  return <div className={`room-wall ${url ? '' : 'plain'}`} data-ink-layer="" style={url ? { backgroundImage: `url("${url}")` } : undefined} />
 }
 
 /** Dark or light ink for text straight on the wallpaper, from how bright the picture is behind it. */
@@ -350,8 +315,8 @@ function Reading({ view, papers, onOpen }: { view?: RoomView; papers: PaperMeta[
         <div className="room-card room-reading" onClick={() => onOpen(reading.id)}>
           {reading.pages ? <img src={`${fileUrl(reading.id, 'thumb.png')}?v=${reading.pages}`} alt="" draggable={false} /> : <span className="thumb" />}
           <div className="t">
-            <PaperText as="div" className="zh" text={reading.titleZh || reading.title} zh={!!reading.titleZh} />
-            {reading.titleZh && <PaperText as="div" className="en" text={reading.title} />}
+            <PaperTitle as="div" className="zh" paper={reading} />
+            <PaperTitle as="div" className="en" paper={reading} other />
             <span className="bar">
               <i style={{ width: `${Math.round((reading.readPos?.ratio ?? 0) * 100)}%` }} />
             </span>
@@ -364,7 +329,7 @@ function Reading({ view, papers, onOpen }: { view?: RoomView; papers: PaperMeta[
       {view?.quote && quoted && (
         <div className="room-card room-quote" onClick={() => onOpen(quoted.id)}>
           <p>{view.quote.text}</p>
-          <PaperText as="div" className="src" text={quoted.titleZh || quoted.title} />
+          <PaperTitle as="div" className="src" paper={quoted} />
         </div>
       )}
       {later.length > 0 && (
@@ -372,7 +337,7 @@ function Reading({ view, papers, onOpen }: { view?: RoomView; papers: PaperMeta[
           {later.map((p) => (
             <button key={p.id} className="p" onClick={() => onOpen(p.id)}>
               {p.pages ? <img src={`${fileUrl(p.id, 'thumb.png')}?v=${p.pages}`} alt="" draggable={false} /> : <span className="thumb" />}
-              <PaperText as="span" text={p.titleZh || p.title} zh={!!p.titleZh} />
+              <PaperTitle as="span" paper={p} />
             </button>
           ))}
         </div>
@@ -493,68 +458,8 @@ function Journal({ papers, onOpen }: { papers: PaperMeta[]; onOpen: (id: string)
 
 /* ---------- right: her notes ---------- */
 
-const time = (iso: string) => {
-  const d = new Date(iso)
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
-function dayLabel(iso: string): string {
-  const d = new Date(iso)
-  const today = new Date()
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  if (dayKey(d) === dayKey(today)) return '今天'
-  if (dayKey(d) === dayKey(yesterday)) return '昨天'
-  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
-}
-
-function Notes({ view, writer, onLink }: { view?: RoomView; writer?: Contact; onLink: (l: RoomLink) => void }) {
-  if (!view) return null
-  if (!view.notes.length && !view.writing) return <div className="room-empty">暂无留言</div>
-  let lastDay = ''
-  return (
-    <>
-      {view.writing && (
-        <div className="room-note writing">
-          <span className="room-typing">
-            <i />
-            <i />
-            <i />
-          </span>
-        </div>
-      )}
-      {view.notes.map((n) => {
-        const label = dayLabel(n.at)
-        const head = label !== lastDay && (lastDay || label !== '今天') ? label : undefined
-        lastDay = label
-        return (
-          <div key={n.id} className="room-note-wrap">
-            {head && <div className="room-day-label">{head}</div>}
-            <NoteCard note={n} writer={writer} onLink={onLink} />
-          </div>
-        )
-      })}
-    </>
-  )
-}
-
-function NoteCard({ note, writer, onLink }: { note: RoomNote; writer?: Contact; onLink: (l: RoomLink) => void }) {
-  return (
-    <div className={`room-note ${note.kind} ${note.read ? 'read' : ''}`} style={writer?.hue !== undefined ? ({ '--hue': writer.hue } as React.CSSProperties) : undefined}>
-      {note.say && <div className="o">{note.say}</div>}
-      <div className="z">{note.zh}</div>
-      <div className="foot">
-        <span className="when">{time(note.at)}</span>
-        {note.links.map((l, i) => (
-          <button key={i} className="act" onClick={() => onLink(l)}>
-            {l.kind === 'paper' ? '打开' : l.kind === 'edition' ? '去看看' : '看看'}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/* ---------- right: studying together ---------- */
+/* ---------- 番茄钟, an app in the phone ---------- */
 
 const R = 45
 const C = 2 * Math.PI * R
@@ -585,7 +490,7 @@ export const clockOf = (ms: number) => {
   return `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`
 }
 
-function Study({ writer }: { writer?: Contact }) {
+export function Pomodoro({ writer }: { writer?: Contact }) {
   const s = useStudy()
   const left = useLeft(s)
   const [plan, setPlan] = useState<StudyPlan>()

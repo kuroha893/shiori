@@ -8,6 +8,7 @@ import './styles/reader.css'
 import './styles/conferences.css'
 import './styles/tasks.css'
 import './styles/room.css'
+import './styles/phone.css'
 import { App } from './components/App'
 
 createRoot(document.getElementById('root')!).render(<App />)
