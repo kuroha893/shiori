@@ -289,15 +289,6 @@
 
 /* ---------- home ---------- */
 
-.cf-search {
-  margin-top: 22px;
-  padding: 14px;
-  box-shadow: var(--shadow);
-}
-.cf-search.tight {
-  margin-top: 0;
-  padding: 0;
-}
 .cf-kw {
   display: inline-flex;
   align-items: center;

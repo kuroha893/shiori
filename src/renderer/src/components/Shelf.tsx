@@ -366,12 +366,26 @@ export function PaperCard({ paper: p, index, ...item }: { paper: PaperMeta; inde
 }
 
 /** 书库's search, at the left of the top bar where the papers' column starts. */
-export function ShelfSearch({ left, query, onQuery }: { left?: number; query: string; onQuery: (q: string) => void }) {
+/**
+ * The top bar's search, lined up with the content below (`left`). 会议 uses it too; inside an edition, `scope` is a
+ * small tag in the field saying what the search is kept to.
+ */
+export function ShelfSearch(props: { left?: number; query: string; onQuery: (q: string) => void; onEnter?: () => void; scope?: ReactNode }) {
+  const { left, query, onQuery } = props
   return (
     <div className="lib-bar" style={left === undefined ? undefined : ({ '--shelf-left': `${left}px` } as React.CSSProperties)}>
-      <label className="lib-find no-drag">
+      <label className={`lib-find no-drag ${props.scope ? 'scoped' : ''}`}>
         <Icon name="search" size={15} />
-        <input placeholder="搜索" value={query} onChange={(e) => onQuery(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && onQuery('')} />
+        {props.scope && <span className="lib-find-scope">{props.scope}</span>}
+        <input
+          placeholder="搜索"
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onQuery('')
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) props.onEnter?.()
+          }}
+        />
       </label>
     </div>
   )

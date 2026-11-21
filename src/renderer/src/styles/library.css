@@ -16,8 +16,12 @@
   gap: 8px;
   margin-left: auto;
 }
-.lib-bar + .topbar-actions {
+.topbar:has(.lib-bar) .topbar-actions {
   margin-left: 0;
+}
+/* where 会议 puts its search: the bar inside is laid out as if it stood in the top bar itself */
+.lib-bar-slot {
+  display: contents;
 }
 /* The library's name heads its sidebar, under the traffic lights, and stays put while the sidebar scrolls. */
 .brand {
@@ -1623,6 +1627,38 @@ input.gloss-en {
 }
 .lib-find input::placeholder {
   color: hsl(var(--faint-foreground));
+}
+/* inside an edition of 会议: what the search is kept to, as a small tag before the words */
+.lib-find.scoped {
+  width: 290px;
+}
+.lib-find-scope {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-left: -3px;
+  padding: 0 8px 0 5px;
+  border-radius: 8px;
+  background: hsl(var(--foreground) / 0.07);
+  color: hsl(var(--foreground));
+  font-size: 12px;
+}
+.lib-find-scope .cf-name {
+  gap: 5px;
+  height: auto;
+}
+.lib-find-scope .cf-mark,
+.lib-find-scope .cf-mark img {
+  width: 16px;
+  height: 16px;
+}
+.lib-find-scope .cf-name b {
+  font-size: 12.5px;
+}
+.lib-find-scope .cf-name-year {
+  margin-left: 0;
+  font-size: 12px;
 }
 .imp-btn {
   height: 32px;

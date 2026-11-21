@@ -87,6 +87,8 @@ export function Library(props: {
   // The top bar's search lines up with the papers' left edge, wherever the centred column and the scrollbar put it.
   const inner = useRef<HTMLDivElement>(null)
   const [shelfLeft, setShelfLeft] = useState<number>()
+  // 会议 puts its own search here (it knows what it searches: everything, or one edition)
+  const [confSearch, setConfSearch] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
     const el = inner.current
     if (!el) return
@@ -240,6 +242,7 @@ export function Library(props: {
       {space !== 'room' && <PhoneLauncher papers={papers} onAction={phoneAction} />}
       <header className="topbar drag">
         {space === 'lib' && <ShelfSearch left={shelfLeft} query={query} onQuery={setQuery} />}
+        {space === 'conf' && <div className="lib-bar-slot" ref={setConfSearch} />}
         <div className="topbar-actions">
           {space === 'lib' && (
             <ShelfTools
@@ -268,7 +271,7 @@ export function Library(props: {
       {space === 'room' ? (
         <Room papers={papers} wall={settings.wallpaperIn.includes('room')} onOpenPaper={props.onOpen} onAction={phoneAction} />
       ) : space === 'conf' ? (
-        <Conferences key={confStart ? `${confStart.conf}/${confStart.year}` : 'home'} start={confStart} overview={overview} library={papers} ready={ready} onOpenPaper={props.onOpen} toast={toast} />
+        <Conferences key={confStart ? `${confStart.conf}/${confStart.year}` : 'home'} start={confStart} searchSlot={confSearch} overview={overview} library={papers} ready={ready} onOpenPaper={props.onOpen} toast={toast} />
       ) : (
       <>
       <aside className="lib-side">

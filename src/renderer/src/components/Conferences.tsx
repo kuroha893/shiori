@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { PaperMeta } from '../../../shared/types'
 import type { Activity, ConfOverview, Conference, ConferenceSummary, EditionSummary, EditionView, Follow, LaterItem, ListedPaper, PaperQuery } from '../../../shared/conferences'
 import { CATALOG, confId } from '../../../shared/conferences'
@@ -9,6 +10,7 @@ import { Menu, useDismiss, type MenuItem } from './Chrome'
 import { errorText, useFolders } from './Folders'
 import { VenueTags } from './VenueTags'
 import { PaperText, PaperTitle } from './PaperText'
+import { ShelfSearch } from './Shelf'
 import type { Toast } from './App'
 
 /*
@@ -45,6 +47,8 @@ interface Props {
   toast: Toast
   /** An edition to open on, as when one of her notes leads here */
   start?: { conf: string; year: number }
+  /** the place in the top bar where 会议's search goes */
+  searchSlot?: HTMLElement | null
 }
 
 type View = { kind: 'home' } | { kind: 'edition'; conf: string; year: number }
@@ -275,29 +279,36 @@ function useSearch() {
   return { text, setText, query, clear, now: () => setQuery(text.trim()) }
 }
 
-function SearchBar({ s }: { s: ReturnType<typeof useSearch> }) {
-  return (
-    <div className="cf-search-box">
-      <div className="import-input">
-        <Icon name="search" className="faint" />
-        <input
-          className="bare"
-          placeholder="搜索论文"
-          value={s.text}
-          onChange={(e) => s.setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.nativeEvent.isComposing) s.now()
-            if (e.key === 'Escape') s.clear()
-          }}
-        />
-        {s.text && (
-          <button className="icon-btn" onClick={s.clear}>
-            <Icon name="x" size={14} />
-          </button>
-        )}
-      </div>
-    </div>
-  )
+/**
+ * 会议's search, in the top bar where 书库 has its own, lined up with what is below: the paper cards' edge when there
+ * are papers (they reach a little past the column), else the column's (`under`).
+ */
+function TopSearch({ s, slot, under, scope }: { s: ReturnType<typeof useSearch>; slot?: HTMLElement | null; under: React.RefObject<HTMLElement | null>; scope?: ReactNode }) {
+  const [left, setLeft] = useState<number>()
+  useEffect(() => {
+    const el = under.current
+    if (!el) return
+    let frame = 0
+    const measure = () => {
+      frame = 0
+      setLeft(Math.round((el.querySelector('.cf-paper') ?? el).getBoundingClientRect().left))
+    }
+    const soon = () => {
+      if (!frame) frame = requestAnimationFrame(measure)
+    }
+    const ro = new ResizeObserver(soon)
+    ro.observe(el)
+    const mo = new MutationObserver(soon)
+    mo.observe(el, { childList: true, subtree: true })
+    measure()
+    return () => {
+      ro.disconnect()
+      mo.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [under])
+  if (!slot) return null
+  return createPortal(<ShelfSearch left={left} query={s.text} onQuery={s.setText} onEnter={s.now} scope={scope} />, slot)
 }
 
 /* ---------- home ---------- */
@@ -319,16 +330,12 @@ function Home(props: Props & { overview: ConfOverview; onOpen: (e: EditionSummar
 
   // Latest first: the edition whose results came out most recently.
   const rows = [...overview.conferences].sort((a, b) => (mainEdition(b)?.releaseDate ?? b.addedAt).localeCompare(mainEdition(a)?.releaseDate ?? a.addedAt))
+  const inner = useRef<HTMLDivElement>(null)
 
   return (
     <main className="lib-scroll">
-      <div className="lib-inner cf">
-        <section className="lib-hero fade-in">
-          <h1>会议</h1>
-        </section>
-        <section className="card cf-search fade-in">
-          <SearchBar s={s} />
-        </section>
+      <TopSearch s={s} slot={props.searchSlot} under={inner} />
+      <div className="lib-inner cf" ref={inner}>
 
         {s.query ? (
           <Results {...props} query={{ search: s.query, lean: true }} />
@@ -1168,6 +1175,7 @@ function EditionPage(props: Props & { c: ConferenceSummary; year: number; onYear
   const [renaming, setRenaming] = useState<string>()
   const s = useSearch()
   const mainRef = useRef<HTMLElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
   const sig = useRef('')
 
   // The whole edition is loaded once and again only when its papers change, not on every status update.
@@ -1377,10 +1385,8 @@ function EditionPage(props: Props & { c: ConferenceSummary; year: number; onYear
       </aside>
 
       <main className="lib-scroll" ref={mainRef}>
-        <div className="lib-inner cf cf-edition">
-          <section className="cf-search tight">
-            <SearchBar s={s} />
-          </section>
+        <TopSearch s={s} slot={props.searchSlot} under={inner} scope={<ConfName c={c} year={year} />} />
+        <div className="lib-inner cf cf-edition" ref={inner}>
           {(view.kinds.length > 1 || view.tracks.length > 1) && (
             <div className="cf-filters">
               {view.kinds.length > 1 &&
